@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/ojo-ciudadano-backend/src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "builder": "rspack",
+    "tsConfigPath": "apps/ojo-ciudadano-backend/tsconfig.app.json"
+  },
+  "monorepo": true,
+  "root": "apps/ojo-ciudadano-backend",
+  "projects": {
+    "auth-usuarios": {
+      "type": "application",
+      "root": "apps/auth-usuarios",
+      "entryFile": "main",
+      "sourceRoot": "apps/auth-usuarios/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/auth-usuarios/tsconfig.app.json"
+      }
+    },
+    "incidentes": {
+      "type": "application",
+      "root": "apps/incidentes",
+      "entryFile": "main",
+      "sourceRoot": "apps/incidentes/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/incidentes/tsconfig.app.json"
+      }
+    },
+    "notificaciones": {
+      "type": "application",
+      "root": "apps/notificaciones",
+      "entryFile": "main",
+      "sourceRoot": "apps/notificaciones/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/notificaciones/tsconfig.app.json"
+      }
+    },
+    "ojo-ciudadano-backend": {
+      "type": "application",
+      "root": "apps/ojo-ciudadano-backend",
+      "entryFile": "main",
+      "sourceRoot": "apps/ojo-ciudadano-backend/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/ojo-ciudadano-backend/tsconfig.app.json"
+      }
+    }
+  }
+}
