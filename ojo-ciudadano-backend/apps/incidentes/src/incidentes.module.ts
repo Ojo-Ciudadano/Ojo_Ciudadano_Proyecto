@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { IncidentesController } from './incidentes.controller';
 import { IncidentesService } from './incidentes.service';
+import { CategoriasModule } from './categorias/categorias.module';
+import { EvidenciasModule } from './evidencias/evidencias.module';
 
 @Module({
-  imports: [],
+  imports: [CategoriasModule, EvidenciasModule],
   controllers: [IncidentesController],
   providers: [IncidentesService],
 })
