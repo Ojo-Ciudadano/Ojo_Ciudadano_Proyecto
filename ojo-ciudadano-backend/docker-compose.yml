@@ -1,0 +1,59 @@
+services:
+  postgres-auth-usuarios:
+    image: postgres:16-alpine
+    container_name: postgres-auth-usuarios
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_password
+      POSTGRES_DB: auth_usuarios
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_usuarios"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-incidentes:
+    image: postgres:16-alpine
+    container_name: postgres-incidentes
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: incidentes_user
+      POSTGRES_PASSWORD: incidentes_password
+      POSTGRES_DB: incidentes
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_incidentes_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incidentes_user -d incidentes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-notificaciones:
+    image: postgres:16-alpine
+    container_name: postgres-notificaciones
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: notificaciones_user
+      POSTGRES_PASSWORD: notificaciones_password
+      POSTGRES_DB: notificaciones
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_notificaciones_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notificaciones_user -d notificaciones"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_auth_data:
+  postgres_incidentes_data:
+  postgres_notificaciones_data:
