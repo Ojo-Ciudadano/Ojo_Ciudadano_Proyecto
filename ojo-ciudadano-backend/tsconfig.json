@@ -25,9 +25,6 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/ojo-ciudadano-backend/tsconfig.app.json"
-    },
-    {
       "path": "./apps/auth-usuarios/tsconfig.app.json"
     },
     {
