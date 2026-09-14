@@ -6,3 +6,51 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Categoria {
+  id                   String  @id @default(uuid()) @db.Uuid
+  nombre               String
+  descripcion          String
+  prioridadBase        Int     @map("prioridad_base")
+  esEmergenciaCritica  Boolean @default(false) @map("es_emergencia_critica")
+  canalOficialContacto String? @map("canal_oficial_contacto")
+  incidentes Incidente[]
+  @@map("categoria")
+}
+
+model Ubicacion {
+  id                  String  @id @default(uuid()) @db.Uuid
+  latitud             Float
+  longitud            Float
+  direccionReferencia String @map("direccion_referencia")
+  comuna              String
+  region              String
+  sector              String
+  incidentes Incidente[]
+  @@map("ubicacion")
+}
+
+model Estado {
+  id     String @id @default(uuid()) @db.Uuid
+  nombre String @unique
+  orden  Int
+  incidentes Incidente[]
+  @@map("estado")
+}
+
+model Incidente {
+  id                 String   @id @default(uuid()) @db.Uuid
+  titulo             String
+  descripcion        String
+  categoriaId        String   @map("categoria_id") @db.Uuid
+  estadoId           String   @map("estado_id") @db.Uuid
+  ubicacionId        String   @map("ubicacion_id") @db.Uuid
+  usuarioReportaId   String   @map("usuario_reporta_id") @db.Uuid   
+  nivelPrioridad     Int?     @map("nivel_prioridad")               // null hasta que un Supervisor lo marque
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion")
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion")
+  categoria Categoria @relation(fields: [categoriaId], references: [id])
+  estado    Estado    @relation(fields: [estadoId], references: [id])
+  ubicacion Ubicacion @relation(fields: [ubicacionId], references: [id])
+  @@map("incidente")
+}
