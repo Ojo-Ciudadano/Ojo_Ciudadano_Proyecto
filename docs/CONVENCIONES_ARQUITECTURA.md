@@ -3,36 +3,43 @@
 **Responsable:** Martín Maier  
 **Tarea:** MM-02 — Definir la estructura modular y las convenciones de carpetas  
 **Proyecto:** Ojo Ciudadano  
-**Versión:** 1.2.0 — Sprint 1  
+**Versión:** 1.3.0 — Sprint 1  
 
 ---
 
 ## 1. Visión y Enfoque Arquitectónico Global
 
-El repositorio de **Ojo Ciudadano** está diseñado como un **monorepo integral** que agrupa todas las plataformas de la solución, facilitando la integración transversal entre el equipo web y el equipo móvil:
+El sistema **Ojo Ciudadano** sigue una arquitectura en capas distribuida, coordinada entre la plataforma web (2° Año) y la aplicación móvil (4° Año):
 
 ```text
 Ojo_Ciudadano_Proyecto/           # Raíz del repositorio
-├── docs/                         # Documentación transversal de arquitectura y decisiones
-├── mobile/                       # Solución y aplicación móvil (Flutter / React Native)
-└── web/                          # Solución Web y Backend de Microservicios
-    ├── frontend/                 # Aplicación Web React (Bárbara Sáez - BSa-01 a BSa-07)
-    └── backend/                  # Monorepo NestJS con Microservicios y API Gateway
+├── docs/                         # Documentación transversal de arquitectura y contratos
+├── mobile/                       # Aplicación Móvil Android (4° Año - Kotlin / GPS + Cámara)
+└── web/                          # Plataforma Web y Backend de Microservicios
+    ├── frontend/                 # Plataforma Web de Gestión (2° Año - React + Vite + Leaflet)
+    └── backend/                  # Monorepo NestJS con API Gateway y Microservicios
 ```
 
-### Capas del Sistema:
-1. **Capa 1: Clientes**:
-   * Aplicación Web (`web/frontend/`): React + Vite con gestión de sesión y alertas.
-   * Aplicación Móvil (`mobile/`): App móvil para reporte ciudadano en terreno.
-2. **Capa 2: API Gateway (`web/backend/apps/api-gateway`)**: Punto único de entrada HTTP (puerto `3000`), encargado de enrutamiento proxy hacia microservicios, manejo unificado de excepciones y validación base.
-3. **Capa 3: Servicios de Dominio / Microservicios (`web/backend/apps/`)**:
-   * **`auth-usuarios`** (puerto `3001`): Autenticación, JWT, roles y gestión de usuarios.
-   * **`incidentes`** (puerto `3002`): Registro, categorías, geolocalización, estados y evidencias de incidentes.
-   * **`notificaciones`** (puerto `3003`): Envíos de notificaciones y alertas ciudadanas.
-4. **Capa 4: Persistencia y Almacenamiento (Base de Datos por Servicio)**:
-   * **Patrón Database-per-Service**: Cada microservicio cuenta con su propia base de datos PostgreSQL independiente para garantizar aislamiento y bajo acoplamiento.
-   * **Entorno de Infraestructura Local**: Orquestado mediante **Docker Compose** con tres instancias PostgreSQL 16 aisladas.
-   * **ORM**: **Prisma 7** con `@prisma/adapter-pg` y clientes dedicados generados por cada microservicio.
+### Capas del Sistema (según Diagrama Oficial de Arquitectura):
+
+1. **Capa 1: Capa de Presentación (Clientes)**:
+   * **Aplicación Móvil Android (4° Año)**: Desarrollada en Kotlin con captura de GPS nativo y cámara para reportes en terreno. Consume el API Gateway mediante HTTPS / REST / JSON con autenticación JWT.
+   * **Plataforma Web de Gestión (2° Año)**: Desarrollada en React + TypeScript con Vite, React Router, interfaz en MUI o Tailwind y visualización cartográfica con **React-Leaflet**.
+2. **Capa 2: Capa de Integración / API Común (`api-gateway`)**:
+   * **API Gateway**: Desarrollado en NestJS + TypeScript.
+   * Punto único de entrada para Web y Móvil.
+   * Responsabilidades: Enrutamiento proxy hacia microservicios de negocio, validación de JWT + Roles, Documentación interactiva Swagger / OpenAPI y formateo uniforme de errores.
+3. **Capa 3: Servicios de Negocio (Backend)**:
+   * **Microservicio de Auth/Usuarios** (Puerto `3001`): Registro, autenticación, hash de contraseñas, roles y permisos.
+   * **Microservicio de Incidentes** (Puerto `3002`): Gestión del ciclo de vida de incidentes, categorías, georreferenciación e integración con mapas OpenStreetMap.
+   * **Microservicio de Notificaciones** (Puerto `3003`): Envíos de notificaciones, alertas y mensajería de eventos.
+4. **Capa 4: Datos / Persistencia**:
+   * **Patrón Database-per-Service**: Cada microservicio cuenta con su propia base de datos PostgreSQL independiente (PostgreSQL 16 en Docker Compose para desarrollo local).
+   * **ORM**: **Prisma 7** con `@prisma/adapter-pg` en cada microservicio.
+   * **Almacenamiento de Archivos (Evidencias/Fotos)**: Supabase Storage para almacenamiento de archivos multimedia y fotografías de incidentes.
+5. **Capa 5: Servicios Externos**:
+   * **OpenStreetMap Foundation**: Servicio de mapas base y datos cartográficos consumido por la plataforma Web (vía React-Leaflet) y el microservicio de incidentes.
+   * **GPS del Dispositivo**: Ubicación capturada directamente desde el hardware Android.
 
 ---
 
@@ -40,9 +47,9 @@ Ojo_Ciudadano_Proyecto/           # Raíz del repositorio
 
 ```text
 web/
-├── frontend/                     # Plataforma Web React (Vite)
+├── frontend/                     # Plataforma Web React (Vite + React-Leaflet)
 └── backend/                      # Monorepo NestJS
-    ├── docker-compose.yml        # Contenedores PostgreSQL independientes por microservicio
+    ├── docker-compose.yml        # 3 Contenedores PostgreSQL independientes
     ├── package.json              # Dependencias compartidas y scripts del monorepo
     ├── tsconfig.json             # Configuración global de TypeScript
     │
@@ -90,7 +97,7 @@ web/
         │   ├── src/
         │   │   ├── filters/      # Manejo homogéneo de excepciones (MM-04)
         │   │   ├── categorias/   # Categorías de incidentes
-        │   │   ├── evidencias/   # Manejo de imágenes y archivos adjuntos
+        │   │   ├── evidencias/   # Manejo de imágenes (Supabase Storage)
         │   │   ├── incidentes/   # CRUD y ciclo de vida de incidentes (dominio principal)
         │   │   │   ├── dto/      # create-incidente.dto.ts
         │   │   │   ├── incidentes.controller.ts
@@ -167,11 +174,11 @@ Todos los servicios y el API Gateway deben responder los errores con una estruct
 
 ```json
 {
-  \"statusCode\": 400,
-  \"timestamp\": \"2026-09-11T10:00:00.000Z\",
-  \"path\": \"/api/v1/auth/login\",
-  \"error\": \"Bad Request\",
-  \"message\": \"El correo electrónico no tiene un formato válido\"
+  "statusCode": 400,
+  "timestamp": "2026-09-11T10:00:00.000Z",
+  "path": "/api/v1/auth/login",
+  "error": "Bad Request",
+  "message": "El correo electrónico no tiene un formato válido"
 }
 ```
 
@@ -217,6 +224,10 @@ export default defineConfig({
   },
 });
 ```
+
+### 6.3 Almacenamiento de Evidencias (Supabase Storage)
+* Las imágenes y evidencias de incidentes se almacenan en un bucket dedicado en **Supabase Storage**.
+* La base de datos de `incidentes` almacena únicamente las URLs o identificadores del archivo generado por Supabase Storage, sin guardar binarios directamente en PostgreSQL.
 
 ---
 
