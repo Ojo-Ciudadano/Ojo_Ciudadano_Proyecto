@@ -8,22 +8,41 @@ Sistema colaborativo para el reporte, seguimiento y gestión de incidentes urban
 
 ```text
 Ojo_Ciudadano_Proyecto/
-├── docs/                      # Documentación transversal de arquitectura y convenciones
+├── docs/                      # Documentación transversal de arquitectura y contratos
 │   └── CONVENCIONES_ARQUITECTURA.md
-├── mobile/                    # App Móvil Android (4° Año) - Kotlin nativo, GPS, Cámara
-├── web/                       # Plataforma Web y Microservicios (2° Año)
-│   ├── frontend/              # Frontend Web (React + Vite + Tailwind/MUI + React-Leaflet)
-│   └── backend/               # Microservicios NestJS + Prisma ORM + PostgreSQL
+├── mobile/                    # Aplicación Móvil Android (4° Año) - Kotlin nativo, GPS, Cámara
+├── web/                       # Plataforma Web y Backend de Microservicios (2° Año)
+│   ├── frontend/              # Plataforma Web de Gestión (React + TypeScript + Vite + Leaflet)
+│   └── backend/               # Monorepo NestJS + Prisma ORM + PostgreSQL
 │       ├── apps/
-│       │   ├── api-gateway/       # Gateway centralizado (Puerto 3000, Proxy & Auth Routing)
-│       │   ├── auth-usuarios/     # Microservicio de Autenticación y Usuarios (Puerto 3001)
-│       │   ├── incidentes/        # Microservicio de Incidentes y Evidencias (Puerto 3002)
-│       │   └── notificaciones/    # Microservicio de Notificaciones (Puerto 3003)
-│       ├── docker-compose.yml     # Orquestación de bases de datos PostgreSQL independientes
-│       ├── package.json           # Dependencias globales del backend monorepo
-│       └── tsconfig.json          # Configuración TypeScript
-└── README.md                  # Documento principal
+│       │   ├── api-gateway/       # API Gateway centralizado (Proxy, JWT, Swagger)
+│       │   ├── auth-usuarios/     # Microservicio de Autenticación y Usuarios
+│       │   ├── incidentes/        # Microservicio de Incidentes y Evidencias
+│       │   └── notificaciones/    # Microservicio de Notificaciones
+│       ├── docker-compose.yml     # Orquestación de bases de datos PostgreSQL
+│       ├── package.json           # Dependencias y scripts globales del backend
+│       └── tsconfig.json          # Configuración TypeScript del monorepo
+└── README.md                  # Guía general del proyecto
 ```
+
+---
+
+## Mapeo de Puertos y Servicios
+
+### Microservicios (HTTP)
+| Servicio | Directorio | Puerto | Descripción |
+| :--- | :--- | :---: | :--- |
+| **API Gateway** | `apps/api-gateway` | `3000` | Punto de entrada único, routing proxy y documentación Swagger |
+| **Auth & Usuarios** | `apps/auth-usuarios` | `3001` | Gestión de usuarios, roles y autenticación |
+| **Incidentes** | `apps/incidentes` | `3002` | Registro de incidentes, categorías y evidencias georreferenciadas |
+| **Notificaciones** | `apps/notificaciones` | `3003` | Despacho de notificaciones y alertas |
+
+### Bases de Datos (PostgreSQL en Docker)
+| Contenedor | Puerto Local | Base de Datos | Usuario |
+| :--- | :---: | :--- | :--- |
+| `postgres-auth-usuarios` | `5432` | `auth_usuarios` | `auth_user` |
+| `postgres-incidentes` | `5433` | `incidentes` | `incidentes_user` |
+| `postgres-notificaciones` | `5434` | `notificaciones` | `notificaciones_user` |
 
 ---
 
@@ -31,25 +50,66 @@ Ojo_Ciudadano_Proyecto/
 
 ### 1. Requisitos Previos
 * **Node.js**: v20 o superior
-* **Docker Desktop** (para contenedores PostgreSQL)
 * **npm**: v10 o superior
+* **Docker Desktop** (en ejecución para las bases de datos)
 
-### 2. Configuración del Backend
+### 2. Instalación y Dependencias
 ```bash
-# Navegar a la carpeta backend
+# Navegar al directorio de backend
 cd web/backend
 
-# Instalar dependencias
+# Instalar dependencias del monorepo
 npm install
-
-# Levantar las bases de datos PostgreSQL en Docker
-docker compose up -d
-
-# Ejecutar las pruebas unitarias
-npm test
-
-# Iniciar el API Gateway en modo desarrollo
-npm run start:dev api-gateway
 ```
 
-Para especificaciones detalladas sobre la arquitectura de 5 capas, convención de nombres y estándares de código, consultar [CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md).
+### 3. Configuración de Variables de Entorno
+```bash
+# Copiar plantilla de variables de entorno base
+cp .env.example .env
+```
+
+### 4. Levantar Bases de Datos (Docker)
+```bash
+# Iniciar los tres contenedores PostgreSQL independientes
+docker compose up -d
+```
+
+### 5. Generar Clientes Prisma
+```bash
+# Generar los clientes Prisma correspondientes a cada esquema
+npx prisma generate --schema=apps/auth-usuarios/prisma/schema.prisma
+npx prisma generate --schema=apps/incidentes/prisma/schema.prisma
+npx prisma generate --schema=apps/notificaciones/prisma/schema.prisma
+```
+
+### 6. Ejecución en Modo Desarrollo
+Puedes iniciar cada servicio de forma individual según se requiera:
+
+```bash
+# API Gateway
+npm run start:dev api-gateway
+
+# Microservicio de Autenticación y Usuarios
+npm run start:dev auth-usuarios
+
+# Microservicio de Incidentes
+npm run start:dev incidentes
+
+# Microservicio de Notificaciones
+npm run start:dev notificaciones
+```
+
+### 7. Pruebas y Calidad de Código
+```bash
+# Ejecutar suite de pruebas unitarias
+npm test
+
+# Ejecutar análisis estático (Linter)
+npm run lint
+```
+
+---
+
+## Documentación de Arquitectura
+
+Para conocer en detalle la arquitectura de 5 capas, los contratos de comunicación, el patrón Database-per-Service y las convenciones de codificación, consultar [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md).
