@@ -16,6 +16,7 @@
       "jest"
     ],
     "sourceMap": true,
+    "rootDir": ".",
     "outDir": "./dist",
     "incremental": true,
     "skipLibCheck": true,
@@ -24,9 +25,6 @@
   },
   "files": [],
   "references": [
-    {
-      "path": "./apps/ojo-ciudadano-backend/tsconfig.app.json"
-    },
     {
       "path": "./apps/auth-usuarios/tsconfig.app.json"
     },
