@@ -35,6 +35,7 @@ model Estado {
   nombre String @unique
   orden  Int
   incidentes Incidente[]
+  historialEstados HistorialEstado[]
   @@map("estado")
 }
 
@@ -52,5 +53,10 @@ model Incidente {
   categoria Categoria @relation(fields: [categoriaId], references: [id])
   estado    Estado    @relation(fields: [estadoId], references: [id])
   ubicacion Ubicacion @relation(fields: [ubicacionId], references: [id])
+
+  evidencias   Evidencia[]          
+  asignaciones Asignacion[]        
+  comentarios  Comentario[]        
+  historial    HistorialEstado[]  
   @@map("incidente")
 }
