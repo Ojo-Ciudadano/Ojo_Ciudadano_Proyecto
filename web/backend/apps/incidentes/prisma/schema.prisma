@@ -60,3 +60,54 @@ model Incidente {
   historial    HistorialEstado[]  
   @@map("incidente")
 }
+
+model Evidencia {
+  id           String   @id @default(uuid()) @db.Uuid
+  incidenteId  String   @map("incidente_id") @db.Uuid
+  urlArchivo   String   @map("url_archivo")
+  tipo         String
+  fechaSubida  DateTime @default(now()) @map("fecha_subida")
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+
+  @@map("evidencia")
+}
+
+model Asignacion {
+  id                String   @id @default(uuid()) @db.Uuid
+  incidenteId       String   @map("incidente_id") @db.Uuid
+  usuarioAsignadoId String   @map("usuario_asignado_id") @db.Uuid   // FK externa: auth-usuarios
+  asignadoPorId     String   @map("asignado_por_id") @db.Uuid       // FK externa: auth-usuarios
+  fechaAsignacion   DateTime @default(now()) @map("fecha_asignacion")
+  activa            Boolean  @default(true)
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+
+  @@map("asignacion")
+}
+
+model Comentario {
+  id          String   @id @default(uuid()) @db.Uuid
+  incidenteId String   @map("incidente_id") @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid   // FK externa: auth-usuarios
+  texto       String
+  fecha       DateTime @default(now())
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+
+  @@map("comentario")
+}
+
+model HistorialEstado {
+  id          String   @id @default(uuid()) @db.Uuid
+  incidenteId String   @map("incidente_id") @db.Uuid
+  estadoId    String   @map("estado_id") @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid   // FK externa: auth-usuarios
+  observacion String?
+  fecha       DateTime @default(now())
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+  estado    Estado    @relation(fields: [estadoId], references: [id])
+
+  @@map("historial_estado")
+}
