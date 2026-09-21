@@ -6,14 +6,22 @@ import { CreateIncidenteDto } from './create-incidente.dto';
 describe('CreateIncidenteDto', () => {
   const validUUID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
 
+  const ubicacionValida = {
+    latitud: -38.7359,
+    longitud: -72.5904,
+    direccionReferencia: 'Av. Alemania 0211',
+    comuna: 'Temuco',
+    region: 'Araucanía',
+    sector: 'Centro',
+  };
+
   it('debe validar exitosamente con datos correctos', async () => {
     const dto = plainToInstance(CreateIncidenteDto, {
       titulo: 'Bache en la via publica',
       descripcion: 'Bache profundo frente al paradero de buses',
       categoriaId: validUUID,
-      latitud: -38.7359,
-      longitud: -72.5904,
-      direccionReferencia: 'Av. Alemania 0211',
+      usuarioReportaId: validUUID,
+      ubicacion: ubicacionValida,
     });
 
     const errors = await validate(dto);
@@ -25,8 +33,8 @@ describe('CreateIncidenteDto', () => {
       titulo: 'Bache en la via',
       descripcion: 'Descripcion valida',
       categoriaId: 'id-invalido',
-      latitud: -38.7359,
-      longitud: -72.5904,
+      usuarioReportaId: validUUID,
+      ubicacion: ubicacionValida,
     });
 
     const errors = await validate(dto);
@@ -40,13 +48,13 @@ describe('CreateIncidenteDto', () => {
       titulo: 'Bache en la via',
       descripcion: 'Descripcion valida',
       categoriaId: validUUID,
-      latitud: 95.0, // Latitud maxima permitida es 90
-      longitud: -72.5904,
+      usuarioReportaId: validUUID,
+      ubicacion: { ...ubicacionValida, latitud: 95.0 }, // Latitud maxima permitida es 90
     });
 
     const errors = await validate(dto);
     expect(errors.length).toBeGreaterThan(0);
-    const latError = errors.find((err) => err.property === 'latitud');
-    expect(latError).toBeDefined();
+    const ubiError = errors.find((err) => err.property === 'ubicacion');
+    expect(ubiError).toBeDefined();
   });
 });

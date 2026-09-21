@@ -3,9 +3,10 @@ import { IncidentesController } from './incidentes.controller';
 import { IncidentesService } from './incidentes.service';
 import { CategoriasModule } from './categorias/categorias.module';
 import { EvidenciasModule } from './evidencias/evidencias.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
-  imports: [CategoriasModule, EvidenciasModule],
+  imports: [PrismaModule, CategoriasModule, EvidenciasModule],
   controllers: [IncidentesController],
   providers: [IncidentesService],
 })
