@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ApiGatewayModule } from './api-gateway.module';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 
@@ -9,6 +9,15 @@ async function bootstrap() {
 
   // Filtro global para formato uniforme de errores (MM-03)
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  // Validacion global de DTOs (MM-05)
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   const port = process.env.PORT ?? process.env.port ?? 3000;
   await app.listen(port);
