@@ -1,87 +1,29 @@
+import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma';
+import { Pool } from 'pg';
 
-const connectionString = process.env.DATABASE_URL_INCIDENTES;
-if (!connectionString) {
-  throw new Error('DATABASE_URL_INCIDENTES no está definida en web/backend/.env');
-}
+const pool = new Pool({ connectionString: process.env.DATABASE_URL_INCIDENTES });
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
-const adapter = new PrismaPg({ connectionString });
-const prisma = new PrismaClient({ adapter });
-
-const categoriasBase = [
-  {
-    id: '10000000-0000-4000-8000-000000000001',
-    nombre: 'Alumbrado Público',
-    descripcion: 'Fallas o mejoras en el alumbrado de calles y espacios públicos.',
-    prioridadBase: 2,
-  },
-  {
-    id: '10000000-0000-4000-8000-000000000002',
-    nombre: 'Basura y Limpieza',
-    descripcion: 'Acumulación de basura, escombros o limpieza de espacios públicos.',
-    prioridadBase: 2,
-  },
-  {
-    id: '10000000-0000-4000-8000-000000000003',
-    nombre: 'Vialidad y Calles',
-    descripcion: 'Problemas de calles, veredas, señalización y tránsito.',
-    prioridadBase: 2,
-  },
-  {
-    id: '10000000-0000-4000-8000-000000000004',
-    nombre: 'Seguridad Ciudadana',
-    descripcion: 'Situaciones que requieren atención de seguridad en el espacio público.',
-    prioridadBase: 1,
-    esEmergenciaCritica: true,
-    canalOficialContacto: '133',
-  },
-  {
-    id: '10000000-0000-4000-8000-000000000005',
-    nombre: 'Parques y Áreas Verdes',
-    descripcion: 'Mantenimiento y problemas en parques, plazas y áreas verdes.',
-    prioridadBase: 3,
-  },
-];
-
-const estadosBase = [
-  { nombre: 'PENDIENTE', orden: 1 },
-  { nombre: 'EN_PROCESO', orden: 2 },
-  { nombre: 'RESUELTO', orden: 3 },
-  { nombre: 'RECHAZADO', orden: 4 },
+const estados = ['Nuevo', 'En revisión', 'En atención', 'Resuelto', 'Cerrado'];
+const categorias = [
+  { nombre: 'Alumbrado público', descripcion: 'Fallas de alumbrado en calles y espacios públicos', prioridadBase: 2, esEmergenciaCritica: false, canalOficialContacto: null },
+  { nombre: 'Baches y vialidad', descripcion: 'Baches, calzada y señalización en mal estado', prioridadBase: 2, esEmergenciaCritica: false, canalOficialContacto: null },
+  { nombre: 'Aseo y basura', descripcion: 'Microbasurales y recolección pendiente', prioridadBase: 1, esEmergenciaCritica: false, canalOficialContacto: null },
+  { nombre: 'Agua y alcantarillado', descripcion: 'Fugas, cortes de agua y alcantarillado colapsado', prioridadBase: 3, esEmergenciaCritica: false, canalOficialContacto: null },
+  { nombre: 'Áreas verdes y arbolado', descripcion: 'Plazas, poda y arbolado en riesgo', prioridadBase: 1, esEmergenciaCritica: false, canalOficialContacto: null },
+  { nombre: 'Seguridad ciudadana', descripcion: 'Hechos delictuales o situaciones de riesgo', prioridadBase: 4, esEmergenciaCritica: false, canalOficialContacto: 'Carabineros 133' },
+  { nombre: 'Accidente de tránsito', descripcion: 'Choques y atropellos con personas afectadas', prioridadBase: 5, esEmergenciaCritica: true, canalOficialContacto: 'SAMU 131' },
+  { nombre: 'Incendio', descripcion: 'Incendios estructurales, forestales o pastizales', prioridadBase: 5, esEmergenciaCritica: true, canalOficialContacto: 'Bomberos 132' },
 ];
 
 async function main() {
-  for (const categoria of categoriasBase) {
-    const { id, ...data } = categoria;
-    await prisma.categoria.upsert({
-      where: { id },
-      update: data,
-      create: categoria,
-    });
+  for (const [i, nombre] of estados.entries())
+    await prisma.estado.upsert({ where: { nombre }, update: {}, create: { nombre, orden: i + 1 } });
+  for (const c of categorias) {
+    const existe = await prisma.categoria.findFirst({ where: { nombre: c.nombre } });
+    if (!existe) await prisma.categoria.create({ data: c });
   }
-
-  for (const estado of estadosBase) {
-    await prisma.estado.upsert({
-      where: { nombre: estado.nombre },
-      update: { orden: estado.orden },
-      create: estado,
-    });
-  }
-
-  console.log(`Categorías aseguradas: ${categoriasBase.map((c) => c.nombre).join(', ')}`);
-  console.log(`Estados asegurados: ${estadosBase.map((e) => e.nombre).join(', ')}`);
-
-  const [categorias, estados] = await Promise.all([
-    prisma.categoria.count(),
-    prisma.estado.count(),
-  ]);
-  console.log(`Totales en BD -> categorias: ${categorias}, estados: ${estados}`);
+  console.log('Seed OK');
 }
-
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+main().then(() => prisma.$disconnect());
