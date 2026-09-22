@@ -19,9 +19,14 @@ describe('IncidentesController', () => {
     jest.clearAllMocks();
   });
 
-  it('delega findAll al service', async () => {
+  it('delega findAll al service sin filtro', async () => {
     await controller.findAll();
-    expect(mockService.findAll).toHaveBeenCalled();
+    expect(mockService.findAll).toHaveBeenCalledWith(undefined);
+  });
+
+  it('delega findAll con filtro usuarioReportaId', async () => {
+    await controller.findAll('uuid-1');
+    expect(mockService.findAll).toHaveBeenCalledWith('uuid-1');
   });
 
   it('delega findOne con el id', async () => {
