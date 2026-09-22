@@ -8,8 +8,12 @@ const include = { categoria: true, estado: true, ubicacion: true };
 export class IncidentesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.incidente.findMany({ include, orderBy: { fechaCreacion: 'desc' } });
+  findAll(usuarioReportaId?: string) {
+    return this.prisma.incidente.findMany({
+      where: usuarioReportaId ? { usuarioReportaId } : undefined,
+      include,
+      orderBy: { fechaCreacion: 'desc' },
+    });
   }
 
   async findOne(id: string) {
