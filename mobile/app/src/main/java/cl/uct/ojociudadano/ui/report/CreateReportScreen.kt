@@ -82,7 +82,8 @@ fun CreateReportScreen(
             ),
             keyboardActions = KeyboardActions(
                 onNext = { descriptionFocusRequester.requestFocus() }
-            )
+            ),
+            errorMessage = state.titleError
         )
 
         ReportTextField(
@@ -103,7 +104,8 @@ fun CreateReportScreen(
                     keyboardController?.hide()
                     focusManager.clearFocus()
                 }
-            )
+            ),
+            errorMessage = state.descriptionError
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -119,6 +121,13 @@ fun CreateReportScreen(
                 Text(
                     text = state.categoryName.ifBlank { "Seleccionar categoría" },
                     modifier = Modifier.fillMaxWidth()
+                )
+            }
+            state.categoryError?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -168,7 +177,8 @@ private fun ReportTextField(
     minLines: Int = 1,
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions,
-    keyboardActions: KeyboardActions
+    keyboardActions: KeyboardActions,
+    errorMessage: String? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -179,7 +189,9 @@ private fun ReportTextField(
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions
+        keyboardActions = keyboardActions,
+        isError = errorMessage != null,
+        supportingText = errorMessage?.let { error -> { Text(error) } }
     )
 }
 
@@ -190,13 +202,14 @@ private fun ReportTextField(
 @Composable
 fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     var state by remember { mutableStateOf(CreateReportFormState()) }
+    val viewModel = remember { CreateReportViewModel() }
 
     CreateReportScreen(
         state = state,
         onTitleChange = { state = state.copy(title = it) },
         onDescriptionChange = { state = state.copy(description = it) },
         onCategoryClick = {},
-        onCreateReportClick = {},
+        onCreateReportClick = { state = viewModel.validateForm(state) },
         modifier = modifier
     )
 }
