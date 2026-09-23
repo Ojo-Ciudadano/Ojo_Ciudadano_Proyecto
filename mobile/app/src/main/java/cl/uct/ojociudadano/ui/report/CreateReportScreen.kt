@@ -11,7 +11,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +40,7 @@ fun CreateReportScreen(
     state: CreateReportFormState,
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
+    onCategoryClick: () -> Unit,
     onCreateReportClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -57,6 +61,7 @@ fun CreateReportScreen(
             value = state.title,
             onValueChange = onTitleChange,
             label = "Título",
+            placeholder = "Ej: Poste de alumbrado dañado",
             singleLine = true
         )
 
@@ -64,6 +69,7 @@ fun CreateReportScreen(
             value = state.description,
             onValueChange = onDescriptionChange,
             label = "Descripción",
+            placeholder = "Describe el problema que deseas reportar",
             singleLine = false,
             minLines = 4
         )
@@ -74,13 +80,15 @@ fun CreateReportScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            OutlinedTextField(
-                value = state.categoryName.ifBlank { "Seleccionar categoría" },
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = true,
-                label = { Text("Categoría") }
-            )
+            OutlinedButton(
+                onClick = onCategoryClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = state.categoryName.ifBlank { "Seleccionar categoría" },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -89,13 +97,18 @@ fun CreateReportScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            OutlinedTextField(
-                value = "Información de ubicación",
-                onValueChange = {},
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                readOnly = true,
-                label = { Text("Ubicación") }
-            )
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Text(
+                    text = "Ubicación pendiente",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -114,6 +127,7 @@ private fun ReportTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
+    placeholder: String,
     singleLine: Boolean,
     minLines: Int = 1
 ) {
@@ -122,6 +136,7 @@ private fun ReportTextField(
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
+        placeholder = { Text(placeholder) },
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = KeyboardOptions(
@@ -143,6 +158,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         state = state,
         onTitleChange = { state = state.copy(title = it) },
         onDescriptionChange = { state = state.copy(description = it) },
+        onCategoryClick = {},
         onCreateReportClick = {},
         modifier = modifier
     )
@@ -154,12 +170,13 @@ private fun CreateReportScreenPreview() {
     OjoCiudadanoTheme {
         CreateReportScreen(
             state = CreateReportFormState(
-                title = "Bache en la calle",
-                description = "Hay un bache grande frente a la plaza.",
-                categoryName = "Infraestructura"
+                title = "Poste de alumbrado dañado",
+                description = "La luminaria lleva varios días sin funcionar",
+                categoryName = "Alumbrado público"
             ),
             onTitleChange = {},
             onDescriptionChange = {},
+            onCategoryClick = {},
             onCreateReportClick = {}
         )
     }
