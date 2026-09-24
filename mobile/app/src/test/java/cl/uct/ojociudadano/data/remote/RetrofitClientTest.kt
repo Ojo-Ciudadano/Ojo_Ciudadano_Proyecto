@@ -3,6 +3,7 @@ package cl.uct.ojociudadano.data.remote
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import org.junit.Assert.assertNotNull
 
 class RetrofitClientTest {
 
@@ -41,5 +42,14 @@ class RetrofitClientTest {
                 "http://localhost:3000"
             )
         }
+    }
+
+    @Test
+    fun `createApiService creates ApiService`() {
+        val apiService = RetrofitClient.createApiService(
+            "http://localhost:3000/"
+        )
+
+        assertNotNull(apiService)
     }
 }
