@@ -23,4 +23,8 @@ object RetrofitClient {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
+
+    fun createApiService(baseUrl: String): ApiService {
+        return create(baseUrl).create(ApiService::class.java)
+    }
 }
