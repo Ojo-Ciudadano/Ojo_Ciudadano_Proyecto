@@ -10,8 +10,10 @@ navigationCompose = "2.9.7"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
 retrofit = "3.0.0"
+coroutines = "1.10.2"
 
 [libraries]
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
