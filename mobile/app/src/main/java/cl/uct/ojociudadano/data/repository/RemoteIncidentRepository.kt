@@ -5,6 +5,7 @@ import cl.uct.ojociudadano.data.mapper.toRequestDto
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.remote.ApiService
+import cl.uct.ojociudadano.data.remote.error.executeApiCall
 
 class RemoteIncidentRepository(
     private val apiService: ApiService
@@ -13,22 +14,28 @@ class RemoteIncidentRepository(
     override suspend fun getIncidents(
         reporterUserId: String?
     ): List<Incident> {
-        return apiService
-            .getIncidents(reporterUserId)
-            .map { it.toDomain() }
+        val response = executeApiCall {
+            apiService.getIncidents(reporterUserId)
+        }
+
+        return response.map { it.toDomain() }
     }
 
     override suspend fun getIncidentById(id: String): Incident {
-        return apiService
-            .getIncidentById(id)
-            .toDomain()
+        val response = executeApiCall {
+            apiService.getIncidentById(id)
+        }
+
+        return response.toDomain()
     }
 
     override suspend fun createIncident(
         input: CreateIncidentInput
     ): Incident {
-        return apiService
-            .createIncident(input.toRequestDto())
-            .toDomain()
+        val response = executeApiCall {
+            apiService.createIncident(input.toRequestDto())
+        }
+
+        return response.toDomain()
     }
 }
