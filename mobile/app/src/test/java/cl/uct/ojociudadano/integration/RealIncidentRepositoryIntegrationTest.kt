@@ -27,17 +27,17 @@ class RealIncidentRepositoryIntegrationTest {
         assertTrue(
             incidents.any {
                 it.title == "Poste sin iluminación" &&
-                    it.reporterUserId == Sprint1ApiDefaults.USER_ID &&
-                    it.category.name == "Alumbrado público" &&
-                    it.status.name == "Nuevo" &&
-                    it.location.commune == "Temuco"
+                        it.reporterUserId == Sprint1ApiDefaults.USER_ID &&
+                        it.category.name == "Alumbrado público" &&
+                        it.status.name == "Nuevo" &&
+                        it.location.commune == "Temuco"
             }
         )
 
         assertTrue(
             incidents.any {
                 it.title == "Basura acumulada" &&
-                    it.reporterUserId != Sprint1ApiDefaults.USER_ID
+                        it.reporterUserId != Sprint1ApiDefaults.USER_ID
             }
         )
     }
@@ -51,7 +51,7 @@ class RealIncidentRepositoryIntegrationTest {
 
         val repository = createRepository()
 
-        val incidents = repository.getIncidents(
+        val incidents = repository.getIncidentsByReporter(
             Sprint1ApiDefaults.USER_ID
         )
 
@@ -80,7 +80,7 @@ class RealIncidentRepositoryIntegrationTest {
         val repository = createRepository()
 
         val allIncidents = repository.getIncidents()
-        val userIncidents = repository.getIncidents(
+        val userIncidents = repository.getIncidentsByReporter(
             Sprint1ApiDefaults.USER_ID
         )
 
