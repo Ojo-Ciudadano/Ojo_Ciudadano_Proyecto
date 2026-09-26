@@ -11,8 +11,16 @@ class RemoteIncidentRepository(
     private val apiService: ApiService
 ) : IncidentRepository {
 
-    override suspend fun getIncidents(
-        reporterUserId: String?
+    override suspend fun getIncidents(): List<Incident> {
+        val response = executeApiCall {
+            apiService.getIncidents()
+        }
+
+        return response.map { it.toDomain() }
+    }
+
+    override suspend fun getIncidentsByReporter(
+        reporterUserId: String
     ): List<Incident> {
         val response = executeApiCall {
             apiService.getIncidents(reporterUserId)
