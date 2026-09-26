@@ -206,8 +206,8 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
 
     CreateReportScreen(
         state = state,
-        onTitleChange = { state = state.copy(title = it) },
-        onDescriptionChange = { state = state.copy(description = it) },
+        onTitleChange = { state = state.updateTitle(it) },
+        onDescriptionChange = { state = state.updateDescription(it) },
         onCategoryClick = {},
         onCreateReportClick = { state = viewModel.validateForm(state) },
         modifier = modifier
