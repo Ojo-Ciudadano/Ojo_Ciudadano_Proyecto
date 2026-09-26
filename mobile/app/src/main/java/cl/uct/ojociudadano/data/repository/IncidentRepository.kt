@@ -5,8 +5,10 @@ import cl.uct.ojociudadano.data.model.Incident
 
 interface IncidentRepository {
 
-    suspend fun getIncidents(
-        reporterUserId: String? = null
+    suspend fun getIncidents(): List<Incident>
+
+    suspend fun getIncidentsByReporter(
+        reporterUserId: String
     ): List<Incident>
 
     suspend fun getIncidentById(id: String): Incident

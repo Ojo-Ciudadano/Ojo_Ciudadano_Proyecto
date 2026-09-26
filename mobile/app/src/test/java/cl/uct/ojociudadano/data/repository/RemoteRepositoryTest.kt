@@ -33,12 +33,12 @@ class RemoteRepositoryTest {
     }
 
     @Test
-    fun `getIncidents with user forwards reporter user id`() = runTest {
+    fun `getIncidentsByReporter forwards reporter user id`() = runTest {
         val apiService = FakeApiService()
         val repository = RemoteIncidentRepository(apiService)
         val userId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
 
-        repository.getIncidents(userId)
+        repository.getIncidentsByReporter(userId)
 
         assertEquals(userId, apiService.lastReporterUserId)
     }
