@@ -320,7 +320,7 @@ private fun CreateReportScreenPreview() {
 
 private val previewCategory = Category(
     id = "preview-category",
-    name = "Alumbrado público",
+    name = "Categoría de ejemplo",
     description = "",
     basePriority = 0,
     isCriticalEmergency = false,
