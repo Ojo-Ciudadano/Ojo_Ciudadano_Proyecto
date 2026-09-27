@@ -1,7 +1,6 @@
 package cl.uct.ojociudadano.ui.report
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,10 +15,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,8 +59,6 @@ fun CreateReportScreen(
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    var isCategoryMenuExpanded by remember { mutableStateOf(false) }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -113,45 +112,11 @@ fun CreateReportScreen(
             errorMessage = state.descriptionError
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Categoría",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { isCategoryMenuExpanded = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = state.selectedCategory?.name ?: "Seleccionar categoría",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                DropdownMenu(
-                    expanded = isCategoryMenuExpanded,
-                    onDismissRequest = { isCategoryMenuExpanded = false }
-                ) {
-                    TemporaryReportCategories.options.forEach { category ->
-                        DropdownMenuItem(
-                            text = { Text(category.name) },
-                            onClick = {
-                                onCategorySelected(category)
-                                isCategoryMenuExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-            state.categoryError?.let { error ->
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
+        CategorySelector(
+            selectedCategory = state.selectedCategory,
+            errorMessage = state.categoryError,
+            onCategorySelected = onCategorySelected
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
@@ -184,6 +149,53 @@ fun CreateReportScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Crear reporte")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategorySelector(
+    selectedCategory: Category?,
+    errorMessage: String?,
+    onCategorySelected: (Category) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = selectedCategory?.name.orEmpty(),
+            onValueChange = {},
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            readOnly = true,
+            label = { Text("Categoría") },
+            placeholder = { Text("Seleccionar categoría") },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            isError = errorMessage != null,
+            supportingText = errorMessage?.let { error -> { Text(error) } }
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            TemporaryReportCategories.options.forEach { category ->
+                DropdownMenuItem(
+                    text = { Text(category.name) },
+                    onClick = {
+                        onCategorySelected(category)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
