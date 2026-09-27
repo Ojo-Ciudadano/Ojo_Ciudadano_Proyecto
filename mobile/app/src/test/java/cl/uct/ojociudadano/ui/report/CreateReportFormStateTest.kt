@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.report
 
+import cl.uct.ojociudadano.data.model.Category
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -46,7 +47,7 @@ class CreateReportFormStateTest {
 
     @Test
     fun `updating category stores selection and clears only its previous error`() {
-        val category = TemporaryReportCategories.options.first()
+        val category = sampleCategory
         val state = CreateReportFormState(
             title = "Poste dañado",
             description = "El poste bloquea la vereda",
@@ -63,3 +64,12 @@ class CreateReportFormStateTest {
         assertEquals(state.descriptionError, updatedState.descriptionError)
     }
 }
+
+private val sampleCategory = Category(
+    id = "category-id",
+    name = "Alumbrado público",
+    description = "",
+    basePriority = 0,
+    isCriticalEmergency = false,
+    officialContactChannel = null
+)
