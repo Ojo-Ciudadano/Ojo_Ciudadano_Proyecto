@@ -15,8 +15,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +39,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 
 /**
@@ -47,14 +52,13 @@ fun CreateReportScreen(
     state: CreateReportFormState,
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
-    onCategoryClick: () -> Unit,
+    onCategorySelected: (Category) -> Unit,
     onCreateReportClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -108,29 +112,11 @@ fun CreateReportScreen(
             errorMessage = state.descriptionError
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Categoría",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            OutlinedButton(
-                onClick = onCategoryClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = state.categoryName.ifBlank { "Seleccionar categoría" },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            state.categoryError?.let { error ->
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
+        CategorySelector(
+            selectedCategory = state.selectedCategory,
+            errorMessage = state.categoryError,
+            onCategorySelected = onCategorySelected
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
@@ -163,6 +149,53 @@ fun CreateReportScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Crear reporte")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategorySelector(
+    selectedCategory: Category?,
+    errorMessage: String?,
+    onCategorySelected: (Category) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = selectedCategory?.name.orEmpty(),
+            onValueChange = {},
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            readOnly = true,
+            label = { Text("Categoría") },
+            placeholder = { Text("Seleccionar categoría") },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            isError = errorMessage != null,
+            supportingText = errorMessage?.let { error -> { Text(error) } }
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            TemporaryReportCategories.options.forEach { category ->
+                DropdownMenuItem(
+                    text = { Text(category.name) },
+                    onClick = {
+                        onCategorySelected(category)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
@@ -208,7 +241,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         state = state,
         onTitleChange = { state = state.updateTitle(it) },
         onDescriptionChange = { state = state.updateDescription(it) },
-        onCategoryClick = {},
+        onCategorySelected = { state = state.updateCategory(it) },
         onCreateReportClick = { state = viewModel.validateForm(state) },
         modifier = modifier
     )
@@ -222,11 +255,11 @@ private fun CreateReportScreenPreview() {
             state = CreateReportFormState(
                 title = "Poste de alumbrado dañado",
                 description = "La luminaria lleva varios días sin funcionar",
-                categoryName = "Alumbrado público"
+                selectedCategory = TemporaryReportCategories.options.first()
             ),
             onTitleChange = {},
             onDescriptionChange = {},
-            onCategoryClick = {},
+            onCategorySelected = {},
             onCreateReportClick = {}
         )
     }

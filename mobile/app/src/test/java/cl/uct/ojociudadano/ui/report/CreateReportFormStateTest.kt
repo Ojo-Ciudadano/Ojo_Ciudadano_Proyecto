@@ -43,4 +43,23 @@ class CreateReportFormStateTest {
         assertEquals(state.titleError, updatedState.titleError)
         assertEquals(state.categoryError, updatedState.categoryError)
     }
+
+    @Test
+    fun `updating category stores selection and clears only its previous error`() {
+        val category = TemporaryReportCategories.options.first()
+        val state = CreateReportFormState(
+            title = "Poste dañado",
+            description = "El poste bloquea la vereda",
+            titleError = "El título es obligatorio",
+            descriptionError = "La descripción es obligatoria",
+            categoryError = "La categoría es obligatoria"
+        )
+
+        val updatedState = state.updateCategory(category)
+
+        assertEquals(category, updatedState.selectedCategory)
+        assertNull(updatedState.categoryError)
+        assertEquals(state.titleError, updatedState.titleError)
+        assertEquals(state.descriptionError, updatedState.descriptionError)
+    }
 }
