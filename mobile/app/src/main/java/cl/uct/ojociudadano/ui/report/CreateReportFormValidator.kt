@@ -9,7 +9,7 @@ class CreateReportFormValidator {
         return state.copy(
             titleError = state.title.requiredFieldError("El título es obligatorio"),
             descriptionError = state.description.requiredFieldError("La descripción es obligatoria"),
-            categoryError = state.categoryId.requiredFieldError("La categoría es obligatoria")
+            categoryError = if (state.selectedCategory == null) "La categoría es obligatoria" else null
         )
     }
 }

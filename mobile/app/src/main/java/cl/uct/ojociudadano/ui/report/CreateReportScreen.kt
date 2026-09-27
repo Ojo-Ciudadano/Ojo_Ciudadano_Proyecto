@@ -1,6 +1,7 @@
 package cl.uct.ojociudadano.ui.report
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +38,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 
 /**
@@ -47,13 +51,14 @@ fun CreateReportScreen(
     state: CreateReportFormState,
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
-    onCategoryClick: () -> Unit,
+    onCategorySelected: (Category) -> Unit,
     onCreateReportClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var isCategoryMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -114,14 +119,30 @@ fun CreateReportScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            OutlinedButton(
-                onClick = onCategoryClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = state.categoryName.ifBlank { "Seleccionar categoría" },
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { isCategoryMenuExpanded = true },
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    Text(
+                        text = state.selectedCategory?.name ?: "Seleccionar categoría",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                DropdownMenu(
+                    expanded = isCategoryMenuExpanded,
+                    onDismissRequest = { isCategoryMenuExpanded = false }
+                ) {
+                    TemporaryReportCategories.options.forEach { category ->
+                        DropdownMenuItem(
+                            text = { Text(category.name) },
+                            onClick = {
+                                onCategorySelected(category)
+                                isCategoryMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
             state.categoryError?.let { error ->
                 Text(
@@ -208,7 +229,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         state = state,
         onTitleChange = { state = state.updateTitle(it) },
         onDescriptionChange = { state = state.updateDescription(it) },
-        onCategoryClick = {},
+        onCategorySelected = { state = state.updateCategory(it) },
         onCreateReportClick = { state = viewModel.validateForm(state) },
         modifier = modifier
     )
@@ -222,11 +243,11 @@ private fun CreateReportScreenPreview() {
             state = CreateReportFormState(
                 title = "Poste de alumbrado dañado",
                 description = "La luminaria lleva varios días sin funcionar",
-                categoryName = "Alumbrado público"
+                selectedCategory = TemporaryReportCategories.options.first()
             ),
             onTitleChange = {},
             onDescriptionChange = {},
-            onCategoryClick = {},
+            onCategorySelected = {},
             onCreateReportClick = {}
         )
     }
