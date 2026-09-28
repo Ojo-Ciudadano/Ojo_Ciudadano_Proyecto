@@ -56,4 +56,18 @@ export class AuthService {
       },
     };
   }
+
+  async login(dto: LoginDto) {
+    const usuario = await this.usuariosService.findByEmail(dto.email);
+    if (!usuario || !(await bcrypt.compare(dto.password, usuario.passwordHash))) {
+      throw new UnauthorizedException('Credenciales invalidas');
+    }
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: usuario.id,
+      email: usuario.email,
+    });
+
+    return { access_token: accessToken, token_type: 'Bearer' };
+  }
 }

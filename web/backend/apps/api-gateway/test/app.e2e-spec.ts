@@ -1,26 +1,129 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { ApiGatewayModule } from './../src/api-gateway.module';
+import { HttpExceptionFilter } from '../src/filters/http-exception.filter';
+import { AuthService } from '../src/auth/auth-service';
+
+const JWT_SECRET = 'test-jwt-secret';
+const CREDENCIALES_VALIDAS = {
+  email: 'admin@ojociudadano.cl',
+  password: 'password-seguro',
+};
+const INCIDENTE = {
+  titulo: 'Luminaria apagada',
+  descripcion: 'La luminaria de la esquina no funciona',
+  categoriaId: '550e8400-e29b-41d4-a716-446655440000',
+  usuarioReportaId: '550e8400-e29b-41d4-a716-446655440001',
+  ubicacion: {
+    latitud: -33.45,
+    longitud: -70.66,
+    direccionReferencia: 'Av. Central 123',
+    comuna: 'Santiago',
+    region: 'Metropolitana',
+    sector: 'Centro',
+  },
+};
 
 describe('ApiGatewayController (e2e)', () => {
   let app: INestApplication<App>;
+  let token: string;
 
   beforeEach(async () => {
+    process.env.JWT_SECRET = JWT_SECRET;
+    token = await new JwtService({ secret: JWT_SECRET }).signAsync({
+      sub: '550e8400-e29b-41d4-a716-446655440001',
+      email: CREDENCIALES_VALIDAS.email,
+    });
+
+    const authService = {
+      register: jest.fn().mockResolvedValue({ id: 'usuario-1', email: CREDENCIALES_VALIDAS.email }),
+      login: jest.fn(async (dto: typeof CREDENCIALES_VALIDAS) => {
+        if (dto.email !== CREDENCIALES_VALIDAS.email || dto.password !== CREDENCIALES_VALIDAS.password) {
+          throw new UnauthorizedException('Credenciales invalidas');
+        }
+        return { access_token: token, token_type: 'Bearer' };
+      }),
+    };
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [ApiGatewayModule],
-    }).compile();
+    })
+      .overrideProvider(AuthService)
+      .useValue(authService)
+      .compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalFilters(new HttpExceptionFilter());
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('registra un usuario por el gateway', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .post('/api/v1/auth/register')
+      .send({ nombre: 'Admin', ...CREDENCIALES_VALIDAS })
+      .expect(201)
+      .expect(({ body }) => expect(body.email).toBe(CREDENCIALES_VALIDAS.email));
+  });
+
+  it('inicia sesion y entrega un JWT', () => {
+    return request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send(CREDENCIALES_VALIDAS)
       .expect(200)
-      .expect('Hello World!');
+      .expect(({ body }) => {
+        expect(body.access_token).toBe(token);
+        expect(body.token_type).toBe('Bearer');
+      });
+  });
+
+  it('rechaza credenciales invalidas con error estructurado', () => {
+    return request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: CREDENCIALES_VALIDAS.email, password: 'incorrecta' })
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.objectContaining({
+          statusCode: 401,
+          error: 'Unauthorized',
+          path: '/api/v1/auth/login',
+        }));
+        expect(body.access_token).toBeUndefined();
+      });
+  });
+
+  it('deniega la creacion de incidentes sin JWT', () => {
+    return request(app.getHttpServer())
+      .post('/api/v1/incidentes')
+      .send(INCIDENTE)
+      .expect(401)
+      .expect(({ body }) => expect(body.statusCode).toBe(401));
+  });
+
+  it('acepta la creacion de incidentes con JWT', async () => {
+    const incidenteCreado = { id: 'incidente-1', ...INCIDENTE };
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      status: 201,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => incidenteCreado,
+    } as Response);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/incidentes')
+      .set('Authorization', `Bearer ${token}`)
+      .send(INCIDENTE)
+      .expect(201)
+      .expect(({ body }) => expect(body.id).toBe('incidente-1'));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3002/incidentes',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(INCIDENTE) }),
+    );
+    fetchMock.mockRestore();
   });
 
   afterEach(async () => {
