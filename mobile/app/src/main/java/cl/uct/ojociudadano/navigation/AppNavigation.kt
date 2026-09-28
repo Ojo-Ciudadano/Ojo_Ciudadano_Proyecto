@@ -28,7 +28,11 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(AppRoutes.REPORTS) {
-            ReportsScreen(onBack = navController::navigateUp)
+            ReportsScreen(
+                onBack = navController::navigateUp,
+                onCreateReportClick = { navController.navigate(AppRoutes.CREATE_REPORT)
+                }
+            )
         }
         composable(AppRoutes.CREATE_REPORT) {
             CreateReportScreen(onBack = navController::navigateUp)
