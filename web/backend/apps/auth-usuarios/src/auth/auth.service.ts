@@ -1,13 +1,18 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { CreateUsuarioDto } from '../usuarios/dto/create-usuario.dto';
+import { LoginDto } from './dto/login.dto';
 
 const SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly usuariosService: UsuariosService) {}
+  constructor(
+    private readonly usuariosService: UsuariosService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async register(dto: CreateUsuarioDto) {
     const existente = await this.usuariosService.findByEmail(dto.email);
@@ -26,5 +31,19 @@ export class AuthService {
 
     const { passwordHash: _omit, ...usuarioSinPassword } = usuario;
     return usuarioSinPassword;
+  }
+
+  async login(dto: LoginDto) {
+    const usuario = await this.usuariosService.findByEmail(dto.email);
+    if (!usuario || !(await bcrypt.compare(dto.password, usuario.passwordHash))) {
+      throw new UnauthorizedException('Credenciales invalidas');
+    }
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: usuario.id,
+      email: usuario.email,
+    });
+
+    return { access_token: accessToken, token_type: 'Bearer' };
   }
 }
