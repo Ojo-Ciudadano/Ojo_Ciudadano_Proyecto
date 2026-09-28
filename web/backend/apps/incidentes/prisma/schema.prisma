@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Categoria {
+  id                   String  @id @default(uuid()) @db.Uuid
+  nombre               String
+  descripcion          String
+  prioridadBase        Int     @map("prioridad_base")
+  esEmergenciaCritica  Boolean @default(false) @map("es_emergencia_critica")
+  canalOficialContacto String? @map("canal_oficial_contacto")
+  incidentes Incidente[]
+  @@map("categoria")
+}
+
+model Ubicacion {
+  id                  String  @id @default(uuid()) @db.Uuid
+  latitud             Float
+  longitud            Float
+  direccionReferencia String @map("direccion_referencia")
+  comuna              String
+  region              String
+  sector              String
+  incidentes Incidente[]
+  @@map("ubicacion")
+}
+
+model Estado {
+  id     String @id @default(uuid()) @db.Uuid
+  nombre String @unique
+  orden  Int
+  incidentes Incidente[]
+  historialEstados HistorialEstado[]
+  @@map("estado")
+}
+
+model Incidente {
+  id                 String   @id @default(uuid()) @db.Uuid
+  titulo             String
+  descripcion        String
+  categoriaId        String   @map("categoria_id") @db.Uuid
+  estadoId           String   @map("estado_id") @db.Uuid
+  ubicacionId        String   @map("ubicacion_id") @db.Uuid
+  usuarioReportaId   String   @map("usuario_reporta_id") @db.Uuid   
+  nivelPrioridad     Int?     @map("nivel_prioridad")               // null hasta que un Supervisor lo marque
+  fechaCreacion      DateTime @default(now()) @map("fecha_creacion")
+  fechaActualizacion DateTime @updatedAt @map("fecha_actualizacion")
+  categoria Categoria @relation(fields: [categoriaId], references: [id])
+  estado    Estado    @relation(fields: [estadoId], references: [id])
+  ubicacion Ubicacion @relation(fields: [ubicacionId], references: [id])
+
+  evidencias   Evidencia[]          
+  asignaciones Asignacion[]        
+  comentarios  Comentario[]        
+  historial    HistorialEstado[]  
+  @@map("incidente")
+}
+
+model Evidencia {
+  id           String   @id @default(uuid()) @db.Uuid
+  incidenteId  String   @map("incidente_id") @db.Uuid
+  urlArchivo   String   @map("url_archivo")
+  tipo         String
+  fechaSubida  DateTime @default(now()) @map("fecha_subida")
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+
+  @@map("evidencia")
+}
+
+model Asignacion {
+  id                String   @id @default(uuid()) @db.Uuid
+  incidenteId       String   @map("incidente_id") @db.Uuid
+  usuarioAsignadoId String   @map("usuario_asignado_id") @db.Uuid   // FK externa: auth-usuarios
+  asignadoPorId     String   @map("asignado_por_id") @db.Uuid       // FK externa: auth-usuarios
+  fechaAsignacion   DateTime @default(now()) @map("fecha_asignacion")
+  activa            Boolean  @default(true)
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+
+  @@map("asignacion")
+}
+
+model Comentario {
+  id          String   @id @default(uuid()) @db.Uuid
+  incidenteId String   @map("incidente_id") @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid   // FK externa: auth-usuarios
+  texto       String
+  fecha       DateTime @default(now())
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+
+  @@map("comentario")
+}
+
+model HistorialEstado {
+  id          String   @id @default(uuid()) @db.Uuid
+  incidenteId String   @map("incidente_id") @db.Uuid
+  estadoId    String   @map("estado_id") @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid   // FK externa: auth-usuarios
+  observacion String?
+  fecha       DateTime @default(now())
+
+  incidente Incidente @relation(fields: [incidenteId], references: [id])
+  estado    Estado    @relation(fields: [estadoId], references: [id])
+
+  @@map("historial_estado")
+}
