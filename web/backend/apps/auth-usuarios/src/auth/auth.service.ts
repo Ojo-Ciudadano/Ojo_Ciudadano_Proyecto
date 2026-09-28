@@ -1,30 +1,59 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../prisma/prisma.service';
+import { LoginDto } from '../dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { UsuariosService } from '../usuarios/usuarios.service';
-import { CreateUsuarioDto } from '../usuarios/dto/create-usuario.dto';
-
-const SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly usuariosService: UsuariosService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
-  async register(dto: CreateUsuarioDto) {
-    const existente = await this.usuariosService.findByEmail(dto.email);
-    if (existente) {
-      throw new ConflictException('Ya existe una cuenta con ese correo');
-    }
+  async login(loginDto: LoginDto) {
+    const { email, password } = loginDto;
 
-    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
-
-    const usuario = await this.usuariosService.create({
-      nombre: dto.nombre,
-      email: dto.email,
-      passwordHash,
-      telefono: dto.telefono,
+    // 1. Buscar usuario por correo e incluir la relación con sus roles
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { email },
+      include: {
+        roles: {
+          include: {
+            rol: true,
+          },
+        },
+      },
     });
 
-    const { passwordHash: _omit, ...usuarioSinPassword } = usuario;
-    return usuarioSinPassword;
+    if (!usuario) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // 2. Validar contraseña contra passwordHash
+    const isPasswordValid = await bcrypt.compare(password, usuario.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // 3. Extraer nombres de roles para el payload del JWT
+    const listaRoles = usuario.roles.map((r) => r.rol.nombre);
+
+    const payload = {
+      sub: usuario.id,
+      email: usuario.email,
+      roles: listaRoles,
+    };
+
+    // 4. Retornar token y datos del usuario
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        roles: listaRoles,
+      },
+    };
   }
 }
