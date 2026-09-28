@@ -1,14 +1,19 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Box, Typography } from '@mui/material'
-import { useAuth } from '../../contexts/AuthContext'
+import { useSession } from '../../hooks/useSession'
 import { LoginForm } from '../../components/auth/LoginForm'
+import { LoadingScreen } from '../../components/auth/LoadingScreen'
 
 export function LoginPage() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useSession()
   const navigate = useNavigate()
   const location = useLocation()
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/'
+
+  if (isLoading) {
+    return <LoadingScreen />
+  }
 
   if (isAuthenticated) {
     navigate(from, { replace: true })
