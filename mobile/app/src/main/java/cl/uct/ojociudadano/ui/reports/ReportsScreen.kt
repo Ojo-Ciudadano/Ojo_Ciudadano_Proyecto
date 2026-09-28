@@ -31,8 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -231,7 +233,7 @@ private fun ReportsHeader(
     onToggleFilters: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(0.10f),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -283,7 +285,7 @@ private fun ReportsHeader(
 @Composable
 private fun ReportsFilters() {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(0.30f),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -395,38 +397,100 @@ private fun ReportsList() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp),
+            .fillMaxHeight(0.60f),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        )
+        colors = CardDefaults.cardColors( containerColor = Color.White )
     ) {
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
+            ReportCard()
 
-            Text(
-                text = "Reportes",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            ReportCard()
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            Text(
-                text = "Aquí se mostrarán los reportes realizados.",
-                fontSize = 14.sp,
-                color = Color.Gray
-            )
+            ReportCard()
         }
     }
 }
 
+// ============================================================
+// ELEMENTO REUTILIZABLE DE REPORTE
+// ============================================================
+@Composable
+private fun ReportCard(
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = Color.Black,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+
+        // ====================================================
+        // IMAGEN
+        // ====================================================
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFFE0E0E0)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Imagen",
+                color = Color.Gray,
+                fontSize = 14.sp
+            )
+        }
+
+        // INFORMACIÓN
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+
+            // TÍTULO
+            Text(
+                text = "Incendio en el cerro Nielol",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // DESCRIPCIÓN
+            Text(
+                text = "Se esta quemando el cerro en Temuco, esto empezo alrededor de las 3am, nadie",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+
+            )
+
+            // FECHA
+            Text(
+                text = "26-09-2026",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.Gray,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 
 // ============================================================
 // FOOTER
