@@ -12,6 +12,35 @@ class ResponseDtoDeserializationTest {
     private val gson = Gson()
 
     @Test
+    fun `login response deserializes token and user from usuario`() {
+        val json = """
+            {
+              "access_token": "jwt-value",
+              "token_type": "Bearer",
+              "usuario": {
+                "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "nombre": "Administrador",
+                "email": "usuario@example.invalid",
+                "roles": ["CIUDADANO"]
+              },
+              "user": {
+                "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "nombre": "Administrador",
+                "email": "usuario@example.invalid",
+                "roles": ["CIUDADANO"]
+              }
+            }
+        """.trimIndent()
+
+        val response = gson.fromJson(json, LoginResponseDto::class.java)
+
+        assertEquals("jwt-value", response.access_token)
+        assertEquals("Bearer", response.token_type)
+        assertEquals("Administrador", response.authenticatedUser().nombre)
+        assertEquals(listOf("CIUDADANO"), response.authenticatedUser().roles)
+    }
+
+    @Test
     fun `incident response deserializes according to backend contract`() {
         val json = """
             {

@@ -8,12 +8,36 @@ import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentLocationDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
+import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
+import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
+import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.session.AuthenticatedSession
+import cl.uct.ojociudadano.data.session.SessionStorage
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class RemoteRepositoryTest {
+
+    @Test
+    fun `login forwards credentials then persists mapped authenticated session`() = runTest {
+        val apiService = FakeApiService()
+        val sessionStorage = FakeSessionStorage()
+        val repository = RemoteAuthRepository(apiService, sessionStorage)
+
+        val session = repository.login(
+            email = "usuario@example.invalid",
+            password = "password-not-stored"
+        )
+
+        assertEquals("usuario@example.invalid", apiService.lastLoginRequest?.email)
+        assertEquals("password-not-stored", apiService.lastLoginRequest?.password)
+        assertEquals("jwt-value", session.accessToken)
+        assertEquals("Administrador", session.name)
+        assertEquals(listOf("CIUDADANO"), session.roles)
+        assertEquals(session, sessionStorage.currentSession())
+    }
 
     @Test
     fun `getIncidents without user forwards null filter and maps response`() = runTest {
@@ -141,8 +165,17 @@ class RemoteRepositoryTest {
     private class FakeApiService(
         private val incidents: List<IncidentDto> = emptyList(),
         private val incident: IncidentDto = sampleIncidentDto(),
-        private val categories: List<CategoryDto> = emptyList()
+        private val categories: List<CategoryDto> = emptyList(),
+        private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+
+        var lastLoginRequest: LoginRequestDto? = null
+            private set
+
+        override suspend fun login(request: LoginRequestDto): LoginResponseDto {
+            lastLoginRequest = request
+            return loginResponse
+        }
 
         var lastReporterUserId: String? = null
             private set
@@ -179,7 +212,37 @@ class RemoteRepositoryTest {
         }
     }
 
+    private class FakeSessionStorage : SessionStorage {
+
+        private var session: AuthenticatedSession? = null
+
+        override fun currentToken(): String? = session?.accessToken
+
+        override fun currentSession(): AuthenticatedSession? = session
+
+        override fun save(session: AuthenticatedSession) {
+            this.session = session
+        }
+
+        override fun clear() {
+            session = null
+        }
+    }
+
     companion object {
+
+        private fun sampleLoginResponse(): LoginResponseDto {
+            return LoginResponseDto(
+                access_token = "jwt-value",
+                token_type = "Bearer",
+                usuario = AuthUserDto(
+                    id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                    nombre = "Administrador",
+                    email = "usuario@example.invalid",
+                    roles = listOf("CIUDADANO")
+                )
+            )
+        }
 
         private fun sampleCategoryDto(): CategoryDto {
             return CategoryDto(
