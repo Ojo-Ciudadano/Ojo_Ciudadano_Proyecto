@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showApp() {
+
         setContent {
             OjoCiudadanoTheme {
                 AppNavigation()
