@@ -20,13 +20,13 @@ class ResponseDtoDeserializationTest {
               "usuario": {
                 "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
                 "nombre": "Administrador",
-                "email": "admin@ojociudadano.cl",
+                "email": "usuario@example.invalid",
                 "roles": ["CIUDADANO"]
               },
               "user": {
                 "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
                 "nombre": "Administrador",
-                "email": "admin@ojociudadano.cl",
+                "email": "usuario@example.invalid",
                 "roles": ["CIUDADANO"]
               }
             }

@@ -27,11 +27,11 @@ class RemoteRepositoryTest {
         val repository = RemoteAuthRepository(apiService, sessionStorage)
 
         val session = repository.login(
-            email = "admin@ojociudadano.cl",
+            email = "usuario@example.invalid",
             password = "password-not-stored"
         )
 
-        assertEquals("admin@ojociudadano.cl", apiService.lastLoginRequest?.email)
+        assertEquals("usuario@example.invalid", apiService.lastLoginRequest?.email)
         assertEquals("password-not-stored", apiService.lastLoginRequest?.password)
         assertEquals("jwt-value", session.accessToken)
         assertEquals("Administrador", session.name)
@@ -238,7 +238,7 @@ class RemoteRepositoryTest {
                 usuario = AuthUserDto(
                     id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
                     nombre = "Administrador",
-                    email = "admin@ojociudadano.cl",
+                    email = "usuario@example.invalid",
                     roles = listOf("CIUDADANO")
                 )
             )
