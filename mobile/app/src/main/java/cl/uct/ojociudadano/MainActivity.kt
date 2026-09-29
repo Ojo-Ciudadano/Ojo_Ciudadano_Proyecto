@@ -9,8 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import cl.uct.ojociudadano.navigation.AppNavigation
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
+import cl.uct.ojociudadano.ui.startup.SessionStartupGate
 
 class MainActivity : ComponentActivity() {
 
@@ -44,7 +44,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OjoCiudadanoTheme {
-                AppNavigation()
+                SessionStartupGate(
+                    sessionBootstrapper = (
+                        application as OjoCiudadanoApplication
+                    ).container.sessionBootstrapper
+                )
             }
         }
     }
