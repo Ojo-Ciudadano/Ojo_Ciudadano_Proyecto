@@ -66,6 +66,35 @@ class CreateReportViewModelTest {
         assertFalse(viewModel.categoryUiState.isLoading)
         assertEquals("Error de red", viewModel.categoryUiState.errorMessage)
     }
+
+    @Test
+    fun `stores form events in view model state`() = runTest {
+        val viewModel = CreateReportViewModel(
+            categoryRepository = FakeCategoryRepository()
+        )
+
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.onDescriptionChange("El poste bloquea la vereda")
+        viewModel.onCategorySelected(sampleCategory)
+
+        assertEquals("Poste dañado", viewModel.formState.title)
+        assertEquals("El poste bloquea la vereda", viewModel.formState.description)
+        assertEquals(sampleCategory, viewModel.formState.selectedCategory)
+    }
+
+    @Test
+    fun `validates form through view model without starting a submission`() = runTest {
+        val viewModel = CreateReportViewModel(
+            categoryRepository = FakeCategoryRepository()
+        )
+
+        viewModel.onCreateReportClick()
+
+        assertEquals("El título es obligatorio", viewModel.formState.titleError)
+        assertEquals("La descripción es obligatoria", viewModel.formState.descriptionError)
+        assertEquals("La categoría es obligatoria", viewModel.formState.categoryError)
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+    }
 }
 
 private class FakeCategoryRepository(

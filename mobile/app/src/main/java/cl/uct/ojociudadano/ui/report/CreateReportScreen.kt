@@ -58,6 +58,7 @@ fun CreateReportScreen(
     categories: List<Category>,
     isLoadingCategories: Boolean,
     categoryLoadError: String?,
+    submissionState: CreateReportSubmissionState,
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onCategorySelected: (Category) -> Unit,
@@ -157,9 +158,27 @@ fun CreateReportScreen(
                 focusManager.clearFocus()
                 onCreateReportClick()
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = submissionState !is CreateReportSubmissionState.Loading
         ) {
-            Text("Crear reporte")
+            Text(
+                if (submissionState is CreateReportSubmissionState.Loading) {
+                    "Creando reporte..."
+                } else {
+                    "Crear reporte"
+                }
+            )
+        }
+
+        if (submissionState is CreateReportSubmissionState.Success) {
+            Text("Reporte creado correctamente")
+        }
+
+        if (submissionState is CreateReportSubmissionState.Error) {
+            Text(
+                text = submissionState.message,
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
@@ -276,7 +295,6 @@ private fun ReportTextField(
  */
 @Composable
 fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
-    var state by remember { mutableStateOf(CreateReportFormState()) }
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val viewModel: CreateReportViewModel = viewModel(
         factory = remember(application) {
@@ -285,14 +303,15 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     )
 
     CreateReportScreen(
-        state = state,
+        state = viewModel.formState,
         categories = viewModel.categoryUiState.categories,
         isLoadingCategories = viewModel.categoryUiState.isLoading,
         categoryLoadError = viewModel.categoryUiState.errorMessage,
-        onTitleChange = { state = state.updateTitle(it) },
-        onDescriptionChange = { state = state.updateDescription(it) },
-        onCategorySelected = { state = state.updateCategory(it) },
-        onCreateReportClick = { state = viewModel.validateForm(state) },
+        submissionState = viewModel.submissionState,
+        onTitleChange = viewModel::onTitleChange,
+        onDescriptionChange = viewModel::onDescriptionChange,
+        onCategorySelected = viewModel::onCategorySelected,
+        onCreateReportClick = viewModel::onCreateReportClick,
         modifier = modifier
     )
 }
@@ -310,6 +329,7 @@ private fun CreateReportScreenPreview() {
             categories = listOf(previewCategory),
             isLoadingCategories = false,
             categoryLoadError = null,
+            submissionState = CreateReportSubmissionState.Idle,
             onTitleChange = {},
             onDescriptionChange = {},
             onCategorySelected = {},
