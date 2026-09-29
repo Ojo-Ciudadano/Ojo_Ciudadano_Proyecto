@@ -8,8 +8,10 @@ import {
   CircularProgress,
   Link,
   Paper,
+  Collapse,
 } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotification } from '../notifications/NotificationProvider'
 import type { ApiError } from '../../types'
 
 interface LoginFormProps {
@@ -22,6 +24,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
   const { login, isLoading } = useAuth()
+  const { showNotification } = useNotification()
 
   const validate = (): boolean => {
     const errors: { email?: string; password?: string } = {}
@@ -50,14 +53,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
     try {
       await login(email, password)
+      showNotification('¡Inicio de sesión exitoso!', 'success')
       onSuccess?.()
     } catch (err) {
       const apiError = err as ApiError
-      setError(
-        Array.isArray(apiError.message)
-          ? apiError.message.join(', ')
-          : apiError.message || 'Error al iniciar sesión',
-      )
+      const errorMessage = Array.isArray(apiError.message)
+        ? apiError.message.join(', ')
+        : apiError.message || 'Error al iniciar sesión'
+
+      setError(errorMessage)
+      showNotification(errorMessage, 'error')
     }
   }
 
@@ -71,11 +76,15 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         Ingresa tus credenciales para acceder
       </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+      <Collapse in={!!error}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+          onClose={() => setError(null)}
+        >
           {error}
         </Alert>
-      )}
+      </Collapse>
 
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
