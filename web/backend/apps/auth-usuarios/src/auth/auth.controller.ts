@@ -1,10 +1,27 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { LoginDto } from '../dto/login.dto';
+import { CreateUsuarioDto } from '../usuarios/dto/create-usuario.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() dto: CreateUsuarioDto) {
+    return this.authService.register(dto);
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -12,9 +29,10 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
-  @Post('login')
-  @HttpCode(200)
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  
+  @Get('perfil')
+  @UseGuards(AuthGuard('jwt'))
+  getPerfil(@Req() req: any) {
+    return req.user;
   }
 }
