@@ -1,48 +1,78 @@
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-describe('AuthService.login', () => {
+describe('AuthService', () => {
+  let service: AuthService;
+  let prisma: any;
+  let jwtService: any;
+  let usuariosService: any;
+
   const usuario = {
     id: '550e8400-e29b-41d4-a716-446655440001',
+    nombre: 'Admin',
     email: 'admin@ojociudadano.cl',
     passwordHash: bcrypt.hashSync('password-seguro', 4),
+    roles: [{ rol: { nombre: 'ADMIN' } }],
   };
-  const usuariosService = {
-    findByEmail: jest.fn(),
-  };
-  const jwtService = {
-    signAsync: jest.fn().mockResolvedValue('jwt-firmado'),
-  };
-  const service = new AuthService(
-    usuariosService as unknown as UsuariosService,
-    jwtService as unknown as JwtService,
-  );
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  beforeEach(async () => {
+    prisma = {
+      usuario: {
+        findUnique: jest.fn<any>(),
+        create: jest.fn<any>(),
+      },
+    };
+
+   jwtService = {
+  signAsync: jest.fn().mockImplementation(() => Promise.resolve('jwt-firmado')),
+};
+
+    usuariosService = {
+      create: jest.fn<any>(),
+    };
+
+    service = new AuthService(prisma, jwtService, usuariosService);
   });
 
-  it('emite un token para credenciales correctas', async () => {
-    usuariosService.findByEmail.mockResolvedValue(usuario);
+  describe('login', () => {
+    it('emite un token para credenciales correctas', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(usuario);
 
-    await expect(service.login({ email: usuario.email, password: 'password-seguro' })).resolves.toEqual({
-      access_token: 'jwt-firmado',
-      token_type: 'Bearer',
+      const result = await service.login({
+        email: usuario.email,
+        password: 'password-seguro',
+      });
+
+     expect(result).toEqual({
+  access_token: 'jwt-firmado',
+  usuario: {
+    id: usuario.id,
+    nombre: usuario.nombre,
+    email: usuario.email,
+    roles: ['ADMIN'],
+  },
+});
     });
 
-    expect(jwtService.signAsync).toHaveBeenCalledWith({ sub: usuario.id, email: usuario.email });
-  });
+    it('rechaza un correo inexistente', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(null);
 
-  it('rechaza un correo inexistente o una contraseña incorrecta', async () => {
-    usuariosService.findByEmail.mockResolvedValueOnce(null).mockResolvedValueOnce(usuario);
+      await expect(
+        service.login({ email: 'nadie@example.cl', password: 'password-seguro' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
 
-    await expect(service.login({ email: 'nadie@example.cl', password: 'password-seguro' }))
-      .rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(service.login({ email: usuario.email, password: 'incorrecta' }))
-      .rejects.toBeInstanceOf(UnauthorizedException);
-    expect(jwtService.signAsync).not.toHaveBeenCalled();
+    it('rechaza una contraseña incorrecta', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(usuario);
+
+      await expect(
+        service.login({ email: usuario.email, password: 'incorrecta' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
   });
 });

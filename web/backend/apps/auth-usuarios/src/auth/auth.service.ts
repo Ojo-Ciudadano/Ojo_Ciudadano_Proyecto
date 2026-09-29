@@ -1,57 +1,43 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { LoginDto } from '../dto/login.dto';
+import { UsuariosService } from '../usuarios/usuarios.service';
 import { CreateUsuarioDto } from '../usuarios/dto/create-usuario.dto';
-import * as bcrypt from 'bcrypt';
+import { LoginDto } from '../dto/login.dto';
+
+const SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly usuariosService: UsuariosService,
   ) {}
 
-  // 1. Método para registrar un nuevo usuario
   async register(dto: CreateUsuarioDto) {
-    const { email, password, nombre } = dto;
-
-    // Verificar si el usuario ya existe
-    const existingUser = await this.prisma.usuario.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('El correo ya está registrado');
+    const existente = await this.usuariosService.findByEmail(dto.email);
+    if (existente) {
+      throw new ConflictException('Ya existe una cuenta con ese correo');
     }
 
-    // Encriptar contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const passwordHash = bcrypt.hashSync(dto.password, SALT_ROUNDS);
 
-    // Crear el usuario en la base de datos
-    const nuevoUsuario = await this.prisma.usuario.create({
-      data: {
-        email,
-        nombre,
-        passwordHash: hashedPassword,
-      },
+    const usuario = await this.usuariosService.create({
+      nombre: dto.nombre,
+      email: dto.email,
+      passwordHash,
+      telefono: dto.telefono,
     });
 
-    return {
-      message: 'Usuario registrado exitosamente',
-      usuario: {
-        id: nuevoUsuario.id,
-        email: nuevoUsuario.email,
-        nombre: nuevoUsuario.nombre,
-      },
-    };
+    const { passwordHash: _omit, ...usuarioSinPassword } = usuario;
+    return usuarioSinPassword;
   }
 
-  // 2. Método de Login con Roles incluidos en el Payload del Token
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    // Buscar usuario por correo e incluir sus roles
     const usuario = await this.prisma.usuario.findUnique({
       where: { email },
       include: {
@@ -67,13 +53,11 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // Validar contraseña
     const isPasswordValid = await bcrypt.compare(password, usuario.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // Extraer lista de roles (ej: ['ADMIN'] o ['CIUDADANO'])
     const listaRoles = usuario.roles.map((r) => r.rol.nombre);
 
     const payload = {

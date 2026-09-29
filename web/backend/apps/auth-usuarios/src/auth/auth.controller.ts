@@ -37,7 +37,6 @@ export class AuthController {
     return req.user;
   }
 
-
   @Get('admin-only')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(Role.ADMIN)
