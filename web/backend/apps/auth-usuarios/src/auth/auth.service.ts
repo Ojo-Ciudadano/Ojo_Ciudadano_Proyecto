@@ -1,20 +1,54 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import bcrypt from 'bcryptjs';
+import { PrismaService } from '../prisma/prisma.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { CreateUsuarioDto } from '../usuarios/dto/create-usuario.dto';
 import { LoginDto } from '../dto/login.dto';
-import * as bcrypt from 'bcrypt';
+
+const SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly usuariosService: UsuariosService,
+    private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly usuariosService: UsuariosService,
   ) {}
+
+  async register(dto: CreateUsuarioDto) {
+    const existente = await this.usuariosService.findByEmail(dto.email);
+    if (existente) {
+      throw new ConflictException('Ya existe una cuenta con ese correo');
+    }
+
+    const passwordHash = bcrypt.hashSync(dto.password, SALT_ROUNDS);
+
+    const usuario = await this.usuariosService.create({
+      nombre: dto.nombre,
+      email: dto.email,
+      passwordHash,
+      telefono: dto.telefono,
+    });
+
+    const { passwordHash: _omit, ...usuarioSinPassword } = usuario;
+    return usuarioSinPassword;
+  }
 
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    const usuario = await this.usuariosService.findByEmail(email);
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { email },
+      include: {
+        roles: {
+          include: {
+            rol: true,
+          },
+        },
+      },
+    });
+
     if (!usuario) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
@@ -24,36 +58,21 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const usuarioConRoles = usuario as typeof usuario & {
-      roles?: Array<{ rol?: { nombre: string } }>;
-    };
-
-    const roles = Array.isArray(usuarioConRoles.roles)
-      ? usuarioConRoles.roles.map((r) => r.rol?.nombre ?? 'CIUDADANO')
-      : ['CIUDADANO'];
+    const listaRoles = usuario.roles.map((r) => r.rol.nombre);
 
     const payload = {
       sub: usuario.id,
       email: usuario.email,
-      roles,
+      roles: listaRoles,
     };
 
-    const accessToken = await this.jwtService.signAsync(payload);
-
     return {
-      access_token: accessToken,
-      token_type: 'Bearer',
+      access_token: await this.jwtService.signAsync(payload),
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
         email: usuario.email,
-        roles,
-      },
-      user: {
-        id: usuario.id,
-        nombre: usuario.nombre,
-        email: usuario.email,
-        roles,
+        roles: listaRoles,
       },
     };
   }
