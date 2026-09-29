@@ -12,6 +12,8 @@ import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.data.session.SharedPreferencesSessionStorage
+import cl.uct.ojociudadano.data.session.DevelopmentAuthCredentials
+import cl.uct.ojociudadano.data.session.SessionBootstrapper
 
 class AppContainer(
     context: Context,
@@ -28,6 +30,17 @@ class AppContainer(
 
     val authRepository: AuthRepository by lazy {
         RemoteAuthRepository(apiService, sessionStorage)
+    }
+
+    val sessionBootstrapper: SessionBootstrapper by lazy {
+        SessionBootstrapper(
+            sessionStorage = sessionStorage,
+            authRepository = authRepository,
+            developmentCredentials = DevelopmentAuthCredentials(
+                email = BuildConfig.DEV_AUTH_EMAIL,
+                password = BuildConfig.DEV_AUTH_PASSWORD
+            )
+        )
     }
 
     val categoryRepository: CategoryRepository by lazy {

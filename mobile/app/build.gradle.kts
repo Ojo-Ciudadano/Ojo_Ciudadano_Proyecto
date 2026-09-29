@@ -1,12 +1,36 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
-val apiBaseUrl = providers.gradleProperty("API_BASE_URL")
-    .orElse(providers.environmentVariable("API_BASE_URL"))
-    .orElse("http://10.0.2.2:3000/")
-    .get()
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun configurationValue(name: String, fallback: String = ""): String {
+    return providers.gradleProperty(name).orNull
+        ?: providers.environmentVariable(name).orNull
+        ?: localProperties.getProperty(name)
+        ?: fallback
+}
+
+fun String.asBuildConfigString(): String {
+    return "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+}
+
+val apiBaseUrl = configurationValue(
+    name = "API_BASE_URL",
+    fallback = "http://10.0.2.2:3000/"
+)
+val devAuthEmail = configurationValue("DEV_AUTH_EMAIL")
+val devAuthPassword = configurationValue("DEV_AUTH_PASSWORD")
+
 android {
     namespace = "cl.uct.ojociudadano"
     compileSdk {
@@ -24,11 +48,25 @@ android {
         buildConfigField(
             "String",
             "API_BASE_URL",
-            "\"$apiBaseUrl\""
+            apiBaseUrl.asBuildConfigString()
         )
+        buildConfigField("String", "DEV_AUTH_EMAIL", "\"\"")
+        buildConfigField("String", "DEV_AUTH_PASSWORD", "\"\"")
     }
 
     buildTypes {
+        debug {
+            buildConfigField(
+                "String",
+                "DEV_AUTH_EMAIL",
+                devAuthEmail.asBuildConfigString()
+            )
+            buildConfigField(
+                "String",
+                "DEV_AUTH_PASSWORD",
+                devAuthPassword.asBuildConfigString()
+            )
+        }
         release {
             optimization {
                 enable = false
