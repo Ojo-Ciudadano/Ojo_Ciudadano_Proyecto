@@ -3,6 +3,8 @@ package cl.uct.ojociudadano.data.remote
 import cl.uct.ojociudadano.data.remote.dto.CategoryDto
 import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
+import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
+import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -10,6 +12,11 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface ApiService {
+
+    @POST("api/v1/auth/login")
+    suspend fun login(
+        @Body request: LoginRequestDto
+    ): LoginResponseDto
 
     @GET("api/v1/incidentes")
     suspend fun getIncidents(

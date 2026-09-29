@@ -8,6 +8,8 @@ import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentLocationDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
+import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
+import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -143,6 +145,10 @@ class RemoteRepositoryTest {
         private val incident: IncidentDto = sampleIncidentDto(),
         private val categories: List<CategoryDto> = emptyList()
     ) : ApiService {
+
+        override suspend fun login(request: LoginRequestDto): LoginResponseDto {
+            error("No se utiliza en esta prueba")
+        }
 
         var lastReporterUserId: String? = null
             private set

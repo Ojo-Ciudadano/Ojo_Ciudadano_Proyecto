@@ -12,6 +12,17 @@ import retrofit2.http.Query
 class ApiServiceContractTest {
 
     @Test
+    fun `login uses auth login endpoint with request body`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "login" }
+
+        val post = requireNotNull(method.getAnnotation(POST::class.java))
+
+        assertEquals("api/v1/auth/login", post.value)
+        assertTrue(method.parameterAnnotations[0].any { it is Body })
+    }
+
+    @Test
     fun `getIncidents uses incidents endpoint and optional user query`() {
         val method = ApiService::class.java.declaredMethods
             .single { it.name == "getIncidents" }
