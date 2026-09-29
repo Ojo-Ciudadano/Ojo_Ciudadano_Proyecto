@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import { ProxyController } from './proxy.controller';
 import { ProxyService } from './proxy.service';
 import type { Request, Response } from 'express';
@@ -15,6 +16,12 @@ describe('ProxyController', () => {
           provide: ProxyService,
           useValue: {
             forward: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            verifyAsync: jest.fn().mockResolvedValue({ sub: '123' }),
           },
         },
       ],
