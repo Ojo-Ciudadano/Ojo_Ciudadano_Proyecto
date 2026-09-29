@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from '../dto/login.dto';
+import { CreateUsuarioDto } from '../usuarios/dto/create-usuario.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -11,10 +12,46 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
+  // 1. Método para registrar un nuevo usuario
+  async register(dto: CreateUsuarioDto) {
+    const { email, password, nombre } = dto;
+
+    // Verificar si el usuario ya existe
+    const existingUser = await this.prisma.usuario.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('El correo ya está registrado');
+    }
+
+    // Encriptar contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Crear el usuario en la base de datos
+    const nuevoUsuario = await this.prisma.usuario.create({
+      data: {
+        email,
+        nombre,
+        passwordHash: hashedPassword,
+      },
+    });
+
+    return {
+      message: 'Usuario registrado exitosamente',
+      usuario: {
+        id: nuevoUsuario.id,
+        email: nuevoUsuario.email,
+        nombre: nuevoUsuario.nombre,
+      },
+    };
+  }
+
+  // 2. Método de Login con Roles incluidos en el Payload del Token
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    // 1. Buscar usuario por correo e incluir la relación con sus roles
+    // Buscar usuario por correo e incluir sus roles
     const usuario = await this.prisma.usuario.findUnique({
       where: { email },
       include: {
@@ -30,13 +67,13 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // 2. Validar contraseña contra passwordHash
+    // Validar contraseña
     const isPasswordValid = await bcrypt.compare(password, usuario.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // 3. Extraer nombres de roles para el payload del JWT
+    // Extraer lista de roles (ej: ['ADMIN'] o ['CIUDADANO'])
     const listaRoles = usuario.roles.map((r) => r.rol.nombre);
 
     const payload = {
@@ -45,7 +82,6 @@ export class AuthService {
       roles: listaRoles,
     };
 
-    // 4. Retornar token y datos del usuario
     return {
       access_token: await this.jwtService.signAsync(payload),
       usuario: {
@@ -55,19 +91,5 @@ export class AuthService {
         roles: listaRoles,
       },
     };
-  }
-
-  async login(dto: LoginDto) {
-    const usuario = await this.usuariosService.findByEmail(dto.email);
-    if (!usuario || !(await bcrypt.compare(dto.password, usuario.passwordHash))) {
-      throw new UnauthorizedException('Credenciales invalidas');
-    }
-
-    const accessToken = await this.jwtService.signAsync({
-      sub: usuario.id,
-      email: usuario.email,
-    });
-
-    return { access_token: accessToken, token_type: 'Bearer' };
   }
 }
