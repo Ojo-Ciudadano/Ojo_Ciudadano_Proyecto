@@ -22,12 +22,23 @@ class ReportsViewModel(
     private val incidentRepository: IncidentRepository,
     private val categoryRepository: CategoryRepository
 ) : ViewModel() {
+
+    // TODOS LOS INCIDENTES
     private val _allIncidents = MutableStateFlow<List<Incident>>(emptyList())
 
+    // CONTROL DE ESTADOS
+    private val _uiState = MutableStateFlow<IncidentsUiState>(IncidentsUiState.Loading )
+
+    val uiState = _uiState.asStateFlow()
+
+    // INCIDENTES
     private val _incidents = MutableStateFlow<List<Incident>>(emptyList())
+
     val incidents = _incidents.asStateFlow()
 
+    // CATEGORIAS
     private val _categories = MutableStateFlow<List<Category>>(emptyList())
+
     val categories = _categories.asStateFlow()
 
     init {
@@ -37,21 +48,42 @@ class ReportsViewModel(
 
     fun loadIncidents() {
         viewModelScope.launch {
+
+            // Estado de carga
+            _uiState.value = IncidentsUiState.Loading
+
             try {
                 val resultI = incidentRepository.getIncidents()
+
                 _allIncidents.value = resultI
                 _incidents.value = resultI
+
+                // Estado vacío o exitoso
+                _uiState.value = if (resultI.isEmpty()) {
+                    IncidentsUiState.Empty
+                } else {
+                    IncidentsUiState.Success
+                }
+
             } catch (exception: CancellationException) {
                 throw exception
+
             } catch (exception: Exception) {
-                runCatching {
-                    Log.e(
-                        "HomeViewModel",
-                        "Error al cargar incidentes: type=${exception::class.java.name}, " +
-                            "message=${exception.message}, cause=${exception.cause}",
-                        exception
-                    )
-                }
+
+                Log.e(
+                    "ReportsViewModel",
+                    "Error al cargar incidentes: " +
+                            "type=${exception::class.java.name}, " +
+                            "message=${exception.message}, " +
+                            "cause=${exception.cause}",
+                    exception
+                )
+
+                // Estado de error
+                _uiState.value = IncidentsUiState.Error(
+                    message = exception.message
+                        ?: "Ocurrió un error al cargar los incidentes."
+                )
             }
         }
     }
@@ -61,8 +93,10 @@ class ReportsViewModel(
             try {
                 val resultC = categoryRepository.getCategories()
                 _categories.value = resultC
+
             } catch (exception: CancellationException) {
                 throw exception
+
             } catch (exception: Exception) {
                 Log.e(
                     "ReportsViewModel",
@@ -79,6 +113,7 @@ class ReportsViewModel(
             _incidents.value = _allIncidents.value
             return
         }
+
         _incidents.value = _allIncidents.value.filter { incident ->
             incident.category.id == category.id
         }
@@ -113,7 +148,8 @@ class ReportsViewModel(
                 val limit = now.minus(7, ChronoUnit.DAYS)
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt).isAfter(limit)
+                    Instant.parse(incident.createdAt)
+                        .isAfter(limit)
                 }
             }
 
@@ -121,7 +157,8 @@ class ReportsViewModel(
                 val limit = now.minus(30, ChronoUnit.DAYS)
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt).isAfter(limit)
+                    Instant.parse(incident.createdAt)
+                        .isAfter(limit)
                 }
             }
 
@@ -129,7 +166,8 @@ class ReportsViewModel(
                 val limit = now.minus(365, ChronoUnit.DAYS)
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt).isAfter(limit)
+                    Instant.parse(incident.createdAt)
+                        .isAfter(limit)
                 }
             }
         }
