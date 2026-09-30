@@ -22,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -769,7 +770,72 @@ private fun HomeFooterItem(
 
 
 // ============================================================
-// TEMPORAL
+// CONTROL DE ESTADOS
+// ============================================================
+@Composable
+fun LoadingState(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator()
+
+        Text( text = "Cargando incidentes..." )
+    }
+}
+
+@Composable
+fun EmptyState(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text( text = "No hay incidentes" )
+
+            Spacer( modifier = Modifier.height(8.dp) )
+
+            Text( text =  "No se encontraron incidentes registrados." )
+        }
+    }
+}
+
+@Composable
+fun ErrorState(
+    modifier: Modifier = Modifier,
+    message: String,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text( text = "No se pudieron cargar los incidentes" )
+
+            Spacer( modifier = Modifier.height(8.dp) )
+
+            Text(text = message)
+
+            Spacer( modifier = Modifier.height(16.dp) )
+
+            Button( onClick = onRetry ) {
+                Text( text = "Reintentar")
+            }
+        }
+    }
+}
+
+// ============================================================
+// RENDER PRINCIPAL
 // ============================================================
 @Composable
 fun ReportsScreen(
@@ -789,15 +855,37 @@ fun ReportsScreen(
     val incidents by viewModel.incidents.collectAsState()
     val categories by viewModel.categories.collectAsState()
 
-    ReportsScreen(
-        onBack = onBack,
-        onCreateReportClick = onCreateReportClick,
+    val uiState by viewModel.uiState.collectAsState()
 
-        incidents = incidents,
-        categories = categories,
+    when (val state = uiState) {
+        IncidentsUiState.Loading -> {
+            LoadingState( modifier = Modifier )
+        }
 
-        filterIncidents = viewModel::filterIncidents
-    )
+        IncidentsUiState.Empty -> {
+            EmptyState( modifier = Modifier )
+        }
+
+        is IncidentsUiState.Error -> {
+            ErrorState(
+                modifier = Modifier,
+                message = state.message,
+                onRetry = viewModel::loadIncidents
+            )
+        }
+
+        is IncidentsUiState.Success -> {
+            ReportsScreen(
+                onBack = onBack,
+                onCreateReportClick = onCreateReportClick,
+
+                incidents = incidents,
+                categories = categories,
+
+                filterIncidents = viewModel::filterIncidents
+            )
+        }
+    }
 }
 
 
