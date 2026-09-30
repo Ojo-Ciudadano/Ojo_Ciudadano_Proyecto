@@ -5,9 +5,12 @@ import { useNotification } from '../../components/notifications/NotificationProv
 import type { ApiError } from '../../types'
 import './LoginPage.css'
 
+type Role = 'CIUDADANO' | 'ADMINISTRADOR'
+
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState<Role>('CIUDADANO')
   const [error, setError] = useState<string | null>(null)
   const { login, isLoading, isAuthenticated } = useAuth()
   const { showNotification } = useNotification()
@@ -43,13 +46,25 @@ export function LoginPage() {
     <div className="web-auth">
       <div className="web-auth-card">
         <div className="web-auth-header">
-          <img src="/logo-2.jpeg" alt="Ojo Ciudadano" className="login-logo" />
+          <img src="/Logo_ojo_ciudadano2.png" alt="Ojo Ciudadano" className="login-logo" />
           <h2>Acceso plataforma</h2>
-          </div>
+        </div>
 
         <div className="role-toggle web-role-toggle">
-          <button className="role-btn active">Ciudadano</button>
-          <button className="role-btn">Administrador</button>
+          <button
+            type="button"
+            className={`role-btn${role === 'CIUDADANO' ? ' active' : ''}`}
+            onClick={() => setRole('CIUDADANO')}
+          >
+            Ciudadano
+          </button>
+          <button
+            type="button"
+            className={`role-btn${role === 'ADMINISTRADOR' ? ' active' : ''}`}
+            onClick={() => setRole('ADMINISTRADOR')}
+          >
+            Administrador
+          </button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -75,7 +90,7 @@ export function LoginPage() {
 
           {error && <div className="error-message">{error}</div>}
 
-          <button type="submit" className="btn btn-primary" disabled={isLoading}>
+          <button type="submit" className="btn btn-primary btn-block" disabled={isLoading}>
             {isLoading ? 'Cargando...' : 'Iniciar sesión'}
           </button>
         </form>

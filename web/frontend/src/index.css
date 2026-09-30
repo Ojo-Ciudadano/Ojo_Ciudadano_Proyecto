@@ -34,19 +34,26 @@
 
 @layer components {
   .btn-primary {
-    display: block;
-    width: 100%;
-    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     border: none;
     border-radius: 10px;
-    padding: 12.5px;
+    padding: 10px 16px;
     font-weight: 700;
-    font-size: 13.5px;
+    font-size: 13px;
     cursor: pointer;
     letter-spacing: 0.2px;
     background: var(--red);
     color: var(--white);
     box-shadow: 0 8px 18px -8px rgba(220, 38, 38, 0.55);
+    transition: all 0.15s ease;
+  }
+
+  .btn-block {
+    display: flex;
+    width: 100%;
   }
 
   .btn-secondary {

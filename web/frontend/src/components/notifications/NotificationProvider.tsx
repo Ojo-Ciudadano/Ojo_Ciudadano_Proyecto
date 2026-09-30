@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useCallback, createContext, useContext, Fragment } from 'react'
+import { type ReactNode, useState, useCallback, createContext, useContext} from 'react'
 import { Snackbar, Alert, type AlertColor } from '@mui/material'
 
 interface NotificationContextType {
@@ -42,13 +42,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         onClose={handleClose}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <Fragment>
-          {notification && (
-            <Alert onClose={handleClose} severity={notification.severity} sx={{ width: '100%' }}>
-              {notification.message}
-            </Alert>
-          )}
-        </Fragment>
+        <Alert onClose={handleClose} severity={notification?.severity ?? 'info'} sx={{ width: '100%' }}>
+          {notification?.message}
+        </Alert>
       </Snackbar>
     </NotificationContext.Provider>
   )

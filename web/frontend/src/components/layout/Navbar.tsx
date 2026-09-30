@@ -1,4 +1,4 @@
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import './Navbar.css'
 
@@ -14,28 +14,24 @@ export function Navbar() {
   return (
     <aside className="web-sidebar">
       <div className="ws-brand">
-        <img src="/logo-3.jpeg" alt="Ojo Ciudadano" className="sidebar-logo" />
-        <span className="ws-brand-text">Ojo Ciudadano</span>
-        </div>
+        <img src="/Logo_ojo_ciudadano1.png" alt="Ojo Ciudadano" className="sidebar-logo" />
+      </div>
 
       <nav className="ws-nav">
-        <RouterLink to="/" className="ws-nav-item">
+        <NavLink to="/" className={({ isActive }) => `ws-nav-item${isActive ? ' active' : ''}`}>
           Inicio
-        </RouterLink>
-        <RouterLink to="/incidentes" className="ws-nav-item active">
-          Incidentes
-        </RouterLink>
-        <RouterLink to="/mapa" className="ws-nav-item">
+        </NavLink>
+        <NavLink to="/mapa" className={({ isActive }) => `ws-nav-item${isActive ? ' active' : ''}`}>
           Mapa territorial
-        </RouterLink>
+        </NavLink>
       </nav>
 
       {isAuthenticated && user?.roles?.includes('ADMINISTRADOR') && (
         <div className="ws-admin-section">
           <div className="ws-section-label">Administración</div>
-          <RouterLink to="/admin" className="ws-nav-item">
+          <NavLink to="/admin" className={({ isActive }) => `ws-nav-item${isActive ? ' active' : ''}`}>
             Usuarios y reglas
-          </RouterLink>
+          </NavLink>
         </div>
       )}
 

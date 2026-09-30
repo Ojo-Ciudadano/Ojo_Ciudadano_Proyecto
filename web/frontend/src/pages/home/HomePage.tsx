@@ -196,7 +196,12 @@ export function HomePage() {
             <div className="pin blue" style={{ top: '60%', left: '60%' }}>
               <div className="drop"></div>
             </div>
+            <div className="pin orange" style={{ top: '45%', left: '55%' }}>
+              <div className="drop"></div>
+            </div>
           </div>
+
+          <button className="map-full-btn">Ver mapa completo</button>
 
           <div className="inc-list">
             <div className="inc-row">
