@@ -15,15 +15,19 @@ import kotlinx.coroutines.CancellationException
 import java.util.Collections.emptyList
 
 class HomeViewModel(
-    private val repository: IncidentRepository
+    private val incidentRepository: IncidentRepository
 ) : ViewModel() {
     private val _incidents = MutableStateFlow<List<Incident>>(emptyList())
     val incidents = _incidents.asStateFlow()
 
+    init {
+        loadIncidents()
+    }
+
     fun loadIncidents() {
         viewModelScope.launch {
             try {
-                val result = repository.getIncidents()
+                val result = incidentRepository.getIncidents()
                 _incidents.value = result
             } catch (exception: CancellationException) {
                 throw exception
