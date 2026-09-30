@@ -15,16 +15,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,11 +40,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 
 
@@ -48,12 +63,16 @@ import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 @Composable
 fun ReportsScreen(
     modifier: Modifier = Modifier,
+
     onBack: () -> Unit = {},
-    onCreateReportClick: () -> Unit = {}
+    onCreateReportClick: () -> Unit = {},
+
+    incidents: List<Incident>,
+    categories: List<Category>,
+
+    filterIncidents: (Category?, DateFilter) -> Unit
 ) {
-    var showFilters by remember {
-        mutableStateOf(false)
-    }
+    var showFilters by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -79,10 +98,14 @@ fun ReportsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.80f),
+
             showFilters = showFilters,
-            onToggleFilters = {
-                showFilters = !showFilters
-            }
+            onToggleFilters = { showFilters = !showFilters },
+
+            incidents = incidents,
+            categories = categories,
+
+            filterIncidents = filterIncidents
         )
 
         // ====================================================
@@ -185,13 +208,20 @@ private fun HomeHeader(
 @Composable
 private fun ReportsContent(
     modifier: Modifier = Modifier,
+
     showFilters: Boolean,
-    onToggleFilters: () -> Unit
+    onToggleFilters: () -> Unit,
+
+    incidents: List<Incident>,
+    categories: List<Category>,
+
+    filterIncidents: (Category?, DateFilter) -> Unit
 ) {
     Column(
         modifier = modifier
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .fillMaxWidth()
+            .fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
 
@@ -211,14 +241,18 @@ private fun ReportsContent(
         AnimatedVisibility(
             visible = showFilters
         ) {
-            ReportsFilters()
+            ReportsFilters(
+                categories = categories,
+                filterIncidents = filterIncidents
+
+            )
         }
 
         // ====================================================
         // REPORTES
         // ====================================================
 
-        ReportsList()
+        ReportsList( incidents = incidents )
     }
 }
 
@@ -283,9 +317,16 @@ private fun ReportsHeader(
 // ============================================================
 
 @Composable
-private fun ReportsFilters() {
+private fun ReportsFilters(
+    categories: List<Category>,
+    filterIncidents: (Category?, DateFilter) -> Unit
+) {
+
+    var selectedCategory by remember { mutableStateOf<Category?>( null ) }
+    var selectedDateFilter by remember { mutableStateOf(DateFilter.RECENT) }
+
     Card(
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(0.30f),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -305,14 +346,21 @@ private fun ReportsFilters() {
                 fontWeight = FontWeight.Bold
             )
 
-            FilterField(
+            CategoryDropdown(
                 label = "Categoría",
-                value = "Seleccionar categoría"
+                categories = categories,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { category ->
+                    selectedCategory = category
+                }
             )
 
-            FilterField(
-                label = "Fecha",
-                value = "Seleccionar período"
+            DateDropdown(
+                label = "Fechas",
+                selectedDateFilter = selectedDateFilter,
+                onDateFilterSelected = { dateFilter ->
+                    selectedDateFilter = dateFilter
+                }
             )
 
             Spacer(
@@ -320,11 +368,10 @@ private fun ReportsFilters() {
             )
 
             Button(
-                onClick = {
-                    // Sin funcionalidad por ahora
-                },
+                onClick = { filterIncidents( selectedCategory, selectedDateFilter) },
+
                 modifier = Modifier.fillMaxWidth(),
-                enabled = false,
+                enabled = true,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFF0000),
                     disabledContainerColor = Color(0xFFFF0000)
@@ -344,12 +391,16 @@ private fun ReportsFilters() {
 // ============================================================
 // CAMPO VISUAL DE FILTRO
 // ============================================================
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilterField(
+fun CategoryDropdown(
     label: String,
-    value: String
+    categories: List<Category>,
+    selectedCategory: Category?,
+    onCategorySelected: (Category) -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -364,55 +415,185 @@ private fun FilterField(
             modifier = Modifier.height(4.dp)
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .border(
-                    width = 1.dp,
-                    color = Color.Gray,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(
-                    horizontal = 12.dp
-                ),
-            contentAlignment = Alignment.CenterStart
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = {
+                expanded = !expanded
+            },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = value,
-                color = Color.Gray,
-                fontSize = 14.sp
+
+            OutlinedTextField(
+                value = selectedCategory?.name ?: "Seleccionar categoría",
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(
+                        ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                    ),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expanded
+                    )
+                },
+                shape = RoundedCornerShape(8.dp),
+                singleLine = true
             )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = {
+                    expanded = false
+                },
+                modifier = Modifier.background(Color(0XFFFFFFFF))
+            ) {
+
+                categories.forEach { category ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = category.name
+                            )
+                        },
+                        onClick = {
+                            onCategorySelected(category)
+                            expanded = false
+                        },
+
+                        modifier = Modifier.padding( 4.dp )
+                    )
+                }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DateDropdown(
+    label: String,
+    selectedDateFilter: DateFilter,
+    onDateFilterSelected: (DateFilter) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val selectedText = when (selectedDateFilter) {
+        DateFilter.RECENT -> "Más recientes"
+        DateFilter.TODAY -> "Creadas durante el día"
+        DateFilter.WEEK -> "Creadas durante la semana"
+        DateFilter.MONTH -> "Creadas durante el mes"
+        DateFilter.YEAR -> "Creadas durante el año"
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(
+            modifier = Modifier.height(4.dp)
+        )
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = {
+                expanded = !expanded
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            OutlinedTextField(
+                value = selectedText,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(
+                        ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                    ),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expanded
+                    )
+                },
+                shape = RoundedCornerShape(8.dp),
+                singleLine = true
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = {
+                    expanded = false
+                },
+                modifier = Modifier.background(Color(0xFFFFFFFF))
+            ) {
+
+                DateFilter.entries.forEach { dateFilter ->
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = when (dateFilter) {
+                                    DateFilter.RECENT ->
+                                        "Más recientes"
+
+                                    DateFilter.TODAY ->
+                                        "Creadas durante el día"
+
+                                    DateFilter.WEEK ->
+                                        "Creadas durante la semana"
+
+                                    DateFilter.MONTH ->
+                                        "Creadas durante el mes"
+
+                                    DateFilter.YEAR ->
+                                        "Creadas durante el año"
+                                }
+                            )
+                        },
+                        onClick = {
+                            onDateFilterSelected(dateFilter)
+                            expanded = false
+                        },
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 
 // ============================================================
 // LISTA DE REPORTES
 // ============================================================
 
 @Composable
-private fun ReportsList() {
+private fun ReportsList(
+    incidents: List<Incident>
+) {
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.60f),
+            .fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors( containerColor = Color.White )
     ) {
 
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            ReportCard()
+            items( incidents ) { incident ->
+                ReportCard( incident = incident )
+            }
 
-            ReportCard()
-
-            ReportCard()
         }
     }
 }
@@ -422,7 +603,8 @@ private fun ReportsList() {
 // ============================================================
 @Composable
 private fun ReportCard(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    incident: Incident
 ) {
     Column(
         modifier = modifier
@@ -462,7 +644,7 @@ private fun ReportCard(
 
             // TÍTULO
             Text(
-                text = "Incendio en el cerro Nielol",
+                text = incident.title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -471,7 +653,7 @@ private fun ReportCard(
 
             // DESCRIPCIÓN
             Text(
-                text = "Se esta quemando el cerro en Temuco, esto empezo alrededor de las 3am, nadie",
+                text = incident.description,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
@@ -481,7 +663,7 @@ private fun ReportCard(
 
             // FECHA
             Text(
-                text = "26-09-2026",
+                text = incident.createdAt,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.Gray,
@@ -587,6 +769,39 @@ private fun HomeFooterItem(
 
 
 // ============================================================
+// TEMPORAL
+// ============================================================
+@Composable
+fun ReportsScreen(
+    onBack: () -> Unit = {},
+    onCreateReportClick: () -> Unit = {}
+) {
+    val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val viewModel: ReportsViewModel = viewModel(
+        factory = remember(application) {
+            ReportsViewModelFactory(
+                incidentRepository = application.container.incidentRepository,
+                categoryRepository = application.container.categoryRepository
+            )
+        }
+    )
+
+    val incidents by viewModel.incidents.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+
+    ReportsScreen(
+        onBack = onBack,
+        onCreateReportClick = onCreateReportClick,
+
+        incidents = incidents,
+        categories = categories,
+
+        filterIncidents = viewModel::filterIncidents
+    )
+}
+
+
+// ============================================================
 // PREVIEW
 // ============================================================
 
@@ -597,6 +812,139 @@ private fun HomeFooterItem(
 @Composable
 private fun ReportsScreenPreview() {
     OjoCiudadanoTheme {
-        ReportsScreen()
+        ReportsScreen(
+            incidents = listOf(
+                Incident(
+                    id = "40000000-0000-0000-0000-000000000001",
+                    title = "Luminaria apagada en calzada principal",
+                    description = "El poste de luz no enciende desde hace 3 días, dejando la cuadra muy oscura.",
+                    category = Category(
+                        id = "20000000-0000-0000-0000-000000000001",
+                        name = "Alumbrado público",
+                        description = "Fallas de alumbrado en calles y espacios públicos",
+                        basePriority = 2,
+                        isCriticalEmergency = false,
+                        officialContactChannel = null
+                    ),
+                    status = IncidentStatus(
+                        id = "10000000-0000-0000-0000-000000000001",
+                        name = "Nuevo",
+                        order = 1
+                    ),
+                    location = IncidentLocation(
+                        id = "30000000-0000-0000-0000-000000000001",
+                        latitude = -33.4372,
+                        longitude = -70.6506,
+                        referenceAddress = "Av. Libertador Bernardo O'Higgins 1234",
+                        commune = "Santiago",
+                        region = "Región Metropolitana",
+                        sector = "Centro"
+                    ),
+                    reporterUserId = "a0000000-0000-0000-0000-000000000001",
+                    priorityLevel = null,
+                    createdAt = "2026-09-28T10:15:00Z",
+                    updatedAt = "2026-09-28T10:15:00Z"
+                ),
+                Incident(
+                    id = "40000000-0000-0000-0000-000000000003",
+                    title = "Incendio en terreno baldío",
+                    description = "Fuego sin control propagándose rápidamente hacia viviendas colindantes.",
+                    category = Category(
+                        id = "20000000-0000-0000-0000-000000000008",
+                        name = "Incendio",
+                        description = "Incendios estructurales, forestales o pastizales",
+                        basePriority = 5,
+                        isCriticalEmergency = true,
+                        officialContactChannel = "Bomberos 132"
+                    ),
+                    status = IncidentStatus(
+                        id = "10000000-0000-0000-0000-000000000003",
+                        name = "En atención",
+                        order = 3
+                    ),
+                    location = IncidentLocation(
+                        id = "30000000-0000-0000-0000-000000000002",
+                        latitude = -33.4261,
+                        longitude = -70.6125,
+                        referenceAddress = "Av. Providencia con Pedro de Valdivia",
+                        commune = "Providencia",
+                        region = "Región Metropolitana",
+                        sector = "Pedro de Valdivia Norte"
+                    ),
+                    reporterUserId = "a0000000-0000-0000-0000-000000000002",
+                    priorityLevel = 5,
+                    createdAt = "2026-09-29T08:00:00Z",
+                    updatedAt = "2026-09-29T08:05:00Z"
+                )
+            ),
+            categories = listOf(
+                Category(
+                    id = "20000000-0000-0000-0000-000000000001",
+                    name = "Alumbrado público",
+                    description = "Fallas de alumbrado en calles y espacios públicos",
+                    basePriority = 2,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000002",
+                    name = "Baches y vialidad",
+                    description = "Baches, calzada y señalización en mal estado",
+                    basePriority = 2,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000003",
+                    name = "Aseo y basura",
+                    description = "Microbasurales y recolección pendiente",
+                    basePriority = 1,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000004",
+                    name = "Agua y alcantarillado",
+                    description = "Fugas, cortes de agua y alcantarillado colapsado",
+                    basePriority = 3,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000005",
+                    name = "Áreas verdes y arbolado",
+                    description = "Plazas, poda y arbolado en riesgo",
+                    basePriority = 1,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000006",
+                    name = "Seguridad ciudadana",
+                    description = "Hechos delictuales o situaciones de riesgo",
+                    basePriority = 4,
+                    isCriticalEmergency = false,
+                    officialContactChannel = "Carabineros 133"
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000007",
+                    name = "Accidente de tránsito",
+                    description = "Choques y atropellos con personas afectadas",
+                    basePriority = 5,
+                    isCriticalEmergency = true,
+                    officialContactChannel = "SAMU 131"
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000008",
+                    name = "Incendio",
+                    description = "Incendios estructurales, forestales o pastizales",
+                    basePriority = 5,
+                    isCriticalEmergency = true,
+                    officialContactChannel = "Bomberos 132"
+                )
+            ),
+
+            filterIncidents = { _, _ -> }
+        )
     }
 }
