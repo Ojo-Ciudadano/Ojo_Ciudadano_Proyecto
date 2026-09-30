@@ -22,6 +22,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -307,6 +313,9 @@ private fun ReportsHeader(
 private fun ReportsFilters(
     categories: List<Category>
 ) {
+
+    var selectedCategory by remember { mutableStateOf<Category?>( null ) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -328,18 +337,18 @@ private fun ReportsFilters(
                 fontWeight = FontWeight.Bold
             )
 
-            FilterField(
+            CategoryDropdown(
                 label = "Categoría",
-                value = "Seleccionar categoría",
-
-                categories = categories
+                categories = categories,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { category ->
+                    selectedCategory = category
+                }
             )
 
             FilterField(
                 label = "Fecha",
-                value = "Seleccionar período",
-
-                categories = categories
+                value = "Seleccionar período"
             )
 
             Spacer(
@@ -371,13 +380,88 @@ private fun ReportsFilters(
 // ============================================================
 // CAMPO VISUAL DE FILTRO
 // ============================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CategoryDropdown(
+    label: String,
+    categories: List<Category>,
+    selectedCategory: Category?,
+    onCategorySelected: (Category) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(
+            modifier = Modifier.height(4.dp)
+        )
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = {
+                expanded = !expanded
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            OutlinedTextField(
+                value = selectedCategory?.name ?: "Seleccionar categoría",
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(
+                        ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                    ),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expanded
+                    )
+                },
+                shape = RoundedCornerShape(8.dp),
+                singleLine = true
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = {
+                    expanded = false
+                },
+                modifier = Modifier.background(Color(0XFFFFFFFF))
+            ) {
+
+                categories.forEach { category ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = category.name
+                            )
+                        },
+                        onClick = {
+                            onCategorySelected(category)
+                            expanded = false
+                        },
+
+                        modifier = Modifier.padding( 4.dp )
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun FilterField(
     label: String,
     value: String,
-
-    categories: List<Category>
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
