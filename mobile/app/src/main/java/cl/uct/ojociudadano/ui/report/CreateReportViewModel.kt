@@ -7,12 +7,18 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
 import cl.uct.ojociudadano.data.repository.CategoryRepository
+import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.data.session.SessionStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class CreateReportViewModel(
     private val categoryRepository: CategoryRepository,
+    private val incidentRepository: IncidentRepository,
+    private val sessionStorage: SessionStorage,
     private val formValidator: CreateReportFormValidator = CreateReportFormValidator()
 ) : ViewModel() {
 
@@ -46,12 +52,55 @@ class CreateReportViewModel(
         submissionState = CreateReportSubmissionState.Idle
     }
 
-    /**
-     * Ejecuta únicamente la validación local. No inicia un envío remoto.
-     */
-    fun onCreateReportClick() {
+    fun createReport() {
+        if (submissionState is CreateReportSubmissionState.Loading) return
+
         formState = formValidator.validate(formState)
-        submissionState = CreateReportSubmissionState.Idle
+
+        if (formState.hasValidationErrors()) {
+            submissionState = CreateReportSubmissionState.Idle
+            return
+        }
+
+        val reporterUserId = sessionStorage.currentSession()?.userId
+
+        if (reporterUserId == null) {
+            submissionState = CreateReportSubmissionState.Error(
+                "No hay una sesión activa para crear el reporte"
+            )
+            return
+        }
+
+        val input = CreateIncidentInput(
+            title = formState.title,
+            description = formState.description,
+            categoryId = requireNotNull(formState.selectedCategory).id,
+            reporterUserId = reporterUserId,
+            location = sprint1Location
+        )
+
+        submissionState = CreateReportSubmissionState.Loading
+
+        viewModelScope.launch {
+            try {
+                incidentRepository.createIncident(input)
+                submissionState = CreateReportSubmissionState.Success
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                runCatching {
+                    Log.e(
+                        "CreateReportViewModel",
+                        "Error al crear reporte: type=${exception::class.java.name}, " +
+                            "message=${exception.message}, cause=${exception.cause}",
+                        exception
+                    )
+                }
+                submissionState = CreateReportSubmissionState.Error(
+                    exception.message ?: "No fue posible crear el reporte"
+                )
+            }
+        }
     }
 
     fun loadCategories() {
@@ -83,5 +132,19 @@ class CreateReportViewModel(
                 )
             }
         }
+    }
+
+    private fun CreateReportFormState.hasValidationErrors(): Boolean =
+        titleError != null || descriptionError != null || categoryError != null
+
+    private companion object {
+        val sprint1Location = CreateIncidentLocationInput(
+            latitude = -38.7359,
+            longitude = -72.5904,
+            referenceAddress = "Ubicación de prueba Sprint 1",
+            commune = "Temuco",
+            region = "La Araucanía",
+            sector = "Centro"
+        )
     }
 }
