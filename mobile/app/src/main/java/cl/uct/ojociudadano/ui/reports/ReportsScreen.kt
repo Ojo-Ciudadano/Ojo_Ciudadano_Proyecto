@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,7 +61,8 @@ fun ReportsScreen(
     onBack: () -> Unit = {},
     onCreateReportClick: () -> Unit = {},
 
-    incidents: List<Incident>
+    incidents: List<Incident>,
+    categories: List<Category>
 ) {
     var showFilters by remember { mutableStateOf(false) }
 
@@ -96,7 +95,8 @@ fun ReportsScreen(
                 showFilters = !showFilters
             },
 
-            incidents = incidents
+            incidents = incidents,
+            categories = categories
         )
 
         // ====================================================
@@ -203,7 +203,8 @@ private fun ReportsContent(
     showFilters: Boolean,
     onToggleFilters: () -> Unit,
 
-    incidents: List<Incident>
+    incidents: List<Incident>,
+    categories: List<Category>
 ) {
     Column(
         modifier = modifier
@@ -229,7 +230,9 @@ private fun ReportsContent(
         AnimatedVisibility(
             visible = showFilters
         ) {
-            ReportsFilters()
+            ReportsFilters(
+                categories = categories
+            )
         }
 
         // ====================================================
@@ -301,7 +304,9 @@ private fun ReportsHeader(
 // ============================================================
 
 @Composable
-private fun ReportsFilters() {
+private fun ReportsFilters(
+    categories: List<Category>
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -325,12 +330,16 @@ private fun ReportsFilters() {
 
             FilterField(
                 label = "Categoría",
-                value = "Seleccionar categoría"
+                value = "Seleccionar categoría",
+
+                categories = categories
             )
 
             FilterField(
                 label = "Fecha",
-                value = "Seleccionar período"
+                value = "Seleccionar período",
+
+                categories = categories
             )
 
             Spacer(
@@ -366,7 +375,9 @@ private fun ReportsFilters() {
 @Composable
 private fun FilterField(
     label: String,
-    value: String
+    value: String,
+
+    categories: List<Category>
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -616,16 +627,21 @@ fun ReportsScreen(
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val viewModel: ReportsViewModel = viewModel(
         factory = remember(application) {
-            ReportsViewModelFactory(application.container.incidentRepository)
+            ReportsViewModelFactory(
+                incidentRepository = application.container.incidentRepository,
+                categoryRepository = application.container.categoryRepository
+            )
         }
     )
 
     val incidents by viewModel.incidents.collectAsState()
+    val categories by viewModel.categories.collectAsState()
 
     ReportsScreen(
         onBack = onBack,
         onCreateReportClick = onCreateReportClick,
-        incidents = incidents
+        incidents = incidents,
+        categories = categories
     )
 }
 
@@ -704,6 +720,72 @@ private fun ReportsScreenPreview() {
                     priorityLevel = 5,
                     createdAt = "2026-09-29T08:00:00Z",
                     updatedAt = "2026-09-29T08:05:00Z"
+                )
+            ),
+            categories = listOf(
+                Category(
+                    id = "20000000-0000-0000-0000-000000000001",
+                    name = "Alumbrado público",
+                    description = "Fallas de alumbrado en calles y espacios públicos",
+                    basePriority = 2,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000002",
+                    name = "Baches y vialidad",
+                    description = "Baches, calzada y señalización en mal estado",
+                    basePriority = 2,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000003",
+                    name = "Aseo y basura",
+                    description = "Microbasurales y recolección pendiente",
+                    basePriority = 1,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000004",
+                    name = "Agua y alcantarillado",
+                    description = "Fugas, cortes de agua y alcantarillado colapsado",
+                    basePriority = 3,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000005",
+                    name = "Áreas verdes y arbolado",
+                    description = "Plazas, poda y arbolado en riesgo",
+                    basePriority = 1,
+                    isCriticalEmergency = false,
+                    officialContactChannel = null
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000006",
+                    name = "Seguridad ciudadana",
+                    description = "Hechos delictuales o situaciones de riesgo",
+                    basePriority = 4,
+                    isCriticalEmergency = false,
+                    officialContactChannel = "Carabineros 133"
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000007",
+                    name = "Accidente de tránsito",
+                    description = "Choques y atropellos con personas afectadas",
+                    basePriority = 5,
+                    isCriticalEmergency = true,
+                    officialContactChannel = "SAMU 131"
+                ),
+                Category(
+                    id = "20000000-0000-0000-0000-000000000008",
+                    name = "Incendio",
+                    description = "Incendios estructurales, forestales o pastizales",
+                    basePriority = 5,
+                    isCriticalEmergency = true,
+                    officialContactChannel = "Bomberos 132"
                 )
             )
         )
