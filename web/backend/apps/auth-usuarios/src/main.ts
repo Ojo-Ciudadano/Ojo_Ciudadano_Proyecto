@@ -7,6 +7,8 @@ import { HttpExceptionFilter } from './filters/http-exception.filter';
 async function bootstrap() {
   const logger = new Logger('AuthUsuarios');
   const app = await NestFactory.create(AuthUsuariosModule);
+  app.enableCors();
+  
 
   // Filtro global para manejo homogeneo de excepciones (MM-04)
   app.useGlobalFilters(new HttpExceptionFilter());

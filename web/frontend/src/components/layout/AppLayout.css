@@ -1,0 +1,11 @@
+.web-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-soft);
+}
+
+.web-main {
+  flex: 1;
+  padding: 26px 30px;
+  overflow: auto;
+}

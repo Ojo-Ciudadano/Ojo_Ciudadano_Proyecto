@@ -1,16 +1,14 @@
 import { Outlet } from 'react-router-dom'
-import { Box } from '@mui/material'
 import { Navbar } from './Navbar'
-import { Footer } from './Footer'
+import './AppLayout.css'
 
 export function AppLayout() {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div className="web-shell">
       <Navbar />
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <div className="web-main">
         <Outlet />
-      </Box>
-      <Footer />
-    </Box>
+      </div>
+    </div>
   )
 }
