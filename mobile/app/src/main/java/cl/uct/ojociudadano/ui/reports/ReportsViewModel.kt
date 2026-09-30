@@ -18,6 +18,8 @@ class ReportsViewModel(
     private val incidentRepository: IncidentRepository,
     private val categoryRepository: CategoryRepository
 ) : ViewModel() {
+    private val _allIncidents = MutableStateFlow<List<Incident>>(emptyList())
+
     private val _incidents = MutableStateFlow<List<Incident>>(emptyList())
     val incidents = _incidents.asStateFlow()
 
@@ -33,6 +35,7 @@ class ReportsViewModel(
         viewModelScope.launch {
             try {
                 val resultI = incidentRepository.getIncidents()
+                _allIncidents.value = resultI
                 _incidents.value = resultI
             } catch (exception: CancellationException) {
                 throw exception
@@ -63,6 +66,16 @@ class ReportsViewModel(
                     exception
                 )
             }
+        }
+    }
+
+    fun filterByCategory(category: Category?) {
+        if (category == null) {
+            _incidents.value = _allIncidents.value
+            return
+        }
+        _incidents.value = _allIncidents.value.filter { incident ->
+            incident.category.id == category.id
         }
     }
 }

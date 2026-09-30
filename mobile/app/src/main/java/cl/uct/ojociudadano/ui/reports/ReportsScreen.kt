@@ -68,7 +68,9 @@ fun ReportsScreen(
     onCreateReportClick: () -> Unit = {},
 
     incidents: List<Incident>,
-    categories: List<Category>
+    categories: List<Category>,
+
+    filterByCategory: (Category?) -> Unit
 ) {
     var showFilters by remember { mutableStateOf(false) }
 
@@ -96,13 +98,14 @@ fun ReportsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.80f),
+
             showFilters = showFilters,
-            onToggleFilters = {
-                showFilters = !showFilters
-            },
+            onToggleFilters = { showFilters = !showFilters },
 
             incidents = incidents,
-            categories = categories
+            categories = categories,
+
+            filterByCategory = filterByCategory
         )
 
         // ====================================================
@@ -210,7 +213,9 @@ private fun ReportsContent(
     onToggleFilters: () -> Unit,
 
     incidents: List<Incident>,
-    categories: List<Category>
+    categories: List<Category>,
+
+    filterByCategory: (Category?) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -237,7 +242,9 @@ private fun ReportsContent(
             visible = showFilters
         ) {
             ReportsFilters(
-                categories = categories
+                categories = categories,
+                filterByCategory = filterByCategory
+
             )
         }
 
@@ -311,7 +318,8 @@ private fun ReportsHeader(
 
 @Composable
 private fun ReportsFilters(
-    categories: List<Category>
+    categories: List<Category>,
+    filterByCategory: (Category?) -> Unit
 ) {
 
     var selectedCategory by remember { mutableStateOf<Category?>( null ) }
@@ -356,11 +364,10 @@ private fun ReportsFilters(
             )
 
             Button(
-                onClick = {
-                    // Sin funcionalidad por ahora
-                },
+                onClick = { filterByCategory(selectedCategory) },
+
                 modifier = Modifier.fillMaxWidth(),
-                enabled = false,
+                enabled = true,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFF0000),
                     disabledContainerColor = Color(0xFFFF0000)
@@ -724,8 +731,11 @@ fun ReportsScreen(
     ReportsScreen(
         onBack = onBack,
         onCreateReportClick = onCreateReportClick,
+
         incidents = incidents,
-        categories = categories
+        categories = categories,
+
+        filterByCategory = viewModel::filterByCategory
     )
 }
 
@@ -871,7 +881,9 @@ private fun ReportsScreenPreview() {
                     isCriticalEmergency = true,
                     officialContactChannel = "Bomberos 132"
                 )
-            )
+            ),
+
+            filterByCategory = {}
         )
     }
 }
