@@ -1,27 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --blue: #1d4ed8;
+  --blue-dark: #0b1f4d;
+  --blue-tint: rgba(29, 78, 216, 0.09);
+  --orange: #f97316;
+  --orange-tint: rgba(249, 115, 22, 0.13);
+  --red: #dc2626;
+  --red-tint: rgba(220, 38, 38, 0.1);
+  --black: #121212;
+  --white: #ffffff;
+  --ink-70: rgba(18, 18, 18, 0.72);
+  --ink-50: rgba(18, 18, 18, 0.5);
+  --ink-30: rgba(18, 18, 18, 0.28);
+  --line: rgba(18, 18, 18, 0.12);
+  --bg-soft: #f5f5f3;
+}
+
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg-soft);
+    color: var(--black);
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    display: block;
+    width: 100%;
+    text-align: center;
+    border: none;
+    border-radius: 10px;
+    padding: 12.5px;
+    font-weight: 700;
+    font-size: 13.5px;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+    background: var(--red);
+    color: var(--white);
+    box-shadow: 0 8px 18px -8px rgba(220, 38, 38, 0.55);
   }
 
   .btn-secondary {
-    @apply bg-secondary-600 hover:bg-secondary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    display: block;
+    width: 100%;
+    text-align: center;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    padding: 12.5px;
+    font-weight: 700;
+    font-size: 13.5px;
+    cursor: pointer;
+    background: var(--white);
+    color: var(--black);
   }
 
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+    width: 100%;
+    padding: 11px 12px;
+    border-radius: 9px;
+    border: 1.5px solid var(--line);
+    font-size: 13.5px;
+    background: var(--bg-soft);
+  }
+
+  .input-field:focus {
+    outline: none;
+    border-color: var(--blue);
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-md p-6;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 26px 22px;
+    box-shadow: 0 20px 40px -30px rgba(11, 31, 77, 0.45);
   }
 }

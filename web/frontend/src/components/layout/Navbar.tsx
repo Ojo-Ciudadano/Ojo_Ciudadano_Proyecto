@@ -1,75 +1,57 @@
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
-import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Button,
-  Box,
-  IconButton,
-  Menu,
-  MenuItem,
-  Avatar,
-} from '@mui/material'
-import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import './Navbar.css'
 
 export function Navbar() {
   const { user, isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-  const handleMenuClose = () => {
-    setAnchorEl(null)
-  }
 
   const handleLogout = async () => {
     await logout()
-    handleMenuClose()
     navigate('/login')
   }
 
   return (
-    <AppBar position="static">
-      <Toolbar>
-        <Typography
-          variant="h6"
-          component={RouterLink}
-          to="/"
-          sx={{ flexGrow: 1, textDecoration: 'none', color: 'inherit' }}
-        >
-          Ojo Ciudadano
-        </Typography>
+    <aside className="web-sidebar">
+      <div className="ws-brand">
+        <img src="/logo-3.jpeg" alt="Ojo Ciudadano" className="sidebar-logo" />
+        <span className="ws-brand-text">Ojo Ciudadano</span>
+        </div>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {isAuthenticated ? (
-            <>
-              <IconButton onClick={handleMenuOpen} size="small">
-                <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
-                  {user?.nombre?.charAt(0)}
-                </Avatar>
-              </IconButton>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-              >
-                <MenuItem disabled>
-                  {user?.nombre} {user?.apellido}
-                </MenuItem>
-                <MenuItem onClick={handleLogout}>Cerrar sesión</MenuItem>
-              </Menu>
-            </>
-          ) : (
-            <Button color="inherit" component={RouterLink} to="/login">
-              Iniciar sesión
-            </Button>
-          )}
-        </Box>
-      </Toolbar>
-    </AppBar>
+      <nav className="ws-nav">
+        <RouterLink to="/" className="ws-nav-item">
+          Inicio
+        </RouterLink>
+        <RouterLink to="/incidentes" className="ws-nav-item active">
+          Incidentes
+        </RouterLink>
+        <RouterLink to="/mapa" className="ws-nav-item">
+          Mapa territorial
+        </RouterLink>
+      </nav>
+
+      {isAuthenticated && user?.roles?.includes('ADMINISTRADOR') && (
+        <div className="ws-admin-section">
+          <div className="ws-section-label">Administración</div>
+          <RouterLink to="/admin" className="ws-nav-item">
+            Usuarios y reglas
+          </RouterLink>
+        </div>
+      )}
+
+      <div className="ws-user">
+        <div className="avatar">
+          {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
+        </div>
+        <div>
+          <strong>{user?.nombre} {user?.apellido}</strong>
+          <span>{user?.roles?.includes('ADMINISTRADOR') ? 'Administrador' : 'Ciudadano'}</span>
+        </div>
+      </div>
+
+      <button className="web-logout" onClick={handleLogout}>
+        Cerrar sesión
+      </button>
+    </aside>
   )
 }

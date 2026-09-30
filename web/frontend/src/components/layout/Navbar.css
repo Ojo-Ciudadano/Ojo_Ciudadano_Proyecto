@@ -1,0 +1,128 @@
+.web-sidebar {
+  width: 220px;
+  background: var(--blue-dark);
+  color: var(--white);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  min-height: 100vh;
+}
+
+.ws-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 14px;
+}
+
+.ws-brand-text {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.ws-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.ws-nav-item:hover {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ws-nav-item.active {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.08);
+  border-left-color: var(--orange);
+}
+
+.ws-admin-section {
+  margin-top: 14px;
+}
+
+.ws-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 14px 20px 6px;
+  font-weight: 700;
+}
+
+.ws-user {
+  margin-top: auto;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ws-user .avatar {
+  background: var(--orange);
+}
+
+.ws-user div strong {
+  display: block;
+  font-size: 12.5px;
+}
+
+.ws-user div span {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.web-logout {
+  margin: 12px 20px 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--white);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.web-logout:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: contain;
+}
