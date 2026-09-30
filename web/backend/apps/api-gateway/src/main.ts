@@ -7,6 +7,9 @@ async function bootstrap() {
   const logger = new Logger('ApiGateway');
   const app = await NestFactory.create(ApiGatewayModule);
 
+  // Habilitar CORS para consumo desde la plataforma Web SPA (React/Vite)
+  app.enableCors();
+
   // Prefijo global de la API pública v1 (MM-06)
   app.setGlobalPrefix('api/v1');
 
