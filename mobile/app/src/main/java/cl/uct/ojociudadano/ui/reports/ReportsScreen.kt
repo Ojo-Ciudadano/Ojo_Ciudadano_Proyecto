@@ -65,9 +65,7 @@ fun ReportsScreen(
 
     incidents: List<Incident>
 ) {
-    var showFilters by remember {
-        mutableStateOf(false)
-    }
+    var showFilters by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -305,7 +303,7 @@ private fun ReportsHeader(
 @Composable
 private fun ReportsFilters() {
     Card(
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(0.30f),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
