@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.reports
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cl.uct.ojociudadano.data.model.Incident
@@ -8,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Collections
+import kotlin.coroutines.cancellation.CancellationException
 
 class ReportsViewModel(
 private val repository: IncidentRepository
@@ -21,8 +23,21 @@ private val repository: IncidentRepository
 
     fun loadIncidents() {
         viewModelScope.launch {
-            val result = repository.getIncidents()
-            _incidents.value = result
+            try {
+                val result = repository.getIncidents()
+                _incidents.value = result
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                runCatching {
+                    Log.e(
+                        "HomeViewModel",
+                        "Error al cargar incidentes: type=${exception::class.java.name}, " +
+                            "message=${exception.message}, cause=${exception.cause}",
+                        exception
+                    )
+                }
+            }
         }
     }
 }
