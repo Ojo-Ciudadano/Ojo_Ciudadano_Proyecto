@@ -93,7 +93,7 @@ class CreateReportViewModelTest {
             categoryRepository = FakeCategoryRepository()
         )
 
-        viewModel.onCreateReportClick()
+        viewModel.createReport()
 
         assertEquals("El título es obligatorio", viewModel.formState.titleError)
         assertEquals("La descripción es obligatoria", viewModel.formState.descriptionError)

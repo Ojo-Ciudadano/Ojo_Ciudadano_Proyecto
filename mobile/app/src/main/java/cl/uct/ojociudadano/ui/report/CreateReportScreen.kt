@@ -315,7 +315,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onTitleChange = viewModel::onTitleChange,
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
-        onCreateReportClick = viewModel::onCreateReportClick,
+        onCreateReportClick = viewModel::createReport,
         modifier = modifier
     )
 }
