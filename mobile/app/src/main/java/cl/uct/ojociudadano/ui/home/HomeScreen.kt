@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.home
 
+import android.view.ViewDebug
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +60,9 @@ fun HomeScreen(
     onNotificationsClick: () -> Unit = {},
 
     recentIncidents: List<Incident>,
+    incidentsUnderReview: Int,
+    incidentsInViewOf: Int,
+    solvedIncidents: Int
 ) {
     Column(
         modifier = modifier
@@ -81,7 +85,10 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .weight(0.80f),
 
-            recentIncidents = recentIncidents
+            recentIncidents = recentIncidents,
+            incidentsUnderReview = incidentsUnderReview,
+            incidentsInViewOf = incidentsInViewOf,
+            solvedIncidents = solvedIncidents
         )
 
         // FOOTER (10% de la pantalla)
@@ -165,6 +172,9 @@ private fun HomeContent(
     onReportsClick: () -> Unit,
 
     recentIncidents: List<Incident>,
+    incidentsUnderReview: Int,
+    incidentsInViewOf: Int,
+    solvedIncidents: Int,
 
     modifier: Modifier = Modifier
 ) {
@@ -228,22 +238,22 @@ private fun HomeContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ReportStatusCard(
-                value = "3",
+                value = incidentsUnderReview.toString(),
                 title = "En revisión",
                 description = "Pendientes",
                 modifier = Modifier.weight(1f)
             )
 
             ReportStatusCard(
-                value = "2",
+                value = incidentsInViewOf.toString(),
                 title = "En atención",
                 description = "Atendidos",
                 modifier = Modifier.weight(1f)
             )
 
             ReportStatusCard(
-                value = "8",
-                title = "Aprobados",
+                value = solvedIncidents.toString(),
+                title = "Cerrados",
                 description = "Aprobados",
                 modifier = Modifier.weight(1f)
             )
@@ -602,18 +612,25 @@ fun HomeScreen(
     val recentIncidents = incidents
         .sortedByDescending{ it.createdAt }
         .take(2)
-    //val incidentsUnderReview = incidents.count{ incident ->
-    //    incident.status.id == 1 && incident.reporterUserId
-    //}
-    //val incidentsInViewOf = null
-    //val solvedIncidents = null
+    val incidentsUnderReview = incidents.count{ incident ->
+        incident.status.name == "En revisión"
+    }
+    val incidentsInViewOf = incidents.count{ incident ->
+        incident.status.name == "En atención"
+    }
+    val solvedIncidents = incidents.count{ incident ->
+        incident.status.name == "Cerrado"
+    }
 
     HomeScreen(
         onReportsClick = onReportsClick,
         onCreateReportClick = onCreateReportClick,
         onNotificationsClick = onNotificationsClick,
 
-        recentIncidents = recentIncidents
+        recentIncidents = recentIncidents,
+        incidentsUnderReview = incidentsUnderReview,
+        incidentsInViewOf = incidentsInViewOf,
+        solvedIncidents = solvedIncidents
     )
 }
 
@@ -692,7 +709,10 @@ private fun HomeScreenPreview() {
                     createdAt = "2026-09-29T08:00:00Z",
                     updatedAt = "2026-09-29T08:05:00Z"
                 )
-            )
+            ),
+            incidentsUnderReview = 5,
+            incidentsInViewOf = 6,
+            solvedIncidents = 7
         )
     }
 }
