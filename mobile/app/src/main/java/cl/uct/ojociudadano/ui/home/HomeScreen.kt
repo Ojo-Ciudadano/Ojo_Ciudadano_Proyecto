@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.home
 
+import android.view.ViewDebug
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -41,9 +42,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.mutableStateListOf
 
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 
 @Composable
@@ -54,7 +59,10 @@ fun HomeScreen(
     onCreateReportClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
 
-    recentIncidents: List<Incident>
+    recentIncidents: List<Incident>,
+    incidentsUnderReview: Int,
+    incidentsInViewOf: Int,
+    solvedIncidents: Int
 ) {
     Column(
         modifier = modifier
@@ -77,7 +85,10 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .weight(0.80f),
 
-            recentIncidents = recentIncidents
+            recentIncidents = recentIncidents,
+            incidentsUnderReview = incidentsUnderReview,
+            incidentsInViewOf = incidentsInViewOf,
+            solvedIncidents = solvedIncidents
         )
 
         // FOOTER (10% de la pantalla)
@@ -161,6 +172,9 @@ private fun HomeContent(
     onReportsClick: () -> Unit,
 
     recentIncidents: List<Incident>,
+    incidentsUnderReview: Int,
+    incidentsInViewOf: Int,
+    solvedIncidents: Int,
 
     modifier: Modifier = Modifier
 ) {
@@ -224,22 +238,22 @@ private fun HomeContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ReportStatusCard(
-                value = "3",
+                value = incidentsUnderReview.toString(),
                 title = "En revisión",
                 description = "Pendientes",
                 modifier = Modifier.weight(1f)
             )
 
             ReportStatusCard(
-                value = "2",
+                value = incidentsInViewOf.toString(),
                 title = "En atención",
                 description = "Atendidos",
                 modifier = Modifier.weight(1f)
             )
 
             ReportStatusCard(
-                value = "8",
-                title = "Aprobados",
+                value = solvedIncidents.toString(),
+                title = "Cerrados",
                 description = "Aprobados",
                 modifier = Modifier.weight(1f)
             )
@@ -275,7 +289,7 @@ private fun HomeContent(
 
                     TextButton(
                         modifier = Modifier
-                            .fillMaxSize(),
+                            .fillMaxHeight(),
                         onClick = onReportsClick
                     ) {
                         Text(
@@ -290,9 +304,9 @@ private fun HomeContent(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.75f),
+                        .fillMaxHeight(0.85f),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp) // Reemplaza SpaceEvenly de forma eficiente
+                    verticalArrangement = Arrangement.SpaceEvenly
                 ) {
                     items(recentIncidents) { incident ->
                         RecentReportItem(
@@ -392,6 +406,7 @@ private fun RecentReportItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight()
             .border(
                 width = 1.dp,
                 color = Color.LightGray,
@@ -427,6 +442,7 @@ private fun RecentReportItem(
                 text = incidentTitle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
                 lineHeight = 1.sp,
                 overflow = TextOverflow.Ellipsis
             )
@@ -596,23 +612,30 @@ fun HomeScreen(
     val recentIncidents = incidents
         .sortedByDescending{ it.createdAt }
         .take(2)
-    //val incidentsUnderReview = incidents.count{ incident ->
-    //    incident.status.id == 1 && incident.reporterUserId
-    //}
-    //val incidentsInViewOf = null
-    //val solvedIncidents = null
+    val incidentsUnderReview = incidents.count{ incident ->
+        incident.status.name == "En revisión"
+    }
+    val incidentsInViewOf = incidents.count{ incident ->
+        incident.status.name == "En atención"
+    }
+    val solvedIncidents = incidents.count{ incident ->
+        incident.status.name == "Cerrado"
+    }
 
     HomeScreen(
         onReportsClick = onReportsClick,
         onCreateReportClick = onCreateReportClick,
         onNotificationsClick = onNotificationsClick,
 
-        recentIncidents = recentIncidents
+        recentIncidents = recentIncidents,
+        incidentsUnderReview = incidentsUnderReview,
+        incidentsInViewOf = incidentsInViewOf,
+        solvedIncidents = solvedIncidents
     )
 }
 
 // ========================= //
-// RENDER //
+// RENDER PREVIEW//
 // ========================= //
 @Preview(
     showBackground = true,
@@ -622,6 +645,74 @@ fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     OjoCiudadanoTheme {
-        HomeScreen()
+        HomeScreen(
+            recentIncidents = listOf(
+                Incident(
+                    id = "40000000-0000-0000-0000-000000000001",
+                    title = "Luminaria apagada en calzada principal",
+                    description = "El poste de luz no enciende desde hace 3 días, dejando la cuadra muy oscura.",
+                    category = Category(
+                        id = "20000000-0000-0000-0000-000000000001",
+                        name = "Alumbrado público",
+                        description = "Fallas de alumbrado en calles y espacios públicos",
+                        basePriority = 2,
+                        isCriticalEmergency = false,
+                        officialContactChannel = null
+                    ),
+                    status = IncidentStatus(
+                        id = "10000000-0000-0000-0000-000000000001",
+                        name = "Nuevo",
+                        order = 1
+                    ),
+                    location = IncidentLocation(
+                        id = "30000000-0000-0000-0000-000000000001",
+                        latitude = -33.4372,
+                        longitude = -70.6506,
+                        referenceAddress = "Av. Libertador Bernardo O'Higgins 1234",
+                        commune = "Santiago",
+                        region = "Región Metropolitana",
+                        sector = "Centro"
+                    ),
+                    reporterUserId = "a0000000-0000-0000-0000-000000000001",
+                    priorityLevel = null,
+                    createdAt = "2026-09-28T10:15:00Z",
+                    updatedAt = "2026-09-28T10:15:00Z"
+                ),
+                Incident(
+                    id = "40000000-0000-0000-0000-000000000003",
+                    title = "Incendio en terreno baldío",
+                    description = "Fuego sin control propagándose rápidamente hacia viviendas colindantes.",
+                    category = Category(
+                        id = "20000000-0000-0000-0000-000000000008",
+                        name = "Incendio",
+                        description = "Incendios estructurales, forestales o pastizales",
+                        basePriority = 5,
+                        isCriticalEmergency = true,
+                        officialContactChannel = "Bomberos 132"
+                    ),
+                    status = IncidentStatus(
+                        id = "10000000-0000-0000-0000-000000000003",
+                        name = "En atención",
+                        order = 3
+                    ),
+                    location = IncidentLocation(
+                        id = "30000000-0000-0000-0000-000000000002",
+                        latitude = -33.4261,
+                        longitude = -70.6125,
+                        referenceAddress = "Av. Providencia con Pedro de Valdivia",
+                        commune = "Providencia",
+                        region = "Región Metropolitana",
+                        sector = "Pedro de Valdivia Norte"
+                    ),
+                    reporterUserId = "a0000000-0000-0000-0000-000000000002",
+                    priorityLevel = 5,
+                    createdAt = "2026-09-29T08:00:00Z",
+                    updatedAt = "2026-09-29T08:05:00Z"
+                )
+            ),
+            incidentsUnderReview = 5,
+            incidentsInViewOf = 6,
+            solvedIncidents = 7
+        )
     }
 }
