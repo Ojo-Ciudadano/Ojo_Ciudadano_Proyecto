@@ -23,9 +23,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       const response = await authService.login({ email, password })
+      const usuario = (response as any).usuario ?? (response as any).user
       localStorage.setItem('access_token', response.access_token)
-      localStorage.setItem('user', JSON.stringify(response.user))
-      setUser(response.user)
+      localStorage.setItem('user', JSON.stringify(usuario))
+      setUser(usuario)
     } finally {
       setIsLoading(false)
     }
