@@ -1,7 +1,7 @@
 package cl.uct.ojociudadano.integration
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
-import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
+import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.remote.Sprint1ApiDefaults
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
@@ -41,14 +41,7 @@ class RealIncidentCreationIntegrationTest {
             description = "Incidente creado para validar el POST real desde Android",
             categoryId = category.id,
             reporterUserId = Sprint1ApiDefaults.USER_ID,
-            location = CreateIncidentLocationInput(
-                latitude = -38.7359,
-                longitude = -72.5904,
-                referenceAddress = "Ubicación de prueba Sprint 1",
-                commune = "Temuco",
-                region = "La Araucanía",
-                sector = "Centro"
-            )
+            location = Sprint1TemporaryLocation.incidentLocation
         )
 
         val created = incidentRepository.createIncident(input)

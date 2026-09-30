@@ -8,7 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
-import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
+import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionStorage
@@ -76,7 +76,7 @@ class CreateReportViewModel(
             description = formState.description,
             categoryId = requireNotNull(formState.selectedCategory).id,
             reporterUserId = reporterUserId,
-            location = sprint1Location
+            location = Sprint1TemporaryLocation.incidentLocation
         )
 
         submissionState = CreateReportSubmissionState.Loading
@@ -137,14 +137,4 @@ class CreateReportViewModel(
     private fun CreateReportFormState.hasValidationErrors(): Boolean =
         titleError != null || descriptionError != null || categoryError != null
 
-    private companion object {
-        val sprint1Location = CreateIncidentLocationInput(
-            latitude = -38.7359,
-            longitude = -72.5904,
-            referenceAddress = "Ubicación de prueba Sprint 1",
-            commune = "Temuco",
-            region = "La Araucanía",
-            sector = "Centro"
-        )
-    }
 }
