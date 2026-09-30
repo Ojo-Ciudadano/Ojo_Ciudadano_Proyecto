@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +27,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,11 +36,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 
 
@@ -48,8 +59,11 @@ import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 @Composable
 fun ReportsScreen(
     modifier: Modifier = Modifier,
+
     onBack: () -> Unit = {},
-    onCreateReportClick: () -> Unit = {}
+    onCreateReportClick: () -> Unit = {},
+
+    incidents: List<Incident>
 ) {
     var showFilters by remember {
         mutableStateOf(false)
@@ -82,7 +96,9 @@ fun ReportsScreen(
             showFilters = showFilters,
             onToggleFilters = {
                 showFilters = !showFilters
-            }
+            },
+
+            incidents = incidents
         )
 
         // ====================================================
@@ -185,13 +201,17 @@ private fun HomeHeader(
 @Composable
 private fun ReportsContent(
     modifier: Modifier = Modifier,
+
     showFilters: Boolean,
-    onToggleFilters: () -> Unit
+    onToggleFilters: () -> Unit,
+
+    incidents: List<Incident>
 ) {
     Column(
         modifier = modifier
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .fillMaxWidth()
+            .fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
 
@@ -218,7 +238,7 @@ private fun ReportsContent(
         // REPORTES
         // ====================================================
 
-        ReportsList()
+        ReportsList( incidents = incidents )
     }
 }
 
@@ -393,26 +413,26 @@ private fun FilterField(
 // ============================================================
 
 @Composable
-private fun ReportsList() {
+private fun ReportsList(
+    incidents: List<Incident>
+) {
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.60f),
+            .fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors( containerColor = Color.White )
     ) {
 
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            ReportCard()
+            items( incidents ) { incident ->
+                ReportCard( incident = incident )
+            }
 
-            ReportCard()
-
-            ReportCard()
         }
     }
 }
@@ -422,7 +442,8 @@ private fun ReportsList() {
 // ============================================================
 @Composable
 private fun ReportCard(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    incident: Incident
 ) {
     Column(
         modifier = modifier
@@ -462,7 +483,7 @@ private fun ReportCard(
 
             // TÍTULO
             Text(
-                text = "Incendio en el cerro Nielol",
+                text = incident.title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -471,7 +492,7 @@ private fun ReportCard(
 
             // DESCRIPCIÓN
             Text(
-                text = "Se esta quemando el cerro en Temuco, esto empezo alrededor de las 3am, nadie",
+                text = incident.description,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
@@ -481,7 +502,7 @@ private fun ReportCard(
 
             // FECHA
             Text(
-                text = "26-09-2026",
+                text = incident.createdAt,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color.Gray,
@@ -587,6 +608,31 @@ private fun HomeFooterItem(
 
 
 // ============================================================
+// TEMPORAL
+// ============================================================
+@Composable
+fun ReportsScreen(
+    onBack: () -> Unit = {},
+    onCreateReportClick: () -> Unit = {}
+) {
+    val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val viewModel: ReportsViewModel = viewModel(
+        factory = remember(application) {
+            ReportsViewModelFactory(application.container.incidentRepository)
+        }
+    )
+
+    val incidents by viewModel.incidents.collectAsState()
+
+    ReportsScreen(
+        onBack = onBack,
+        onCreateReportClick = onCreateReportClick,
+        incidents = incidents
+    )
+}
+
+
+// ============================================================
 // PREVIEW
 // ============================================================
 
@@ -597,6 +643,71 @@ private fun HomeFooterItem(
 @Composable
 private fun ReportsScreenPreview() {
     OjoCiudadanoTheme {
-        ReportsScreen()
+        ReportsScreen(
+            incidents = listOf(
+                Incident(
+                    id = "40000000-0000-0000-0000-000000000001",
+                    title = "Luminaria apagada en calzada principal",
+                    description = "El poste de luz no enciende desde hace 3 días, dejando la cuadra muy oscura.",
+                    category = Category(
+                        id = "20000000-0000-0000-0000-000000000001",
+                        name = "Alumbrado público",
+                        description = "Fallas de alumbrado en calles y espacios públicos",
+                        basePriority = 2,
+                        isCriticalEmergency = false,
+                        officialContactChannel = null
+                    ),
+                    status = IncidentStatus(
+                        id = "10000000-0000-0000-0000-000000000001",
+                        name = "Nuevo",
+                        order = 1
+                    ),
+                    location = IncidentLocation(
+                        id = "30000000-0000-0000-0000-000000000001",
+                        latitude = -33.4372,
+                        longitude = -70.6506,
+                        referenceAddress = "Av. Libertador Bernardo O'Higgins 1234",
+                        commune = "Santiago",
+                        region = "Región Metropolitana",
+                        sector = "Centro"
+                    ),
+                    reporterUserId = "a0000000-0000-0000-0000-000000000001",
+                    priorityLevel = null,
+                    createdAt = "2026-09-28T10:15:00Z",
+                    updatedAt = "2026-09-28T10:15:00Z"
+                ),
+                Incident(
+                    id = "40000000-0000-0000-0000-000000000003",
+                    title = "Incendio en terreno baldío",
+                    description = "Fuego sin control propagándose rápidamente hacia viviendas colindantes.",
+                    category = Category(
+                        id = "20000000-0000-0000-0000-000000000008",
+                        name = "Incendio",
+                        description = "Incendios estructurales, forestales o pastizales",
+                        basePriority = 5,
+                        isCriticalEmergency = true,
+                        officialContactChannel = "Bomberos 132"
+                    ),
+                    status = IncidentStatus(
+                        id = "10000000-0000-0000-0000-000000000003",
+                        name = "En atención",
+                        order = 3
+                    ),
+                    location = IncidentLocation(
+                        id = "30000000-0000-0000-0000-000000000002",
+                        latitude = -33.4261,
+                        longitude = -70.6125,
+                        referenceAddress = "Av. Providencia con Pedro de Valdivia",
+                        commune = "Providencia",
+                        region = "Región Metropolitana",
+                        sector = "Pedro de Valdivia Norte"
+                    ),
+                    reporterUserId = "a0000000-0000-0000-0000-000000000002",
+                    priorityLevel = 5,
+                    createdAt = "2026-09-29T08:00:00Z",
+                    updatedAt = "2026-09-29T08:05:00Z"
+                )
+            )
+        )
     }
 }
