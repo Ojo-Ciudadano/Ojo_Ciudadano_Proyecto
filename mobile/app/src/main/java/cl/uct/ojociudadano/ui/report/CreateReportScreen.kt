@@ -298,7 +298,11 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val viewModel: CreateReportViewModel = viewModel(
         factory = remember(application) {
-            CreateReportViewModelFactory(application.container.categoryRepository)
+            CreateReportViewModelFactory(
+                categoryRepository = application.container.categoryRepository,
+                incidentRepository = application.container.incidentRepository,
+                sessionStorage = application.container.sessionStorage
+            )
         }
     )
 

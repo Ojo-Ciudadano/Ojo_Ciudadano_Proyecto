@@ -8,11 +8,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.repository.CategoryRepository
+import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.data.session.SessionStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class CreateReportViewModel(
     private val categoryRepository: CategoryRepository,
+    private val incidentRepository: IncidentRepository,
+    private val sessionStorage: SessionStorage,
     private val formValidator: CreateReportFormValidator = CreateReportFormValidator()
 ) : ViewModel() {
 

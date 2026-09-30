@@ -1,7 +1,12 @@
 package cl.uct.ojociudadano.ui.report
 
 import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.repository.CategoryRepository
+import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.data.session.AuthenticatedSession
+import cl.uct.ojociudadano.data.session.SessionStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -34,7 +39,7 @@ class CreateReportViewModelTest {
     @Test
     fun `loads categories returned by the repository`() = runTest {
         val category = sampleCategory
-        val viewModel = CreateReportViewModel(
+        val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(categories = listOf(category))
         )
 
@@ -45,7 +50,7 @@ class CreateReportViewModelTest {
 
     @Test
     fun `keeps an empty category list without an error`() = runTest {
-        val viewModel = CreateReportViewModel(
+        val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(categories = emptyList())
         )
 
@@ -56,7 +61,7 @@ class CreateReportViewModelTest {
 
     @Test
     fun `exposes an error when category loading fails`() = runTest {
-        val viewModel = CreateReportViewModel(
+        val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(
                 failure = IllegalStateException("Error de red")
             )
@@ -69,7 +74,7 @@ class CreateReportViewModelTest {
 
     @Test
     fun `stores form events in view model state`() = runTest {
-        val viewModel = CreateReportViewModel(
+        val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository()
         )
 
@@ -84,7 +89,7 @@ class CreateReportViewModelTest {
 
     @Test
     fun `validates form through view model without starting a submission`() = runTest {
-        val viewModel = CreateReportViewModel(
+        val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository()
         )
 
@@ -97,6 +102,14 @@ class CreateReportViewModelTest {
     }
 }
 
+private fun createViewModel(
+    categoryRepository: CategoryRepository
+): CreateReportViewModel = CreateReportViewModel(
+    categoryRepository = categoryRepository,
+    incidentRepository = FakeIncidentRepository(),
+    sessionStorage = FakeSessionStorage()
+)
+
 private class FakeCategoryRepository(
     private val categories: List<Category> = emptyList(),
     private val failure: Throwable? = null
@@ -106,6 +119,29 @@ private class FakeCategoryRepository(
         failure?.let { throw it }
         return categories
     }
+}
+
+private class FakeIncidentRepository : IncidentRepository {
+
+    override suspend fun getIncidents(): List<Incident> = emptyList()
+
+    override suspend fun getIncidentsByReporter(reporterUserId: String): List<Incident> = emptyList()
+
+    override suspend fun getIncidentById(id: String): Incident = error("Not used by this test")
+
+    override suspend fun createIncident(input: CreateIncidentInput): Incident =
+        error("Not used by this test")
+}
+
+private class FakeSessionStorage : SessionStorage {
+
+    override fun currentToken(): String? = null
+
+    override fun currentSession(): AuthenticatedSession? = null
+
+    override fun save(session: AuthenticatedSession) = Unit
+
+    override fun clear() = Unit
 }
 
 private val sampleCategory = Category(
