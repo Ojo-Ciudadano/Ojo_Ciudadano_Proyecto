@@ -70,7 +70,7 @@ fun ReportsScreen(
     incidents: List<Incident>,
     categories: List<Category>,
 
-    filterByCategory: (Category?) -> Unit
+    filterIncidents: (Category?, DateFilter) -> Unit
 ) {
     var showFilters by remember { mutableStateOf(false) }
 
@@ -105,7 +105,7 @@ fun ReportsScreen(
             incidents = incidents,
             categories = categories,
 
-            filterByCategory = filterByCategory
+            filterIncidents = filterIncidents
         )
 
         // ====================================================
@@ -215,7 +215,7 @@ private fun ReportsContent(
     incidents: List<Incident>,
     categories: List<Category>,
 
-    filterByCategory: (Category?) -> Unit
+    filterIncidents: (Category?, DateFilter) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -243,7 +243,7 @@ private fun ReportsContent(
         ) {
             ReportsFilters(
                 categories = categories,
-                filterByCategory = filterByCategory
+                filterIncidents = filterIncidents
 
             )
         }
@@ -319,10 +319,11 @@ private fun ReportsHeader(
 @Composable
 private fun ReportsFilters(
     categories: List<Category>,
-    filterByCategory: (Category?) -> Unit
+    filterIncidents: (Category?, DateFilter) -> Unit
 ) {
 
     var selectedCategory by remember { mutableStateOf<Category?>( null ) }
+    var selectedDateFilter by remember { mutableStateOf(DateFilter.RECENT) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -354,9 +355,12 @@ private fun ReportsFilters(
                 }
             )
 
-            FilterField(
-                label = "Fecha",
-                value = "Seleccionar período"
+            DateDropdown(
+                label = "Fechas",
+                selectedDateFilter = selectedDateFilter,
+                onDateFilterSelected = { dateFilter ->
+                    selectedDateFilter = dateFilter
+                }
             )
 
             Spacer(
@@ -364,7 +368,7 @@ private fun ReportsFilters(
             )
 
             Button(
-                onClick = { filterByCategory(selectedCategory) },
+                onClick = { filterIncidents( selectedCategory, selectedDateFilter) },
 
                 modifier = Modifier.fillMaxWidth(),
                 enabled = true,
@@ -465,11 +469,23 @@ fun CategoryDropdown(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilterField(
+fun DateDropdown(
     label: String,
-    value: String,
+    selectedDateFilter: DateFilter,
+    onDateFilterSelected: (DateFilter) -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val selectedText = when (selectedDateFilter) {
+        DateFilter.RECENT -> "Más recientes"
+        DateFilter.TODAY -> "Creadas durante el día"
+        DateFilter.WEEK -> "Creadas durante la semana"
+        DateFilter.MONTH -> "Creadas durante el mes"
+        DateFilter.YEAR -> "Creadas durante el año"
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -484,29 +500,74 @@ private fun FilterField(
             modifier = Modifier.height(4.dp)
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .border(
-                    width = 1.dp,
-                    color = Color.Gray,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(
-                    horizontal = 12.dp
-                ),
-            contentAlignment = Alignment.CenterStart
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = {
+                expanded = !expanded
+            },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = value,
-                color = Color.Gray,
-                fontSize = 14.sp
+
+            OutlinedTextField(
+                value = selectedText,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(
+                        ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                    ),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expanded
+                    )
+                },
+                shape = RoundedCornerShape(8.dp),
+                singleLine = true
             )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = {
+                    expanded = false
+                },
+                modifier = Modifier.background(Color(0xFFFFFFFF))
+            ) {
+
+                DateFilter.entries.forEach { dateFilter ->
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = when (dateFilter) {
+                                    DateFilter.RECENT ->
+                                        "Más recientes"
+
+                                    DateFilter.TODAY ->
+                                        "Creadas durante el día"
+
+                                    DateFilter.WEEK ->
+                                        "Creadas durante la semana"
+
+                                    DateFilter.MONTH ->
+                                        "Creadas durante el mes"
+
+                                    DateFilter.YEAR ->
+                                        "Creadas durante el año"
+                                }
+                            )
+                        },
+                        onClick = {
+                            onDateFilterSelected(dateFilter)
+                            expanded = false
+                        },
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+            }
         }
     }
 }
-
 
 // ============================================================
 // LISTA DE REPORTES
@@ -735,7 +796,7 @@ fun ReportsScreen(
         incidents = incidents,
         categories = categories,
 
-        filterByCategory = viewModel::filterByCategory
+        filterIncidents = viewModel::filterIncidents
     )
 }
 
@@ -883,7 +944,7 @@ private fun ReportsScreenPreview() {
                 )
             ),
 
-            filterByCategory = {}
+            filterIncidents = { _, _ -> }
         )
     }
 }

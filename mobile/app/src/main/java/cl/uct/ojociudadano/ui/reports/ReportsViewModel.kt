@@ -14,6 +14,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
+
 class ReportsViewModel(
     private val incidentRepository: IncidentRepository,
     private val categoryRepository: CategoryRepository
@@ -69,6 +73,7 @@ class ReportsViewModel(
         }
     }
 
+    // Residual
     fun filterByCategory(category: Category?) {
         if (category == null) {
             _incidents.value = _allIncidents.value
@@ -77,5 +82,123 @@ class ReportsViewModel(
         _incidents.value = _allIncidents.value.filter { incident ->
             incident.category.id == category.id
         }
+    }
+
+    // Residual
+    fun filterByDate(filter: DateFilter) {
+
+        val now = Instant.now()
+
+        _incidents.value = when (filter) {
+
+            DateFilter.RECENT -> {
+                _allIncidents.value.sortedByDescending { incident ->
+                    Instant.parse(incident.createdAt)
+                }
+            }
+
+            DateFilter.TODAY -> {
+                val today = now
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate()
+
+                _allIncidents.value.filter { incident ->
+                    Instant.parse(incident.createdAt)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate() == today
+                }
+            }
+
+            DateFilter.WEEK -> {
+                val limit = now.minus(7, ChronoUnit.DAYS)
+
+                _allIncidents.value.filter { incident ->
+                    Instant.parse(incident.createdAt).isAfter(limit)
+                }
+            }
+
+            DateFilter.MONTH -> {
+                val limit = now.minus(30, ChronoUnit.DAYS)
+
+                _allIncidents.value.filter { incident ->
+                    Instant.parse(incident.createdAt).isAfter(limit)
+                }
+            }
+
+            DateFilter.YEAR -> {
+                val limit = now.minus(365, ChronoUnit.DAYS)
+
+                _allIncidents.value.filter { incident ->
+                    Instant.parse(incident.createdAt).isAfter(limit)
+                }
+            }
+        }
+    }
+
+    fun filterIncidents(
+        category: Category?,
+        dateFilter: DateFilter
+    ) {
+        var filtered = _allIncidents.value
+
+        // Filtrar por categoría
+        if (category != null) {
+            filtered = filtered.filter { incident ->
+                incident.category.id == category.id
+            }
+        }
+
+        // Filtrar por fecha
+        val now = Instant.now()
+
+        filtered = when (dateFilter) {
+
+            DateFilter.RECENT -> {
+                filtered.sortedByDescending { incident ->
+                    Instant.parse(incident.createdAt)
+                }
+            }
+
+            DateFilter.TODAY -> {
+                val today = now
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate()
+
+                filtered.filter { incident ->
+                    Instant.parse(incident.createdAt)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate() == today
+                }
+            }
+
+            DateFilter.WEEK -> {
+                val limit = now.minus(7, ChronoUnit.DAYS)
+
+                filtered.filter { incident ->
+                    Instant.parse(incident.createdAt)
+                        .isAfter(limit)
+                }
+            }
+
+            DateFilter.MONTH -> {
+                val limit = now.minus(30, ChronoUnit.DAYS)
+
+                filtered.filter { incident ->
+                    Instant.parse(incident.createdAt)
+                        .isAfter(limit)
+                }
+            }
+
+            DateFilter.YEAR -> {
+                val limit = now.minus(365, ChronoUnit.DAYS)
+
+                filtered.filter { incident ->
+                    Instant.parse(incident.createdAt)
+                        .isAfter(limit)
+                }
+            }
+        }
+
+        _incidents.value = filtered
     }
 }
