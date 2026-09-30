@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,27 +24,37 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
+
     onReportsClick: () -> Unit = {},
     onCreateReportClick: () -> Unit = {},
-    onNotificationsClick: () -> Unit = {}
+    onNotificationsClick: () -> Unit = {},
+
+    recentIncidents: List<Incident>
 ) {
     Column(
         modifier = modifier
@@ -62,9 +72,12 @@ fun HomeScreen(
         HomeContent(
             onCreateReportClick = onCreateReportClick,
             onReportsClick = onReportsClick,
+
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.80f)
+                .weight(0.80f),
+
+            recentIncidents = recentIncidents
         )
 
         // FOOTER (10% de la pantalla)
@@ -146,6 +159,9 @@ private fun HomeHeader( modifier: Modifier = Modifier ) {
 private fun HomeContent(
     onCreateReportClick: () -> Unit,
     onReportsClick: () -> Unit,
+
+    recentIncidents: List<Incident>,
+
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -271,20 +287,21 @@ private fun HomeContent(
                 }
 
                 // Content - 75% del alto disponible
-                Column(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.75f),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly
+                    verticalArrangement = Arrangement.spacedBy(16.dp) // Reemplaza SpaceEvenly de forma eficiente
                 ) {
-                    RecentReportItem(
-                        onReportsClick = onReportsClick
-                    )
-
-                    RecentReportItem(
-                        onReportsClick = onReportsClick
-                    )
+                    items(recentIncidents) { incident ->
+                        RecentReportItem(
+                            incidentTitle = incident.title,
+                            incidentDescription = incident.description,
+                            incidentDate = incident.createdAt,
+                            onReportsClick = onReportsClick
+                        )
+                    }
                 }
             }
         }
@@ -297,7 +314,7 @@ private fun HomeContent(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
-            // Mapa futuro
+            // Mapa
         }
     }
 }
@@ -366,6 +383,10 @@ private fun ReportStatusCard(
 // REPORTES RECIENTES
 @Composable
 private fun RecentReportItem(
+    incidentTitle: String,
+    incidentDescription: String,
+    incidentDate: String,
+
     onReportsClick: () -> Unit
 ) {
     Row(
@@ -403,14 +424,14 @@ private fun RecentReportItem(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = "Incedio", // report.title
+                text = incidentTitle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 lineHeight = 1.sp,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "Se esta quemando el bosque", // report.description
+                text = incidentDescription,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Normal,
                 maxLines = 2,
@@ -418,7 +439,7 @@ private fun RecentReportItem(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "Hoy", // report.date
+                text = incidentDate,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Normal,
                 maxLines = 1,
@@ -552,6 +573,42 @@ private fun HomeFooterItem(
             )
         }
     }
+}
+
+
+// ========================= //
+// TEMPORAL //
+// ========================= //
+@Composable
+fun HomeScreen(
+    onReportsClick: () -> Unit = {},
+    onCreateReportClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {}
+) {
+    val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val viewModel: HomeViewModel = viewModel(
+        factory = remember(application) {
+            HomeViewModelFactory(application.container.incidentRepository)
+        }
+    )
+
+    val incidents by viewModel.incidents.collectAsState()
+    val recentIncidents = incidents
+        .sortedByDescending{ it.createdAt }
+        .take(2)
+    //val incidentsUnderReview = incidents.count{ incident ->
+    //    incident.status.id == 1 && incident.reporterUserId
+    //}
+    //val incidentsInViewOf = null
+    //val solvedIncidents = null
+
+    HomeScreen(
+        onReportsClick = onReportsClick,
+        onCreateReportClick = onCreateReportClick,
+        onNotificationsClick = onNotificationsClick,
+
+        recentIncidents = recentIncidents
+    )
 }
 
 // ========================= //
