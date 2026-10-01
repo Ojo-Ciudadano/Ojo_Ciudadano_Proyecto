@@ -279,7 +279,7 @@ private val sampleSession = AuthenticatedSession(
 )
 
 private val sampleCategory = Category(
-    id = "real-category-id",
+    id = "3d059063-63eb-4a4c-9f2a-27eea72f84fb",
     name = "Categoría real",
     description = "",
     basePriority = 0,

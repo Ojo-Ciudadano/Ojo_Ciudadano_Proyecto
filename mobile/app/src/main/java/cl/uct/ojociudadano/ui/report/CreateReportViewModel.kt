@@ -71,10 +71,11 @@ class CreateReportViewModel(
             return
         }
 
+        val selectedCategory = requireNotNull(formState.selectedCategory)
         val input = CreateIncidentInput(
             title = formState.title,
             description = formState.description,
-            categoryId = requireNotNull(formState.selectedCategory).id,
+            categoryId = selectedCategory.id,
             reporterUserId = reporterUserId,
             location = Sprint1TemporaryLocation.incidentLocation
         )
@@ -83,6 +84,15 @@ class CreateReportViewModel(
 
         viewModelScope.launch {
             try {
+                // Temporary diagnostic log: verifies the API UUID selected in the dropdown.
+                runCatching {
+                    Log.d(
+                        "CreateReportViewModel",
+                        "Creating incident: selectedCategory=$selectedCategory, " +
+                            "categoryName=${selectedCategory.name}, " +
+                            "categoriaId=${input.categoryId}"
+                    )
+                }
                 incidentRepository.createIncident(input)
                 submissionState = CreateReportSubmissionState.Success
             } catch (exception: CancellationException) {
