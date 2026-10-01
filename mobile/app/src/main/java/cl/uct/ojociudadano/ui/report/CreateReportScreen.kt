@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.ui.report
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +26,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +52,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
@@ -63,7 +74,8 @@ fun CreateReportScreen(
     onDescriptionChange: (String) -> Unit,
     onCategorySelected: (Category) -> Unit,
     onCreateReportClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -76,11 +88,16 @@ fun CreateReportScreen(
             .padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Crear reporte",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+            }
+            Text(
+                text = "Crear reporte",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
         ReportTextField(
             value = state.title,
@@ -96,7 +113,8 @@ fun CreateReportScreen(
             keyboardActions = KeyboardActions(
                 onNext = { descriptionFocusRequester.requestFocus() }
             ),
-            errorMessage = state.titleError
+            errorMessage = state.titleError,
+            leadingIcon = Icons.Filled.Edit
         )
 
         ReportTextField(
@@ -118,7 +136,8 @@ fun CreateReportScreen(
                     focusManager.clearFocus()
                 }
             ),
-            errorMessage = state.descriptionError
+            errorMessage = state.descriptionError,
+            leadingIcon = Icons.Filled.Description
         )
 
         CategorySelector(
@@ -142,11 +161,14 @@ fun CreateReportScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Text(
-                    text = "Ubicación pendiente",
+                Row(
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Ubicación pendiente", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 
@@ -161,6 +183,8 @@ fun CreateReportScreen(
             modifier = Modifier.fillMaxWidth(),
             enabled = submissionState !is CreateReportSubmissionState.Loading
         ) {
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
             Text(
                 if (submissionState is CreateReportSubmissionState.Loading) {
                     "Creando reporte..."
@@ -220,6 +244,7 @@ private fun CategorySelector(
             readOnly = true,
             enabled = !isLoading,
             label = { Text("Categoría") },
+            leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null) },
             placeholder = {
                 Text(if (isLoading) "Cargando categorías..." else "Seleccionar categoría")
             },
@@ -272,7 +297,8 @@ private fun ReportTextField(
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
-    errorMessage: String? = null
+    errorMessage: String? = null,
+    leadingIcon: ImageVector? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -285,6 +311,7 @@ private fun ReportTextField(
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         isError = errorMessage != null,
+        leadingIcon = leadingIcon?.let { icon -> { Icon(icon, contentDescription = null) } },
         supportingText = errorMessage?.let { error -> { Text(error) } }
     )
 }
@@ -316,7 +343,8 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
         onCreateReportClick = viewModel::createReport,
-        modifier = modifier
+        modifier = modifier,
+        onBack = onBack
     )
 }
 

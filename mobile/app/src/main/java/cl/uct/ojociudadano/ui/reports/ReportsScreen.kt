@@ -31,6 +31,15 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -98,35 +107,16 @@ fun ReportsScreen(
         ReportsContent(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.80f),
+                .weight(0.90f),
 
             showFilters = showFilters,
             onToggleFilters = { showFilters = !showFilters },
+            onBack = onBack,
 
             incidents = incidents,
             categories = categories,
 
             filterIncidents = filterIncidents
-        )
-
-        // ====================================================
-        // FOOTER
-        // ====================================================
-
-        HomeFooter(
-            onHomeClick = {
-                // Pendiente
-            },
-            onReportClick = onCreateReportClick,
-            onMapClick = {
-                // Pendiente
-            },
-            onProfileClick = {
-                // Pendiente
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.10f)
         )
     }
 }
@@ -165,7 +155,9 @@ private fun HomeHeader(
                         color = Color.White,
                         shape = RoundedCornerShape(8.dp)
                     )
-            )
+            ) {
+                Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color(0xFF023889))
+            }
 
             Text(
                 text = "Ojo ciudadano",
@@ -212,6 +204,7 @@ private fun ReportsContent(
 
     showFilters: Boolean,
     onToggleFilters: () -> Unit,
+    onBack: () -> Unit,
 
     incidents: List<Incident>,
     categories: List<Category>,
@@ -232,7 +225,8 @@ private fun ReportsContent(
 
         ReportsHeader(
             showFilters = showFilters,
-            onToggleFilters = onToggleFilters
+            onToggleFilters = onToggleFilters,
+            onBack = onBack
         )
 
         // ====================================================
@@ -265,7 +259,8 @@ private fun ReportsContent(
 @Composable
 private fun ReportsHeader(
     showFilters: Boolean,
-    onToggleFilters: () -> Unit
+    onToggleFilters: () -> Unit,
+    onBack: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().fillMaxHeight(0.10f),
@@ -286,17 +281,23 @@ private fun ReportsHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-            Text(
-                text = "Mis reportes",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver a Inicio")
+                }
+                Text(
+                    text = "Mis reportes",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
             TextButton(
                 onClick = onToggleFilters,
                 colors = ButtonDefaults.buttonColors( containerColor = Color(0xFFFF0000) ),
                 shape = RoundedCornerShape(8.dp)
             ) {
+                Icon(Icons.Filled.FilterList, contentDescription = null, tint = Color.White)
                 Text(
                     text = if (showFilters) {
                         "Ocultar"
@@ -438,6 +439,7 @@ fun CategoryDropdown(
                         expanded = expanded
                     )
                 },
+                leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null) },
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true
             )
@@ -523,6 +525,7 @@ fun DateDropdown(
                         expanded = expanded
                     )
                 },
+                leadingIcon = { Icon(Icons.Filled.CalendarToday, contentDescription = null) },
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true
             )
@@ -630,10 +633,11 @@ private fun ReportCard(
                 .background(Color(0xFFE0E0E0)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Imagen",
-                color = Color.Gray,
-                fontSize = 14.sp
+            Icon(
+                imageVector = Icons.Filled.PhotoCamera,
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = Color.Gray
             )
         }
 
