@@ -19,7 +19,7 @@ on:
 
 jobs:
   build:
-    name: Test and Build Android
+    name: Android - Test, Lint and Build
     runs-on: ubuntu-latest
 
     defaults:
@@ -28,20 +28,38 @@ jobs:
 
     steps:
       - name: Descargar código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configurar Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Dar permisos a Gradle
         run: chmod +x gradlew
 
-      - name: Ejecutar tests
+      - name: Ejecutar tests unitarios
         run: ./gradlew testDebugUnitTest
 
-      - name: Compilar aplicación
+      - name: Ejecutar Android Lint
+        run: ./gradlew lintDebug
+
+      - name: Compilar APK Debug
         run: ./gradlew assembleDebug
+
+      - name: Guardar reportes de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: mobile/app/build/reports/
+
+      - name: Guardar APK Debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: ojo-ciudadano-debug
+          path: mobile/app/build/outputs/apk/debug/app-debug.apk
