@@ -14,6 +14,6 @@ object Sprint1TemporaryLocation {
         referenceAddress = "Ubicación de prueba Sprint 1",
         commune = "Temuco",
         region = "La Araucanía",
-        sector = "Centro"
+        sector = "Pedro de Valdivia"
     )
 }
