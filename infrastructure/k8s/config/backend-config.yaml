@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  DB_HOST_AUTH: "postgres-auth-svc"
+  DB_PORT_AUTH: "5432"
+  DB_NAME_AUTH: "auth_usuarios"
+  
+  DB_HOST_INCIDENTES: "postgres-incidentes-svc"
+  DB_PORT_INCIDENTES: "5432"
+  DB_NAME_INCIDENTES: "incidentes"
+  
+  DB_HOST_NOTIFICACIONES: "postgres-notificaciones-svc"
+  DB_PORT_NOTIFICACIONES: "5432"
+  DB_NAME_NOTIFICACIONES: "notificaciones"
+  
+  AUTH_SERVICE_URL: "http://auth-svc:3001"
+  INCIDENTES_SERVICE_URL: "http://incidentes-svc:3002"
+  NOTIFICACIONES_SERVICE_URL: "http://notificaciones-svc:3003"

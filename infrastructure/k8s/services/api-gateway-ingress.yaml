@@ -4,8 +4,7 @@ metadata:
   name: api-gateway-ingress
 spec:
   rules:
-    - host: api-ojociudadano.uct.cl
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
