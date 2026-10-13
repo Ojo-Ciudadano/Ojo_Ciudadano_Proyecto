@@ -2,12 +2,14 @@ package cl.uct.ojociudadano.ui.report
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -15,10 +17,24 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.ImeAction
@@ -35,7 +52,11 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
+import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 /**
  * Formulario visual desacoplado de la navegación y de la capa de datos.
@@ -45,16 +66,20 @@ import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 @Composable
 fun CreateReportScreen(
     state: CreateReportFormState,
+    categories: List<Category>,
+    isLoadingCategories: Boolean,
+    categoryLoadError: String?,
+    submissionState: CreateReportSubmissionState,
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
-    onCategoryClick: () -> Unit,
+    onCategorySelected: (Category) -> Unit,
     onCreateReportClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -63,11 +88,16 @@ fun CreateReportScreen(
             .padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Crear reporte",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+            }
+            Text(
+                text = "Crear reporte",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
         ReportTextField(
             value = state.title,
@@ -83,7 +113,8 @@ fun CreateReportScreen(
             keyboardActions = KeyboardActions(
                 onNext = { descriptionFocusRequester.requestFocus() }
             ),
-            errorMessage = state.titleError
+            errorMessage = state.titleError,
+            leadingIcon = Icons.Filled.Edit
         )
 
         ReportTextField(
@@ -105,32 +136,18 @@ fun CreateReportScreen(
                     focusManager.clearFocus()
                 }
             ),
-            errorMessage = state.descriptionError
+            errorMessage = state.descriptionError,
+            leadingIcon = Icons.Filled.Description
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Categoría",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            OutlinedButton(
-                onClick = onCategoryClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = state.categoryName.ifBlank { "Seleccionar categoría" },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            state.categoryError?.let { error ->
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
+        CategorySelector(
+            selectedCategory = state.selectedCategory,
+            categories = categories,
+            isLoading = isLoadingCategories,
+            loadErrorMessage = categoryLoadError,
+            errorMessage = state.categoryError,
+            onCategorySelected = onCategorySelected
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
@@ -144,11 +161,14 @@ fun CreateReportScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Text(
-                    text = "Ubicación pendiente",
+                Row(
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Ubicación pendiente", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 
@@ -160,9 +180,108 @@ fun CreateReportScreen(
                 focusManager.clearFocus()
                 onCreateReportClick()
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = submissionState !is CreateReportSubmissionState.Loading
         ) {
-            Text("Crear reporte")
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(
+                if (submissionState is CreateReportSubmissionState.Loading) {
+                    "Creando reporte..."
+                } else {
+                    "Crear reporte"
+                }
+            )
+        }
+
+        if (submissionState is CreateReportSubmissionState.Success) {
+            Text("Reporte creado correctamente")
+        }
+
+        if (submissionState is CreateReportSubmissionState.Error) {
+            Text(
+                text = submissionState.message,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategorySelector(
+    selectedCategory: Category?,
+    categories: List<Category>,
+    isLoading: Boolean,
+    loadErrorMessage: String?,
+    errorMessage: String?,
+    onCategorySelected: (Category) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val supportingMessage = listOfNotNull(errorMessage, loadErrorMessage)
+        .joinToString("\n")
+        .ifBlank { null }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = {
+            if (!isLoading) {
+                expanded = !expanded
+            }
+        },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = selectedCategory?.name.orEmpty(),
+            onValueChange = {},
+            modifier = Modifier
+                .menuAnchor(
+                    type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                    enabled = !isLoading
+                )
+                .fillMaxWidth(),
+            readOnly = true,
+            enabled = !isLoading,
+            label = { Text("Categoría") },
+            leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null) },
+            placeholder = {
+                Text(if (isLoading) "Cargando categorías..." else "Seleccionar categoría")
+            },
+            trailingIcon = {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                }
+            },
+            isError = supportingMessage != null,
+            supportingText = supportingMessage?.let { message -> { Text(message) } }
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            if (categories.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("No hay categorías disponibles") },
+                    onClick = {},
+                    enabled = false
+                )
+            } else {
+                categories.forEach { category ->
+                    DropdownMenuItem(
+                        text = { Text(category.name) },
+                        onClick = {
+                            onCategorySelected(category)
+                            expanded = false
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -178,7 +297,8 @@ private fun ReportTextField(
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
-    errorMessage: String? = null
+    errorMessage: String? = null,
+    leadingIcon: ImageVector? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -191,6 +311,7 @@ private fun ReportTextField(
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         isError = errorMessage != null,
+        leadingIcon = leadingIcon?.let { icon -> { Icon(icon, contentDescription = null) } },
         supportingText = errorMessage?.let { error -> { Text(error) } }
     )
 }
@@ -201,16 +322,29 @@ private fun ReportTextField(
  */
 @Composable
 fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
-    var state by remember { mutableStateOf(CreateReportFormState()) }
-    val viewModel = remember { CreateReportViewModel() }
+    val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val viewModel: CreateReportViewModel = viewModel(
+        factory = remember(application) {
+            CreateReportViewModelFactory(
+                categoryRepository = application.container.categoryRepository,
+                incidentRepository = application.container.incidentRepository,
+                sessionStorage = application.container.sessionStorage
+            )
+        }
+    )
 
     CreateReportScreen(
-        state = state,
-        onTitleChange = { state = state.copy(title = it) },
-        onDescriptionChange = { state = state.copy(description = it) },
-        onCategoryClick = {},
-        onCreateReportClick = { state = viewModel.validateForm(state) },
-        modifier = modifier
+        state = viewModel.formState,
+        categories = viewModel.categoryUiState.categories,
+        isLoadingCategories = viewModel.categoryUiState.isLoading,
+        categoryLoadError = viewModel.categoryUiState.errorMessage,
+        submissionState = viewModel.submissionState,
+        onTitleChange = viewModel::onTitleChange,
+        onDescriptionChange = viewModel::onDescriptionChange,
+        onCategorySelected = viewModel::onCategorySelected,
+        onCreateReportClick = viewModel::createReport,
+        modifier = modifier,
+        onBack = onBack
     )
 }
 
@@ -222,12 +356,25 @@ private fun CreateReportScreenPreview() {
             state = CreateReportFormState(
                 title = "Poste de alumbrado dañado",
                 description = "La luminaria lleva varios días sin funcionar",
-                categoryName = "Alumbrado público"
+                selectedCategory = previewCategory
             ),
+            categories = listOf(previewCategory),
+            isLoadingCategories = false,
+            categoryLoadError = null,
+            submissionState = CreateReportSubmissionState.Idle,
             onTitleChange = {},
             onDescriptionChange = {},
-            onCategoryClick = {},
+            onCategorySelected = {},
             onCreateReportClick = {}
         )
     }
 }
+
+private val previewCategory = Category(
+    id = "preview-category",
+    name = "Categoría de ejemplo",
+    description = "",
+    basePriority = 0,
+    isCriticalEmergency = false,
+    officialContactChannel = null
+)
