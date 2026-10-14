@@ -1,0 +1,227 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-auth-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: cinder-ceph
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-auth
+spec:
+  selector:
+    matchLabels:
+      app: postgres-auth
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: postgres-auth
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              value: "auth_user"
+            - name: POSTGRES_DB
+              value: "auth_usuarios"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: postgres-auth
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "auth_user", "-d", "auth_usuarios"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: postgres-auth-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-auth-svc
+spec:
+  selector:
+    app: postgres-auth
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-incidentes-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: cinder-ceph
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-incidentes
+spec:
+  selector:
+    matchLabels:
+      app: postgres-incidentes
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: postgres-incidentes
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              value: "incidentes_user"
+            - name: POSTGRES_DB
+              value: "incidentes"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: postgres-incidentes
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "incidentes_user", "-d", "incidentes"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: postgres-incidentes-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-incidentes-svc
+spec:
+  selector:
+    app: postgres-incidentes
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-notificaciones-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: cinder-ceph
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-notificaciones
+spec:
+  selector:
+    matchLabels:
+      app: postgres-notificaciones
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: postgres-notificaciones
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              value: "notificaciones_user"
+            - name: POSTGRES_DB
+              value: "notificaciones"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: postgres-notificaciones
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "notificaciones_user", "-d", "notificaciones"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: postgres-notificaciones-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-notificaciones-svc
+spec:
+  selector:
+    app: postgres-notificaciones
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP

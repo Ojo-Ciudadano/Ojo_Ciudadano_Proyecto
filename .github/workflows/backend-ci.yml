@@ -1,0 +1,60 @@
+name: Backend CI CD
+
+on:
+  push:
+    branches:
+      - integration
+    paths:
+      - 'web/backend/**'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  REPO: ojo-ciudadano/ojo_ciudadano_proyecto
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        app: [api-gateway, auth-usuarios, incidentes, notificaciones]
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web/backend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.app }}:latest
+          build-args: |
+            APP_NAME=${{ matrix.app }}
+
+      - name: Configurar kubectl
+        run: |
+          echo "${{ secrets.K8S_CA }}" | base64 -d > "$RUNNER_TEMP/ca.crt"
+          kubectl config set-cluster uct --server=https://k8s-estudiantes.dev.censei.cl --certificate-authority="$RUNNER_TEMP/ca.crt"
+          kubectl config set-credentials ci --token="${{ secrets.K8S_TOKEN }}"
+          kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
+          kubectl config use-context ci
+
+      - name: Desplegar en Kubernetes
+        run: |
+          kubectl set image deployment/${{ matrix.app }} ${{ matrix.app }}=${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.app }}:latest
+          kubectl rollout restart deployment/${{ matrix.app }}
+          kubectl rollout status deployment/${{ matrix.app }} --timeout=180s
