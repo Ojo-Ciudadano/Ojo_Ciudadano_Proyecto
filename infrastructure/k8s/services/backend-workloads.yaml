@@ -6,6 +6,11 @@ spec:
   selector:
     matchLabels:
       app: auth-usuarios
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -32,6 +37,13 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3001
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 150m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -54,6 +66,11 @@ spec:
   selector:
     matchLabels:
       app: incidentes
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -80,6 +97,13 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3002
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 150m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -102,6 +126,11 @@ spec:
   selector:
     matchLabels:
       app: notificaciones
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -128,6 +157,13 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3003
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 150m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -150,6 +186,11 @@ spec:
   selector:
     matchLabels:
       app: api-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -169,6 +210,13 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3000
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 150m
+              memory: 192Mi
 ---
 apiVersion: v1
 kind: Service

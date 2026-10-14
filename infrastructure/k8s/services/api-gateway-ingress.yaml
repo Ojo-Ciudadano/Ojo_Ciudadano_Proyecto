@@ -2,9 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gateway-ingress
+  namespace: student-daalvarez
+  annotations:
+    external-dns.alpha.kubernetes.io/target: proxy.inf.uct.cl
 spec:
+  ingressClassName: nginx
   rules:
-    - http:
+    - host: ojociudadano.dev.censei.cl
+      http:
         paths:
           - path: /
             pathType: Prefix

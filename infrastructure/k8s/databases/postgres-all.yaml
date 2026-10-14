@@ -49,6 +49,13 @@ spec:
               command: ["pg_isready", "-U", "auth_user", "-d", "auth_usuarios"]
             initialDelaySeconds: 10
             periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
       volumes:
         - name: db-data
           persistentVolumeClaim:
@@ -118,6 +125,13 @@ spec:
               command: ["pg_isready", "-U", "incidentes_user", "-d", "incidentes"]
             initialDelaySeconds: 10
             periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
       volumes:
         - name: db-data
           persistentVolumeClaim:
@@ -187,6 +201,13 @@ spec:
               command: ["pg_isready", "-U", "notificaciones_user", "-d", "notificaciones"]
             initialDelaySeconds: 10
             periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
       volumes:
         - name: db-data
           persistentVolumeClaim:
