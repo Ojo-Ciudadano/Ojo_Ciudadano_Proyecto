@@ -30,6 +30,8 @@ spec:
                   key: postgres-auth
             - name: DATABASE_URL
               value: "postgresql://auth_user:$(DB_PASSWORD)@$(DB_HOST_AUTH):$(DB_PORT_AUTH)/$(DB_NAME_AUTH)?schema=public"
+            - name: DATABASE_URL_AUTH
+              value: "postgresql://auth_user:$(DB_PASSWORD)@$(DB_HOST_AUTH):$(DB_PORT_AUTH)/$(DB_NAME_AUTH)?schema=public"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -90,6 +92,8 @@ spec:
                   key: postgres-incidentes
             - name: DATABASE_URL
               value: "postgresql://incidentes_user:$(DB_PASSWORD)@$(DB_HOST_INCIDENTES):$(DB_PORT_INCIDENTES)/$(DB_NAME_INCIDENTES)?schema=public"
+            - name: DATABASE_URL_INCIDENTES
+              value: "postgresql://incidentes_user:$(DB_PASSWORD)@$(DB_HOST_INCIDENTES):$(DB_PORT_INCIDENTES)/$(DB_NAME_INCIDENTES)?schema=public"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -149,6 +153,8 @@ spec:
                   name: backend-secrets
                   key: postgres-notificaciones
             - name: DATABASE_URL
+              value: "postgresql://notificaciones_user:$(DB_PASSWORD)@$(DB_HOST_NOTIFICACIONES):$(DB_PORT_NOTIFICACIONES)/$(DB_NAME_NOTIFICACIONES)?schema=public"
+            - name: DATABASE_URL_NOTIFICACIONES
               value: "postgresql://notificaciones_user:$(DB_PASSWORD)@$(DB_HOST_NOTIFICACIONES):$(DB_PORT_NOTIFICACIONES)/$(DB_NAME_NOTIFICACIONES)?schema=public"
             - name: JWT_SECRET
               valueFrom:
