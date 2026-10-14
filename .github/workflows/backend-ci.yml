@@ -6,6 +6,8 @@ on:
       - integration
     paths:
       - 'web/backend/**'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -54,4 +56,5 @@ jobs:
       - name: Desplegar en Kubernetes
         run: |
           kubectl set image deployment/${{ matrix.app }} ${{ matrix.app }}=${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.app }}:latest
+          kubectl rollout restart deployment/${{ matrix.app }}
           kubectl rollout status deployment/${{ matrix.app }} --timeout=180s
