@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npx prisma generate || true
+RUN find . -name "schema.prisma" -exec npx prisma generate --schema={} \;
 RUN mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
 ARG APP_NAME
 RUN npm run build ${APP_NAME}
