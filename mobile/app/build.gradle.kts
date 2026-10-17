@@ -16,10 +16,7 @@ val localProperties = Properties().apply {
 fun configurationValue(name: String, fallback: String = ""): String {
     return providers.gradleProperty(name).orNull
         ?: providers.environmentVariable(name).orNull
-        ?: localProperties.getProperty(name)diego Documents/U/Ojo_Ciudadano_Proyecto   feature/79-android-remote-backend-config % grep -rn "createApiService" mobile/app/src/main/java/
-        mobile/app/src/main/java/cl/uct/ojociudadano/di/AppContainer.kt:28:        RetrofitClient.createApiService(baseUrl, sessionStorage)
-        mobile/app/src/main/java/cl/uct/ojociudadano/data/remote/RetrofitClient.kt:67:    fun createApiService(
-        diego Documents/U/Ojo_Ciudadano_Proyecto   feature/79-android-remote-backend-config %
+        ?: localProperties.getProperty(name)
         ?: fallback
 }
 
