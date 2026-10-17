@@ -97,7 +97,7 @@ class RealIncidentRepositoryIntegrationTest {
 
     private fun createRepository(): RemoteIncidentRepository {
         val baseUrl = System.getenv("API_BASE_URL")
-            ?: "http://localhost:3000/"
+            ?: RetrofitClient.DEFAULT_BASE_URL
 
         val apiService = RetrofitClient.createApiService(baseUrl)
 

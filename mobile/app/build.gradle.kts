@@ -26,7 +26,7 @@ fun String.asBuildConfigString(): String {
 
 val apiBaseUrl = configurationValue(
     name = "API_BASE_URL",
-    fallback = "http://10.0.2.2:3000/"
+    fallback = "https://ojociudadano.dev.censei.cl/"
 )
 val devAuthEmail = configurationValue("DEV_AUTH_EMAIL")
 val devAuthPassword = configurationValue("DEV_AUTH_PASSWORD")

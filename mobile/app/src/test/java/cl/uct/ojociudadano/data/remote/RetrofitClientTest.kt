@@ -1,11 +1,33 @@
 package cl.uct.ojociudadano.data.remote
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
-import org.junit.Assert.assertNotNull
 
 class RetrofitClientTest {
+
+    @Test
+    fun `create uses remote UCT base url by default`() {
+        val retrofit = RetrofitClient.create()
+
+        assertEquals(
+            "https://ojociudadano.dev.censei.cl/",
+            retrofit.baseUrl().toString()
+        )
+    }
+
+    @Test
+    fun `create normalizes api v1 suffix to avoid duplicated prefix`() {
+        val retrofit = RetrofitClient.create(
+            "https://ojociudadano.dev.censei.cl/api/v1/"
+        )
+
+        assertEquals(
+            "https://ojociudadano.dev.censei.cl/",
+            retrofit.baseUrl().toString()
+        )
+    }
 
     @Test
     fun `create configures expected base url`() {
@@ -46,9 +68,7 @@ class RetrofitClientTest {
 
     @Test
     fun `createApiService creates ApiService`() {
-        val apiService = RetrofitClient.createApiService(
-            "http://localhost:3000/"
-        )
+        val apiService = RetrofitClient.createApiService()
 
         assertNotNull(apiService)
     }
