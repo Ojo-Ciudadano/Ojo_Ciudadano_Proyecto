@@ -9,7 +9,8 @@ Sistema colaborativo para el reporte, seguimiento y gestión de incidentes urban
 ```text
 Ojo_Ciudadano_Proyecto/
 ├── docs/                      # Documentación transversal de arquitectura y contratos
-│   └── CONVENCIONES_ARQUITECTURA.md
+│   ├── CONVENCIONES_ARQUITECTURA.md
+│   └── ESTRATEGIA_DESPLIEGUE_WEB_K8S.md
 ├── mobile/                    # Aplicación Móvil Android (4° Año) - Kotlin nativo, GPS, Cámara
 ├── web/                       # Plataforma Web y Backend de Microservicios (2° Año)
 │   ├── frontend/              # Plataforma Web de Gestión (React + TypeScript + Vite + Leaflet)
@@ -112,4 +113,5 @@ npm run lint
 
 ## Documentación de Arquitectura
 
-Para conocer en detalle la arquitectura de 5 capas, los contratos de comunicación, el patrón Database-per-Service y las convenciones de codificación, consultar [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md).
+* **Convenciones y Arquitectura de Backend:** [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md)
+* **Estrategia de Despliegue Web en Kubernetes UCT (#128):** [docs/ESTRATEGIA_DESPLIEGUE_WEB_K8S.md](docs/ESTRATEGIA_DESPLIEGUE_WEB_K8S.md)
