@@ -21,32 +21,44 @@ import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.session.SessionBootstrapState
 import cl.uct.ojociudadano.data.session.SessionBootstrapper
 import cl.uct.ojociudadano.navigation.AppNavigation
+import cl.uct.ojociudadano.navigation.AppRoutes
+import cl.uct.ojociudadano.ui.login.LoginCredentials
 import kotlinx.coroutines.launch
 
 @Composable
 fun SessionStartupGate(
-    sessionBootstrapper: SessionBootstrapper
+    sessionBootstrapper: SessionBootstrapper,
+    onLogin: (LoginCredentials) -> Unit = {}
 ) {
     var state: SessionBootstrapState by remember {
         mutableStateOf(SessionBootstrapState.Loading)
     }
+    var isLoginRequested by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(sessionBootstrapper) {
         state = sessionBootstrapper.bootstrap()
     }
 
-    when (state) {
-        SessionBootstrapState.Loading -> StartupLoading()
-        is SessionBootstrapState.Authenticated -> AppNavigation()
-        is SessionBootstrapState.Error -> StartupError(
-            onRetry = {
-                state = SessionBootstrapState.Loading
-                coroutineScope.launch {
-                    state = sessionBootstrapper.bootstrap()
-                }
-            }
+    if (isLoginRequested) {
+        AppNavigation(
+            startDestination = AppRoutes.LOGIN,
+            onLogin = onLogin
         )
+    } else {
+        when (state) {
+            SessionBootstrapState.Loading -> StartupLoading()
+            is SessionBootstrapState.Authenticated -> AppNavigation(onLogin = onLogin)
+            is SessionBootstrapState.Error -> StartupError(
+                onRetry = {
+                    state = SessionBootstrapState.Loading
+                    coroutineScope.launch {
+                        state = sessionBootstrapper.bootstrap()
+                    }
+                },
+                onLoginClick = { isLoginRequested = true }
+            )
+        }
     }
 }
 
@@ -60,7 +72,8 @@ private fun StartupLoading() {
 
 @Composable
 private fun StartupError(
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onLoginClick: () -> Unit
 ) {
     StartupContainer {
         Text(
@@ -73,6 +86,9 @@ private fun StartupError(
         )
         Button(onClick = onRetry) {
             Text("Reintentar")
+        }
+        Button(onClick = onLoginClick) {
+            Text("Ir al inicio de sesión")
         }
     }
 }
