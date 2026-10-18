@@ -10,15 +10,17 @@ class BearerTokenInterceptor(
     private val onUnauthorizedRefreshToken: (() -> String?)? = null
 ) : Interceptor {
 
+    private val refreshLock = Any()
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val token = tokenProvider.currentToken()?.trim()
+        val requestToken = tokenProvider.currentToken()?.trim()
 
         val initialRequest = if (
-            !token.isNullOrEmpty() && request.header(AUTHORIZATION_HEADER) == null
+            !requestToken.isNullOrEmpty() && request.header(AUTHORIZATION_HEADER) == null
         ) {
             request.newBuilder()
-                .header(AUTHORIZATION_HEADER, "$BEARER_PREFIX$token")
+                .header(AUTHORIZATION_HEADER, "$BEARER_PREFIX$requestToken")
                 .build()
         } else {
             request
@@ -31,18 +33,33 @@ class BearerTokenInterceptor(
             !request.url.encodedPath.endsWith("/auth/login") &&
             request.header(RETRY_HEADER) == null
         ) {
-            if (tokenProvider is SessionStorage) {
-                tokenProvider.clear()
+            val refreshedToken = synchronized(refreshLock) {
+                val currentStoredToken = tokenProvider.currentToken()?.trim()
+                if (!currentStoredToken.isNullOrEmpty() && currentStoredToken != requestToken) {
+                    currentStoredToken
+                } else {
+                    if (tokenProvider is SessionStorage) {
+                        tokenProvider.clear()
+                    }
+                    onUnauthorizedRefreshToken?.invoke()?.trim()?.takeIf { it.isNotEmpty() }
+                }
             }
 
-            val refreshedToken = onUnauthorizedRefreshToken?.invoke()?.trim()
             if (!refreshedToken.isNullOrEmpty()) {
                 response.close()
                 val retriedRequest = request.newBuilder()
                     .header(AUTHORIZATION_HEADER, "$BEARER_PREFIX$refreshedToken")
                     .header(RETRY_HEADER, "true")
                     .build()
-                return chain.proceed(retriedRequest)
+                val retryResponse = chain.proceed(retriedRequest)
+                if (retryResponse.code == HTTP_UNAUTHORIZED && tokenProvider is SessionStorage) {
+                    synchronized(refreshLock) {
+                        if (tokenProvider.currentToken()?.trim() == refreshedToken) {
+                            tokenProvider.clear()
+                        }
+                    }
+                }
+                return retryResponse
             }
         }
 

@@ -15,8 +15,8 @@ data class AuthenticatedSession(
 
     fun isExpired(nowEpochSeconds: Long = System.currentTimeMillis() / 1000): Boolean {
         val parts = accessToken.split('.')
-        if (parts.size != 3) {
-            return false
+        if (parts.size != 3 || parts[1].isBlank()) {
+            return true
         }
 
         val expSeconds = runCatching {
@@ -24,7 +24,7 @@ data class AuthenticatedSession(
             val payloadJson = String(payloadBytes, StandardCharsets.UTF_8)
             val jsonObject = JsonParser.parseString(payloadJson).asJsonObject
             jsonObject.get("exp")?.takeIf { it.isJsonPrimitive }?.asLong
-        }.getOrNull() ?: return false
+        }.getOrNull() ?: return true
 
         return expSeconds <= nowEpochSeconds
     }

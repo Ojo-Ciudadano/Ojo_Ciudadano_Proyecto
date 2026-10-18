@@ -41,6 +41,15 @@ class AppContainer(
         RemoteAuthRepository(authApiService, sessionStorage)
     }
 
+    val sessionBootstrapper: SessionBootstrapper by lazy {
+        SessionBootstrapper(
+            sessionStorage = sessionStorage,
+            authRepository = authRepository,
+            developmentCredentials = developmentCredentials,
+            allowDevelopmentAutoLogin = BuildConfig.DEBUG
+        )
+    }
+
     val apiService: ApiService by lazy {
         RetrofitClient.createApiService(
             baseUrl = baseUrl,
@@ -54,19 +63,16 @@ class AppContainer(
                                 password = developmentCredentials.password
                             ).accessToken
                         }
-                    }.getOrNull()
+                    }.getOrNull().also { refreshedToken ->
+                        if (refreshedToken == null) {
+                            sessionBootstrapper.onSessionInvalidated()
+                        }
+                    }
                 } else {
+                    sessionBootstrapper.onSessionInvalidated()
                     null
                 }
             }
-        )
-    }
-
-    val sessionBootstrapper: SessionBootstrapper by lazy {
-        SessionBootstrapper(
-            sessionStorage = sessionStorage,
-            authRepository = authRepository,
-            developmentCredentials = developmentCredentials
         )
     }
 
