@@ -19,17 +19,45 @@ class RealIncidentCreationIntegrationTest {
     @Test
     fun `createIncident persists incident through API Gateway`() = runBlocking {
         assumeTrue(
-            "La prueba requiere RUN_API_INTEGRATION_TESTS=true",
-            System.getenv("RUN_API_INTEGRATION_TESTS") == "true"
+            "La prueba de escritura requiere RUN_API_INTEGRATION_TESTS=true y RUN_WRITE_INTEGRATION_TESTS=true",
+            System.getenv("RUN_API_INTEGRATION_TESTS") == "true" &&
+                    System.getenv("RUN_WRITE_INTEGRATION_TESTS") == "true"
+        )
+
+        val email = System.getenv("AUTH_EMAIL").orEmpty()
+        val password = System.getenv("AUTH_PASSWORD").orEmpty()
+
+        assumeTrue(
+            "La prueba requiere AUTH_EMAIL y AUTH_PASSWORD",
+            email.isNotBlank() && password.isNotBlank()
         )
 
         val baseUrl = System.getenv("API_BASE_URL")
             ?: RetrofitClient.DEFAULT_BASE_URL
 
-        val apiService = RetrofitClient.createApiService(baseUrl)
+        // 2. Nuevo SessionStorage falso en memoria para la prueba
+        val sessionStorage = object : cl.uct.ojociudadano.data.session.SessionStorage {
+            private var session: cl.uct.ojociudadano.data.session.AuthenticatedSession? = null
+            override fun currentToken(): String? = session?.accessToken
+            override fun currentSession() = session
+            override fun save(session: cl.uct.ojociudadano.data.session.AuthenticatedSession) {
+                this.session = session
+            }
+
+            override fun clear() {
+                session = null
+            }
+        }
+
+        // 3. Crear ApiService CON el sessionStorage y hacer login
+        val apiService = RetrofitClient.createApiService(baseUrl, sessionStorage)
+        cl.uct.ojociudadano.data.repository.RemoteAuthRepository(apiService, sessionStorage)
+            .login(email, password)
+
         val categoryRepository = RemoteCategoryRepository(apiService)
         val incidentRepository = RemoteIncidentRepository(apiService)
 
+        // --- A partir de aquí, el resto del test queda exactamente igual ---
         val category = categoryRepository
             .getCategories()
             .first { it.name == "Alumbrado público" }

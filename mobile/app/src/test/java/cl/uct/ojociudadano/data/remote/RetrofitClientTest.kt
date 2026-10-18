@@ -1,5 +1,8 @@
 package cl.uct.ojociudadano.data.remote
 
+import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
@@ -27,6 +30,25 @@ class RetrofitClientTest {
             "https://ojociudadano.dev.censei.cl/",
             retrofit.baseUrl().toString()
         )
+    }
+
+    @Test
+    fun `apiService sends exact request path when baseUrl ends with api v1`() = runTest {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+        server.start()
+
+        try {
+            val baseWithApiV1 = server.url("/api/v1/").toString()
+            val apiService = RetrofitClient.createApiService(baseUrl = baseWithApiV1)
+
+            apiService.getCategories()
+
+            val recordedRequest = server.takeRequest()
+            assertEquals("/api/v1/categorias", recordedRequest.path)
+        } finally {
+            server.shutdown()
+        }
     }
 
     @Test

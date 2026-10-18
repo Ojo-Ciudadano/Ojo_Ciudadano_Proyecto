@@ -10,36 +10,63 @@ import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
-import cl.uct.ojociudadano.data.session.SessionStorage
-import cl.uct.ojociudadano.data.session.SharedPreferencesSessionStorage
 import cl.uct.ojociudadano.data.session.DevelopmentAuthCredentials
 import cl.uct.ojociudadano.data.session.SessionBootstrapper
+import cl.uct.ojociudadano.data.session.SessionStorage
+import cl.uct.ojociudadano.data.session.SharedPreferencesSessionStorage
+import kotlinx.coroutines.runBlocking
 
 class AppContainer(
     context: Context,
     baseUrl: String = BuildConfig.API_BASE_URL
 ) {
 
+    private val developmentCredentials = DevelopmentAuthCredentials(
+        email = BuildConfig.DEV_AUTH_EMAIL,
+        password = BuildConfig.DEV_AUTH_PASSWORD
+    )
+
     val sessionStorage: SessionStorage by lazy {
-        SharedPreferencesSessionStorage(context)
+        SharedPreferencesSessionStorage(
+            context = context,
+            environmentBaseUrl = baseUrl
+        )
     }
 
-    val apiService: ApiService by lazy {
-        RetrofitClient.createApiService(baseUrl, sessionStorage)
+    private val authApiService: ApiService by lazy {
+        RetrofitClient.createApiService(baseUrl = baseUrl)
     }
 
     val authRepository: AuthRepository by lazy {
-        RemoteAuthRepository(apiService, sessionStorage)
+        RemoteAuthRepository(authApiService, sessionStorage)
+    }
+
+    val apiService: ApiService by lazy {
+        RetrofitClient.createApiService(
+            baseUrl = baseUrl,
+            tokenProvider = sessionStorage,
+            onUnauthorizedRefreshToken = {
+                if (BuildConfig.DEBUG && developmentCredentials.isConfigured()) {
+                    runCatching {
+                        runBlocking {
+                            authRepository.login(
+                                email = developmentCredentials.email,
+                                password = developmentCredentials.password
+                            ).accessToken
+                        }
+                    }.getOrNull()
+                } else {
+                    null
+                }
+            }
+        )
     }
 
     val sessionBootstrapper: SessionBootstrapper by lazy {
         SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = DevelopmentAuthCredentials(
-                email = BuildConfig.DEV_AUTH_EMAIL,
-                password = BuildConfig.DEV_AUTH_PASSWORD
-            )
+            developmentCredentials = developmentCredentials
         )
     }
 

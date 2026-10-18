@@ -13,9 +13,12 @@ class SessionBootstrapper(
         return try {
             val existingSession = sessionStorage.currentSession()
 
-            if (existingSession != null) {
+            if (existingSession != null && !existingSession.isExpired()) {
                 SessionBootstrapState.Authenticated(existingSession)
             } else {
+                if (existingSession != null) {
+                    sessionStorage.clear()
+                }
                 loginWithDevelopmentCredentials()
             }
         } catch (exception: CancellationException) {

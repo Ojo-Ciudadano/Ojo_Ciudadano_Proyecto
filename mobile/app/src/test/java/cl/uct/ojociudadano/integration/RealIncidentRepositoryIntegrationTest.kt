@@ -95,11 +95,34 @@ class RealIncidentRepositoryIntegrationTest {
         )
     }
 
-    private fun createRepository(): RemoteIncidentRepository {
+    private suspend fun createRepository(): RemoteIncidentRepository {
+        val email = System.getenv("AUTH_EMAIL").orEmpty()
+        val password = System.getenv("AUTH_PASSWORD").orEmpty()
+
+        assumeTrue(
+            "La prueba requiere AUTH_EMAIL y AUTH_PASSWORD",
+            email.isNotBlank() && password.isNotBlank()
+        )
+
         val baseUrl = System.getenv("API_BASE_URL")
             ?: RetrofitClient.DEFAULT_BASE_URL
 
-        val apiService = RetrofitClient.createApiService(baseUrl)
+        val sessionStorage = object : cl.uct.ojociudadano.data.session.SessionStorage {
+            private var session: cl.uct.ojociudadano.data.session.AuthenticatedSession? = null
+            override fun currentToken(): String? = session?.accessToken
+            override fun currentSession() = session
+            override fun save(session: cl.uct.ojociudadano.data.session.AuthenticatedSession) {
+                this.session = session
+            }
+
+            override fun clear() {
+                session = null
+            }
+        }
+
+        val apiService = RetrofitClient.createApiService(baseUrl, sessionStorage)
+        cl.uct.ojociudadano.data.repository.RemoteAuthRepository(apiService, sessionStorage)
+            .login(email, password)
 
         return RemoteIncidentRepository(apiService)
     }

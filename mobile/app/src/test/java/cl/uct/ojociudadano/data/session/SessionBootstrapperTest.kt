@@ -103,6 +103,32 @@ class SessionBootstrapperTest {
         assertEquals(sampleSession, sessionStorage.currentSession())
     }
 
+    @Test
+    fun `bootstrap clears expired JWT session and logs in again`() = runTest {
+        val expiredPayload = java.util.Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString("""{"sub":"u1","exp":1000}""".toByteArray())
+        val expiredSession = sampleSession.copy(
+            accessToken = "eyJhbGciOiJIUzI1NiJ9.$expiredPayload.sig"
+        )
+        val sessionStorage = FakeSessionStorage(expiredSession)
+        val authRepository = FakeAuthRepository(
+            sessionStorage = sessionStorage,
+            loginOutcomes = mutableListOf(Result.success(sampleSession))
+        )
+        val bootstrapper = SessionBootstrapper(
+            sessionStorage = sessionStorage,
+            authRepository = authRepository,
+            developmentCredentials = configuredCredentials
+        )
+
+        val state = bootstrapper.bootstrap()
+
+        assertEquals(1, authRepository.loginCalls)
+        assertEquals(sampleSession, sessionStorage.currentSession())
+        assertEquals(SessionBootstrapState.Authenticated(sampleSession), state)
+    }
+
     private class FakeAuthRepository(
         private val sessionStorage: SessionStorage,
         private val loginOutcomes: MutableList<Result<AuthenticatedSession>>
