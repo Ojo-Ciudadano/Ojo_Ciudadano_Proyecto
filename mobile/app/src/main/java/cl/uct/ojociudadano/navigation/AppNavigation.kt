@@ -13,6 +13,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
 import cl.uct.ojociudadano.ui.home.HomeScreen
+import cl.uct.ojociudadano.ui.login.LoginCredentials
+import cl.uct.ojociudadano.ui.login.LoginScreen
 import cl.uct.ojociudadano.ui.map.MapScreen
 import cl.uct.ojociudadano.ui.notifications.NotificationsScreen
 import cl.uct.ojociudadano.ui.profile.ProfileScreen
@@ -26,10 +28,15 @@ object AppRoutes {
     const val NOTIFICATIONS = "notifications"
     const val MAP = "map"
     const val PROFILE = "profile"
+    const val LOGIN = "login"
 }
 
 @Composable
-fun AppNavigation(navController: NavHostController = rememberNavController()) {
+fun AppNavigation(
+    navController: NavHostController = rememberNavController(),
+    startDestination: String = AppRoutes.HOME,
+    onLogin: (LoginCredentials) -> Unit = {}
+) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     fun navigateToHome() {
@@ -40,16 +47,18 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
 
     Scaffold(
         bottomBar = {
-            AppBottomNavigation(currentRoute = currentRoute) { route ->
-                if (route == AppRoutes.HOME) {
-                    navigateToHome()
-                } else {
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+            if (currentRoute != AppRoutes.LOGIN) {
+                AppBottomNavigation(currentRoute = currentRoute) { route ->
+                    if (route == AppRoutes.HOME) {
+                        navigateToHome()
+                    } else {
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 }
             }
@@ -57,9 +66,12 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = AppRoutes.HOME,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(AppRoutes.LOGIN) {
+                LoginScreen(onLogin = onLogin)
+            }
             composable(AppRoutes.HOME) {
                 HomeScreen(
                     onReportsClick = { navController.navigate(AppRoutes.REPORTS) },
