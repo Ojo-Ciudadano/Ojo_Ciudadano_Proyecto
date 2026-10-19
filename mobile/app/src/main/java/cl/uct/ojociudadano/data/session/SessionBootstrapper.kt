@@ -9,8 +9,12 @@ import kotlinx.coroutines.flow.asStateFlow
 class SessionBootstrapper(
     private val sessionStorage: SessionStorage,
     private val authRepository: AuthRepository,
-    private val developmentCredentials: DevelopmentAuthCredentials,
-    private val allowDevelopmentAutoLogin: Boolean = true
+    private val developmentCredentials: DevelopmentAuthCredentials = DevelopmentAuthCredentials(),
+    /**
+     * Opt-in only for an explicit local test harness. The normal application flow must always
+     * request interactive credentials when there is no valid persisted session.
+     */
+    private val allowDevelopmentAutoLogin: Boolean = false
 ) {
 
     private val _state = MutableStateFlow<SessionBootstrapState>(SessionBootstrapState.Loading)

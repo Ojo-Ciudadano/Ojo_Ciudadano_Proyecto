@@ -10,22 +10,14 @@ import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
-import cl.uct.ojociudadano.data.session.DevelopmentAuthCredentials
 import cl.uct.ojociudadano.data.session.SessionBootstrapper
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.data.session.SharedPreferencesSessionStorage
-import kotlinx.coroutines.runBlocking
 
 class AppContainer(
     context: Context,
     baseUrl: String = BuildConfig.API_BASE_URL
 ) {
-
-    private val developmentCredentials = DevelopmentAuthCredentials(
-        email = BuildConfig.DEV_AUTH_EMAIL,
-        password = BuildConfig.DEV_AUTH_PASSWORD
-    )
-
     val sessionStorage: SessionStorage by lazy {
         SharedPreferencesSessionStorage(
             context = context,
@@ -44,9 +36,7 @@ class AppContainer(
     val sessionBootstrapper: SessionBootstrapper by lazy {
         SessionBootstrapper(
             sessionStorage = sessionStorage,
-            authRepository = authRepository,
-            developmentCredentials = developmentCredentials,
-            allowDevelopmentAutoLogin = BuildConfig.DEBUG
+            authRepository = authRepository
         )
     }
 
@@ -55,23 +45,8 @@ class AppContainer(
             baseUrl = baseUrl,
             tokenProvider = sessionStorage,
             onUnauthorizedRefreshToken = {
-                if (BuildConfig.DEBUG && developmentCredentials.isConfigured()) {
-                    runCatching {
-                        runBlocking {
-                            authRepository.login(
-                                email = developmentCredentials.email,
-                                password = developmentCredentials.password
-                            ).accessToken
-                        }
-                    }.getOrNull().also { refreshedToken ->
-                        if (refreshedToken == null) {
-                            sessionBootstrapper.onSessionInvalidated()
-                        }
-                    }
-                } else {
-                    sessionBootstrapper.onSessionInvalidated()
-                    null
-                }
+                sessionBootstrapper.onSessionInvalidated()
+                null
             }
         )
     }

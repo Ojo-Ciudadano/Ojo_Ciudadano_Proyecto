@@ -12,7 +12,7 @@ import org.junit.Test
 class SessionBootstrapperTest {
 
     @Test
-    fun `bootstrap logs in and persists session when no session exists`() = runTest {
+    fun `explicit development auto login logs in and persists session when no session exists`() = runTest {
         val sessionStorage = FakeSessionStorage()
         val authRepository = FakeAuthRepository(
             sessionStorage = sessionStorage,
@@ -21,7 +21,8 @@ class SessionBootstrapperTest {
         val bootstrapper = SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = configuredCredentials
+            developmentCredentials = configuredCredentials,
+            allowDevelopmentAutoLogin = true
         )
 
         val state = bootstrapper.bootstrap()
@@ -35,6 +36,26 @@ class SessionBootstrapperTest {
     }
 
     @Test
+    fun `normal bootstrap requires interactive login even when development credentials are supplied`() = runTest {
+        val sessionStorage = FakeSessionStorage()
+        val authRepository = FakeAuthRepository(
+            sessionStorage = sessionStorage,
+            loginOutcomes = mutableListOf(Result.success(sampleSession))
+        )
+        val bootstrapper = SessionBootstrapper(
+            sessionStorage = sessionStorage,
+            authRepository = authRepository,
+            developmentCredentials = configuredCredentials
+        )
+
+        val state = bootstrapper.bootstrap()
+
+        assertEquals(0, authRepository.loginCalls)
+        assertEquals(SessionBootstrapState.RequiresLogin(), state)
+        assertNull(sessionStorage.currentSession())
+    }
+
+    @Test
     fun `bootstrap reuses existing session without logging in`() = runTest {
         val sessionStorage = FakeSessionStorage(sampleSession)
         val authRepository = FakeAuthRepository(
@@ -44,7 +65,8 @@ class SessionBootstrapperTest {
         val bootstrapper = SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = configuredCredentials
+            developmentCredentials = configuredCredentials,
+            allowDevelopmentAutoLogin = true
         )
 
         val state = bootstrapper.bootstrap()
@@ -68,7 +90,8 @@ class SessionBootstrapperTest {
         val bootstrapper = SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = configuredCredentials
+            developmentCredentials = configuredCredentials,
+            allowDevelopmentAutoLogin = true
         )
 
         val state = bootstrapper.bootstrap()
@@ -91,7 +114,8 @@ class SessionBootstrapperTest {
         val bootstrapper = SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = configuredCredentials
+            developmentCredentials = configuredCredentials,
+            allowDevelopmentAutoLogin = true
         )
 
         val firstAttempt = bootstrapper.bootstrap()
@@ -119,7 +143,8 @@ class SessionBootstrapperTest {
         val bootstrapper = SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = configuredCredentials
+            developmentCredentials = configuredCredentials,
+            allowDevelopmentAutoLogin = true
         )
 
         val state = bootstrapper.bootstrap()
@@ -154,7 +179,8 @@ class SessionBootstrapperTest {
         val bootstrapper = SessionBootstrapper(
             sessionStorage = sessionStorage,
             authRepository = authRepository,
-            developmentCredentials = configuredCredentials
+            developmentCredentials = configuredCredentials,
+            allowDevelopmentAutoLogin = true
         )
 
         val state = bootstrapper.bootstrap()

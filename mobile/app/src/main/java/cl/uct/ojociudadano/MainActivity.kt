@@ -43,7 +43,9 @@ class MainActivity : ComponentActivity() {
     private fun showApp() {
 
         setContent {
+
             OjoCiudadanoTheme {
+
                 SessionStartupGate(
                     sessionBootstrapper = (
                         application as OjoCiudadanoApplication
