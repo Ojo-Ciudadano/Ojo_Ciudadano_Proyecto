@@ -1,11 +1,15 @@
 package cl.uct.ojociudadano.data.session
 
 import android.content.Context
+import cl.uct.ojociudadano.data.remote.RetrofitClient
 import org.json.JSONArray
 
 class SharedPreferencesSessionStorage(
-    context: Context
+    context: Context,
+    environmentBaseUrl: String = RetrofitClient.DEFAULT_BASE_URL
 ) : SessionStorage {
+
+    private val normalizedEnvironmentBaseUrl = RetrofitClient.normalizeBaseUrl(environmentBaseUrl)
 
     private val preferences = context.applicationContext.getSharedPreferences(
         PREFERENCES_NAME,
@@ -17,6 +21,12 @@ class SharedPreferencesSessionStorage(
     }
 
     override fun currentSession(): AuthenticatedSession? {
+        val storedBaseUrl = preferences.getString(KEY_BASE_URL, null)
+        if (storedBaseUrl != normalizedEnvironmentBaseUrl) {
+            clear()
+            return null
+        }
+
         val accessToken = preferences.getString(KEY_ACCESS_TOKEN, null)
             ?.takeIf { it.isNotBlank() }
             ?: return null
@@ -26,7 +36,7 @@ class SharedPreferencesSessionStorage(
         val name = preferences.getString(KEY_NAME, null) ?: return null
         val tokenType = preferences.getString(KEY_TOKEN_TYPE, null) ?: DEFAULT_TOKEN_TYPE
 
-        return AuthenticatedSession(
+        val session = AuthenticatedSession(
             accessToken = accessToken,
             tokenType = tokenType,
             userId = userId,
@@ -36,11 +46,19 @@ class SharedPreferencesSessionStorage(
                 ?.let(::decodeRoles)
                 .orEmpty()
         )
+
+        if (session.isExpired()) {
+            clear()
+            return null
+        }
+
+        return session
     }
 
     override fun save(session: AuthenticatedSession) {
         check(
             preferences.edit()
+                .putString(KEY_BASE_URL, normalizedEnvironmentBaseUrl)
                 .putString(KEY_ACCESS_TOKEN, session.accessToken)
                 .putString(KEY_TOKEN_TYPE, session.tokenType)
                 .putString(KEY_USER_ID, session.userId)
@@ -66,6 +84,7 @@ class SharedPreferencesSessionStorage(
 
     private companion object {
         const val PREFERENCES_NAME = "authenticated_session"
+        const val KEY_BASE_URL = "base_url"
         const val KEY_ACCESS_TOKEN = "access_token"
         const val KEY_TOKEN_TYPE = "token_type"
         const val KEY_USER_ID = "user_id"

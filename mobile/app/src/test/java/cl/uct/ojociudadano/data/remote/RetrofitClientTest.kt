@@ -1,11 +1,55 @@
 package cl.uct.ojociudadano.data.remote
 
+import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
-import org.junit.Assert.assertNotNull
 
 class RetrofitClientTest {
+
+    @Test
+    fun `create uses remote UCT base url by default`() {
+        val retrofit = RetrofitClient.create()
+
+        assertEquals(
+            "https://ojociudadano.dev.censei.cl/",
+            retrofit.baseUrl().toString()
+        )
+    }
+
+    @Test
+    fun `create normalizes api v1 suffix to avoid duplicated prefix`() {
+        val retrofit = RetrofitClient.create(
+            "https://ojociudadano.dev.censei.cl/api/v1/"
+        )
+
+        assertEquals(
+            "https://ojociudadano.dev.censei.cl/",
+            retrofit.baseUrl().toString()
+        )
+    }
+
+    @Test
+    fun `apiService sends exact request path when baseUrl ends with api v1`() = runTest {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+        server.start()
+
+        try {
+            val baseWithApiV1 = server.url("/api/v1/").toString()
+            val apiService = RetrofitClient.createApiService(baseUrl = baseWithApiV1)
+
+            apiService.getCategories()
+
+            val recordedRequest = server.takeRequest()
+            assertEquals("/api/v1/categorias", recordedRequest.path)
+        } finally {
+            server.shutdown()
+        }
+    }
 
     @Test
     fun `create configures expected base url`() {
@@ -46,9 +90,7 @@ class RetrofitClientTest {
 
     @Test
     fun `createApiService creates ApiService`() {
-        val apiService = RetrofitClient.createApiService(
-            "http://localhost:3000/"
-        )
+        val apiService = RetrofitClient.createApiService()
 
         assertNotNull(apiService)
     }

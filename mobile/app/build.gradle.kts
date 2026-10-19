@@ -26,10 +26,8 @@ fun String.asBuildConfigString(): String {
 
 val apiBaseUrl = configurationValue(
     name = "API_BASE_URL",
-    fallback = "http://10.0.2.2:3000/"
+    fallback = "https://ojociudadano.dev.censei.cl/"
 )
-val devAuthEmail = configurationValue("DEV_AUTH_EMAIL")
-val devAuthPassword = configurationValue("DEV_AUTH_PASSWORD")
 
 android {
     namespace = "cl.uct.ojociudadano"
@@ -50,23 +48,9 @@ android {
             "API_BASE_URL",
             apiBaseUrl.asBuildConfigString()
         )
-        buildConfigField("String", "DEV_AUTH_EMAIL", "\"\"")
-        buildConfigField("String", "DEV_AUTH_PASSWORD", "\"\"")
     }
 
     buildTypes {
-        debug {
-            buildConfigField(
-                "String",
-                "DEV_AUTH_EMAIL",
-                devAuthEmail.asBuildConfigString()
-            )
-            buildConfigField(
-                "String",
-                "DEV_AUTH_PASSWORD",
-                devAuthPassword.asBuildConfigString()
-            )
-        }
         release {
             optimization {
                 enable = false

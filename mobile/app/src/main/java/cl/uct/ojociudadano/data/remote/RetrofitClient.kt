@@ -8,10 +8,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    fun create(
-        baseUrl: String,
-        tokenProvider: TokenProvider? = null
-    ): Retrofit {
+    const val DEFAULT_BASE_URL = "https://ojociudadano.dev.censei.cl/"
+
+    fun normalizeBaseUrl(baseUrl: String): String {
         require(baseUrl.isNotBlank()) {
             "La URL base del API Gateway no puede estar vacía"
         }
@@ -24,23 +23,42 @@ object RetrofitClient {
             "La URL base del API Gateway debe terminar en '/'"
         }
 
+        return baseUrl.removeSuffix("api/v1/")
+    }
+
+    fun create(
+        baseUrl: String = DEFAULT_BASE_URL,
+        tokenProvider: TokenProvider? = null,
+        onUnauthorizedRefreshToken: (() -> String?)? = null
+    ): Retrofit {
+        val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+
         val httpClient = OkHttpClient.Builder()
             .apply {
-                tokenProvider?.let { addInterceptor(BearerTokenInterceptor(it)) }
+                tokenProvider?.let {
+                    addInterceptor(
+                        BearerTokenInterceptor(
+                            tokenProvider = it,
+                            onUnauthorizedRefreshToken = onUnauthorizedRefreshToken
+                        )
+                    )
+                }
             }
             .build()
 
         return Retrofit.Builder()
-            .baseUrl(baseUrl)
+            .baseUrl(normalizedBaseUrl)
             .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 
     fun createApiService(
-        baseUrl: String,
-        tokenProvider: TokenProvider? = null
+        baseUrl: String = DEFAULT_BASE_URL,
+        tokenProvider: TokenProvider? = null,
+        onUnauthorizedRefreshToken: (() -> String?)? = null
     ): ApiService {
-        return create(baseUrl, tokenProvider).create(ApiService::class.java)
+        return create(baseUrl, tokenProvider, onUnauthorizedRefreshToken)
+            .create(ApiService::class.java)
     }
 }
