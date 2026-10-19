@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +48,9 @@ object LoginTestTags {
     const val EMAIL_FIELD = "login_email_field"
     const val PASSWORD_FIELD = "login_password_field"
     const val SUBMIT_BUTTON = "login_submit_button"
+    const val LOADING_INDICATOR = "login_loading_indicator"
+    const val AUTH_ERROR_MESSAGE = "login_auth_error_message"
+    const val AUTH_SUCCESS_MESSAGE = "login_auth_success_message"
 }
 
 /**
@@ -58,6 +62,7 @@ object LoginTestTags {
 @Composable
 fun LoginScreen(
     onLogin: (LoginCredentials) -> Unit,
+    authState: AuthUiState = AuthUiState.Idle,
     modifier: Modifier = Modifier,
     formValidator: LoginFormValidator = remember { LoginFormValidator() }
 ) {
@@ -87,6 +92,7 @@ fun LoginScreen(
             formState = formState.togglePasswordVisibility()
         },
         onLoginClick = ::submitLogin,
+        authState = authState,
         modifier = modifier
     )
 }
@@ -98,11 +104,13 @@ private fun LoginScreenContent(
     onPasswordChange: (String) -> Unit,
     onPasswordVisibilityToggle: () -> Unit,
     onLoginClick: () -> Unit,
+    authState: AuthUiState,
     modifier: Modifier = Modifier
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isLoading = authState is AuthUiState.Loading
 
     fun attemptLogin() {
         keyboardController?.hide()
@@ -133,6 +141,31 @@ private fun LoginScreenContent(
             modifier = Modifier.fillMaxWidth()
         )
 
+        when (authState) {
+            AuthUiState.Idle -> Unit
+            AuthUiState.Loading -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.testTag(LoginTestTags.LOADING_INDICATOR)
+                )
+                Text("Iniciando sesión…")
+            }
+
+            is AuthUiState.Success -> {
+                Text(
+                    text = "Sesión iniciada.",
+                    modifier = Modifier.testTag(LoginTestTags.AUTH_SUCCESS_MESSAGE)
+                )
+            }
+
+            is AuthUiState.Error -> {
+                Text(
+                    text = authState.error.message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag(LoginTestTags.AUTH_ERROR_MESSAGE)
+                )
+            }
+        }
+
         OutlinedTextField(
             value = state.email,
             onValueChange = onEmailChange,
@@ -141,6 +174,7 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.EMAIL_FIELD),
             label = { Text("Correo electrónico") },
             singleLine = true,
+            enabled = !isLoading,
             isError = state.emailError != null,
             leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
             keyboardOptions = KeyboardOptions(
@@ -162,6 +196,7 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.PASSWORD_FIELD),
             label = { Text("Contraseña") },
             singleLine = true,
+            enabled = !isLoading,
             isError = state.passwordError != null,
             leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
             trailingIcon = {
@@ -196,6 +231,7 @@ private fun LoginScreenContent(
 
         Button(
             onClick = ::attemptLogin,
+            enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(LoginTestTags.SUBMIT_BUTTON)

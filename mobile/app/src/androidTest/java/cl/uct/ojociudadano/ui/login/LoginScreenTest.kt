@@ -94,6 +94,35 @@ class LoginScreenTest {
         assertTrue(emittedCredentials.isNotEmpty())
     }
 
+    @Test
+    fun authenticationLoadingStateIsRendered() {
+        composeTestRule.setContent {
+            OjoCiudadanoTheme {
+                LoginScreen(
+                    onLogin = {},
+                    authState = AuthUiState.Loading
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag(LoginTestTags.LOADING_INDICATOR).assertIsDisplayed()
+    }
+
+    @Test
+    fun authenticationErrorStateIsRendered() {
+        composeTestRule.setContent {
+            OjoCiudadanoTheme {
+                LoginScreen(
+                    onLogin = {},
+                    authState = AuthUiState.Error(AuthError.Network)
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag(LoginTestTags.AUTH_ERROR_MESSAGE).assertIsDisplayed()
+        composeTestRule.onNodeWithText(AuthError.Network.message).assertIsDisplayed()
+    }
+
     private fun setLoginScreen(onLogin: (LoginCredentials) -> Unit = {}) {
         composeTestRule.setContent {
             OjoCiudadanoTheme {
