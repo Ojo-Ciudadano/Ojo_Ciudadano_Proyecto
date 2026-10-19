@@ -28,7 +28,10 @@ class SessionStartupGateTest {
 
         composeTestRule.setContent {
             OjoCiudadanoTheme {
-                SessionStartupGate(sessionBootstrapper = bootstrapper)
+                SessionStartupGate(
+                    sessionBootstrapper = bootstrapper,
+                    authRepository = repository
+                )
             }
         }
 

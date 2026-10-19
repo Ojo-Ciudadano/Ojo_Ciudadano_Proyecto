@@ -13,23 +13,28 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.SessionBootstrapState
 import cl.uct.ojociudadano.data.session.SessionBootstrapper
 import cl.uct.ojociudadano.navigation.AppNavigation
 import cl.uct.ojociudadano.navigation.AppRoutes
-import cl.uct.ojociudadano.ui.login.LoginCredentials
+import cl.uct.ojociudadano.ui.login.AuthViewModel
+import cl.uct.ojociudadano.ui.login.AuthViewModelFactory
+import cl.uct.ojociudadano.ui.login.LoginRoute
 import kotlinx.coroutines.launch
 
 @Composable
 fun SessionStartupGate(
     sessionBootstrapper: SessionBootstrapper,
-    onLogin: (LoginCredentials) -> Unit = {}
+    authRepository: AuthRepository
 ) {
     val state by sessionBootstrapper.state.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -41,11 +46,17 @@ fun SessionStartupGate(
 
     when (state) {
         SessionBootstrapState.Loading -> StartupLoading()
-        is SessionBootstrapState.Authenticated -> AppNavigation(onLogin = onLogin)
-        is SessionBootstrapState.RequiresLogin -> LoginNavigation(onLogin)
+        is SessionBootstrapState.Authenticated -> AppNavigation()
+        is SessionBootstrapState.RequiresLogin -> LoginNavigation(
+            sessionBootstrapper = sessionBootstrapper,
+            authRepository = authRepository
+        )
         is SessionBootstrapState.Error -> {
             if (isManualLoginRequested) {
-                LoginNavigation(onLogin)
+                LoginNavigation(
+                    sessionBootstrapper = sessionBootstrapper,
+                    authRepository = authRepository
+                )
             } else {
                 StartupError(
                     onRetry = {
@@ -61,10 +72,31 @@ fun SessionStartupGate(
 }
 
 @Composable
-private fun LoginNavigation(onLogin: (LoginCredentials) -> Unit) {
+private fun LoginNavigation(
+    sessionBootstrapper: SessionBootstrapper,
+    authRepository: AuthRepository
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val authViewModel: AuthViewModel = viewModel(
+        factory = remember(authRepository) {
+            AuthViewModelFactory(authRepository)
+        }
+    )
+
     AppNavigation(
         startDestination = AppRoutes.LOGIN,
-        onLogin = onLogin
+        loginContent = {
+            LoginRoute(
+                viewModel = authViewModel,
+                onAuthenticated = {
+                    coroutineScope.launch {
+                        // The repository has already applied its established session contract.
+                        // Bootstrap only reflects that result in the existing global startup state.
+                        sessionBootstrapper.bootstrap()
+                    }
+                }
+            )
+        }
     )
 }
 
