@@ -35,7 +35,8 @@ object AppRoutes {
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
     startDestination: String = AppRoutes.HOME,
-    onLogin: (LoginCredentials) -> Unit = {}
+    onLogin: (LoginCredentials) -> Unit = {},
+    loginContent: (@Composable () -> Unit)? = null
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -70,7 +71,7 @@ fun AppNavigation(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(AppRoutes.LOGIN) {
-                LoginScreen(onLogin = onLogin)
+                loginContent?.invoke() ?: LoginScreen(onLogin = onLogin)
             }
             composable(AppRoutes.HOME) {
                 HomeScreen(

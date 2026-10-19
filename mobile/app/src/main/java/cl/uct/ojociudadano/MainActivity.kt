@@ -45,11 +45,10 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             OjoCiudadanoTheme {
-
+                val container = (application as OjoCiudadanoApplication).container
                 SessionStartupGate(
-                    sessionBootstrapper = (
-                        application as OjoCiudadanoApplication
-                    ).container.sessionBootstrapper
+                    sessionBootstrapper = container.sessionBootstrapper,
+                    authRepository = container.authRepository
                 )
             }
         }
