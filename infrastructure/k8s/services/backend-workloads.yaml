@@ -84,6 +84,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: backend-config
+            - configMapRef:
+                name: supabase-config
+            - secretRef:
+                name: supabase-credentials
           env:
             - name: DB_PASSWORD
               valueFrom:
