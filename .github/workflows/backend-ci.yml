@@ -124,42 +124,58 @@ jobs:
             *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
           esac
 
-          JOB_NAME="prisma-migrate-$MICROSERVICIO"
-          kubectl delete job "$JOB_NAME" --ignore-not-found=true
+          POD_NAME="prisma-migrate-$MICROSERVICIO"
+          kubectl delete pod "$POD_NAME" --ignore-not-found=true
 
           cat <<EOF | kubectl apply -f -
-          apiVersion: batch/v1
-          kind: Job
+          apiVersion: v1
+          kind: Pod
           metadata:
-            name: ${JOB_NAME}
+            name: ${POD_NAME}
             namespace: student-daalvarez
           spec:
-            backoffLimit: 0
-            ttlSecondsAfterFinished: 600
-            template:
-              spec:
-                restartPolicy: Never
-                containers:
-                  - name: migrate
-                    image: ${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}
-                    workingDir: /app/apps/${MICROSERVICIO}
-                    command: ["npx", "prisma", "migrate", "deploy"]
-                    env:
-                      - name: DB_PASSWORD
-                        valueFrom:
-                          secretKeyRef:
-                            name: backend-secrets
-                            key: ${SECRET_KEY}
-                      - name: ${DB_ENV}
-                        value: "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
+            restartPolicy: Never
+            containers:
+              - name: migrate
+                image: ${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}
+                workingDir: /app/apps/${MICROSERVICIO}
+                command: ["npx", "prisma", "migrate", "deploy"]
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 128Mi
+                  limits:
+                    cpu: "1"
+                    memory: 1Gi
+                env:
+                  - name: DB_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: backend-secrets
+                        key: ${SECRET_KEY}
+                  - name: ${DB_ENV}
+                    value: "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
           EOF
 
-          if ! kubectl wait --for=condition=complete "job/$JOB_NAME" --timeout=300s; then
-            echo "::error::La migracion no se completo correctamente"
-            kubectl logs "job/$JOB_NAME" --tail=200 || true
-            kubectl describe "job/$JOB_NAME" || true
+          PHASE=""
+          for i in $(seq 1 40); do
+            PHASE=$(kubectl get pod "$POD_NAME" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            echo "Intento $i - fase del pod: ${PHASE:-desconocida}"
+            case "$PHASE" in
+              Succeeded) break ;;
+              Failed) break ;;
+            esac
+            sleep 15
+          done
+
+          kubectl describe pod "$POD_NAME" || true
+          kubectl logs "$POD_NAME" || true
+
+          if [ "$PHASE" != "Succeeded" ]; then
+            echo "::error::La migracion no se completo correctamente (fase: ${PHASE:-desconocida})"
+            kubectl get events -n student-daalvarez --sort-by=.lastTimestamp | tail -30 || true
+            kubectl delete pod "$POD_NAME" --ignore-not-found=true
             exit 1
           fi
 
-          kubectl logs "job/$JOB_NAME"
-          kubectl delete job "$JOB_NAME" --ignore-not-found=true
+          kubectl delete pod "$POD_NAME" --ignore-not-found=true
