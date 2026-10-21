@@ -128,7 +128,6 @@ jobs:
           kubectl delete pod "$POD_NAME" --ignore-not-found=true
 
           echo "::group::Estado del namespace student-daalvarez"
-          kubectl get resourcequota -n student-daalvarez || true
           kubectl get pods -n student-daalvarez -o wide || true
           echo "::endgroup::"
 
@@ -147,8 +146,8 @@ jobs:
                 command: ["npx", "prisma", "migrate", "deploy"]
                 resources:
                   requests:
-                    cpu: 10m
-                    memory: 32Mi
+                    cpu: 25m
+                    memory: 64Mi
                   limits:
                     cpu: 250m
                     memory: 256Mi
