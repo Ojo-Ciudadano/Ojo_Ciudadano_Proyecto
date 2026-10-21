@@ -1,0 +1,13 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# Dependencias del monorepo (incluye el CLI de Prisma, necesario para `migrate deploy`)
+COPY package*.json ./
+RUN npm ci
+
+# Esquemas, migraciones y configuracion de Prisma de cada microservicio
+COPY apps ./apps
+
+# Microservicio por defecto; el Job de Kubernetes sobrescribe el workingDir
+WORKDIR /app/apps/incidentes
+CMD ["npx", "prisma", "migrate", "deploy"]

@@ -93,7 +93,13 @@ All migrations have been successfully applied.
 
 ### 2.4 Alternativa: workflow manual en GitHub Actions
 
-El workflow `.github/workflows/backend-ci.yml` incluye un job `migrate-prisma` que se ejecuta **solo de forma manual** (evento `workflow_dispatch`) y realiza exactamente el procedimiento anterior: configura el contexto de Kubernetes, levanta el `port-forward` hacia el Service de PostgreSQL del microservicio seleccionado y ejecuta `npx prisma migrate deploy` con la contraseña leída del Secret `backend-secrets` del clúster.
+El service account `ci-deployer` del clúster **no tiene permisos de `pods/portforward`**, por lo que el pipeline no puede abrir el túnel desde el runner. Por eso el job `migrate-prisma` de `.github/workflows/backend-ci.yml` ejecuta la migración **dentro del clúster**: construye una imagen liviana con el CLI de Prisma (`web/backend/Dockerfile.migrate`) y la ejecuta en un `Job` de Kubernetes que apunta directamente a `postgres-<servicio>-svc`.
+
+El job **solo se ejecuta de forma manual** (evento `workflow_dispatch`) y realiza las siguientes acciones:
+
+1. Construye y publica la imagen `migrate-prisma:<sha>` en el registro del proyecto.
+2. Crea un `Job` en el namespace `student-daalvarez` que corre `npx prisma migrate deploy` contra el PostgreSQL del microservicio, usando la contraseña del Secret `backend-secrets`.
+3. Espera el resultado, muestra los logs del Job y lo elimina.
 
 Para ejecutarlo desde GitHub Actions → *Backend CI CD* → *Run workflow*:
 
@@ -102,7 +108,7 @@ Para ejecutarlo desde GitHub Actions → *Backend CI CD* → *Run workflow*:
 | `microservicio` | `incidentes`, `auth-usuarios`, `notificaciones` | Base de datos destino de la migración. |
 | `desplegar` | `true` / `false` | Si es `true`, además reconstruye y despliega las imágenes (por defecto `false`). |
 
-El job nunca se ejecuta de forma automática en los `push` a `integration`: el pipeline conserva su comportamiento original (construcción de imagen y despliegue).
+El pipeline por `push` a `integration` conserva su comportamiento original (construcción de imagen y despliegue); las migraciones nunca se aplican de forma automática.
 
 ---
 

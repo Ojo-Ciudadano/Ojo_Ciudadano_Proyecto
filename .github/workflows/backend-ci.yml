@@ -81,6 +81,7 @@ jobs:
 
     permissions:
       contents: read
+      packages: write
 
     env:
       MICROSERVICIO: ${{ inputs.microservicio }}
@@ -88,6 +89,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar kubectl
         run: |
@@ -97,45 +105,61 @@ jobs:
           kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
           kubectl config use-context ci
 
-      - name: Exponer PostgreSQL del microservicio (port-forward)
-        run: |
-          case "$MICROSERVICIO" in
-            incidentes)      SVC=postgres-incidentes-svc;    SECRET_KEY=postgres-incidentes;    PG_USER=incidentes_user;      PG_DB=incidentes;      LOCAL_PORT=5433; DB_ENV=DATABASE_URL_INCIDENTES ;;
-            auth-usuarios)  SVC=postgres-auth-svc;            SECRET_KEY=postgres-auth;          PG_USER=auth_user;          PG_DB=auth_usuarios;  LOCAL_PORT=5432; DB_ENV=DATABASE_URL_AUTH ;;
-            notificaciones) SVC=postgres-notificaciones-svc; SECRET_KEY=postgres-notificaciones; PG_USER=notificaciones_user; PG_DB=notificaciones; LOCAL_PORT=5434; DB_ENV=DATABASE_URL_NOTIFICACIONES ;;
-            *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
-          esac
-          echo "SVC=$SVC" >> "$GITHUB_ENV"
-          echo "SECRET_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
-          echo "PG_USER=$PG_USER" >> "$GITHUB_ENV"
-          echo "PG_DB=$PG_DB" >> "$GITHUB_ENV"
-          echo "LOCAL_PORT=$LOCAL_PORT" >> "$GITHUB_ENV"
-          echo "DB_ENV=$DB_ENV" >> "$GITHUB_ENV"
+      - name: Construir imagen de migraciones
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web/backend
+          file: ./web/backend/Dockerfile.migrate
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO }}/migrate-prisma:${{ github.sha }}
 
-      - name: Instalar dependencias del backend
-        working-directory: web/backend
-        run: npm ci
-
-      - name: Aplicar migraciones Prisma
+      - name: Aplicar migraciones Prisma en el clúster
         run: |
           set -euo pipefail
 
-          kubectl port-forward "svc/$SVC" "$LOCAL_PORT:5432" &
-          PF_PID=$!
-          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+          case "$MICROSERVICIO" in
+            incidentes)      PG_USER=incidentes_user;      PG_DB=incidentes;      PG_HOST=postgres-incidentes-svc;    SECRET_KEY=postgres-incidentes;    DB_ENV=DATABASE_URL_INCIDENTES ;;
+            auth-usuarios)  PG_USER=auth_user;              PG_DB=auth_usuarios;  PG_HOST=postgres-auth-svc;            SECRET_KEY=postgres-auth;          DB_ENV=DATABASE_URL_AUTH ;;
+            notificaciones) PG_USER=notificaciones_user;   PG_DB=notificaciones; PG_HOST=postgres-notificaciones-svc; SECRET_KEY=postgres-notificaciones; DB_ENV=DATABASE_URL_NOTIFICACIONES ;;
+            *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
+          esac
 
-          for i in $(seq 1 30); do
-            if (echo > /dev/tcp/127.0.0.1/"$LOCAL_PORT") 2>/dev/null; then
-              echo "Port-forward listo en 127.0.0.1:$LOCAL_PORT"
-              break
-            fi
-            sleep 2
-          done
-          (echo > /dev/tcp/127.0.0.1/"$LOCAL_PORT") 2>/dev/null
+          JOB_NAME="prisma-migrate-$MICROSERVICIO"
+          kubectl delete job "$JOB_NAME" --ignore-not-found=true
 
-          PG_PASS=$(kubectl get secret backend-secrets -o jsonpath="{.data.$SECRET_KEY}" | base64 -d)
-          export "${DB_ENV}=postgresql://${PG_USER}:${PG_PASS}@127.0.0.1:${LOCAL_PORT}/${PG_DB}"
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+            namespace: student-daalvarez
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: migrate
+                    image: ${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}
+                    workingDir: /app/apps/${MICROSERVICIO}
+                    command: ["npx", "prisma", "migrate", "deploy"]
+                    env:
+                      - name: DB_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: backend-secrets
+                            key: ${SECRET_KEY}
+                      - name: ${DB_ENV}
+                        value: "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
+          EOF
 
-          cd "web/backend/apps/$MICROSERVICIO"
-          npx prisma migrate deploy
-          npx prisma migrate status
+          if ! kubectl wait --for=condition=complete "job/$JOB_NAME" --timeout=300s; then
+            echo "::error::La migracion no se completo correctamente"
+            kubectl logs "job/$JOB_NAME" --tail=200 || true
+            kubectl describe "job/$JOB_NAME" || true
+            exit 1
+          fi
+
+          kubectl logs "job/$JOB_NAME"
+          kubectl delete job "$JOB_NAME" --ignore-not-found=true
