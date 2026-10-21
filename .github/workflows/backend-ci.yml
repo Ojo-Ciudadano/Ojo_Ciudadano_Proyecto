@@ -127,6 +127,11 @@ jobs:
           POD_NAME="prisma-migrate-$MICROSERVICIO"
           kubectl delete pod "$POD_NAME" --ignore-not-found=true
 
+          echo "::group::Estado del namespace student-daalvarez"
+          kubectl get resourcequota -n student-daalvarez || true
+          kubectl get pods -n student-daalvarez -o wide || true
+          echo "::endgroup::"
+
           cat <<EOF | kubectl apply -f -
           apiVersion: v1
           kind: Pod
@@ -142,11 +147,11 @@ jobs:
                 command: ["npx", "prisma", "migrate", "deploy"]
                 resources:
                   requests:
-                    cpu: 25m
-                    memory: 64Mi
+                    cpu: 10m
+                    memory: 32Mi
                   limits:
-                    cpu: 500m
-                    memory: 512Mi
+                    cpu: 250m
+                    memory: 256Mi
                 env:
                   - name: DB_PASSWORD
                     valueFrom:
