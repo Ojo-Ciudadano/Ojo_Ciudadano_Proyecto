@@ -124,62 +124,74 @@ jobs:
             *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
           esac
 
-          POD_NAME="prisma-migrate-$MICROSERVICIO"
-          kubectl delete pod "$POD_NAME" --ignore-not-found=true
+          DEPLOYMENT="$MICROSERVICIO"
+          NAMESPACE="student-daalvarez"
 
-          echo "::group::Estado del namespace student-daalvarez"
-          kubectl get pods -n student-daalvarez -o wide || true
+          echo "::group::Estado del namespace $NAMESPACE"
+          kubectl get pods -n "$NAMESPACE" -o wide || true
           echo "::endgroup::"
 
-          cat <<EOF | kubectl apply -f -
-          apiVersion: v1
-          kind: Pod
-          metadata:
-            name: ${POD_NAME}
-            namespace: student-daalvarez
-          spec:
-            restartPolicy: Never
-            containers:
-              - name: migrate
-                image: ${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}
-                workingDir: /app/apps/${MICROSERVICIO}
-                command: ["npx", "prisma", "migrate", "deploy"]
-                resources:
-                  requests:
-                    cpu: 25m
-                    memory: 64Mi
-                  limits:
-                    cpu: 250m
-                    memory: 256Mi
-                env:
-                  - name: DB_PASSWORD
-                    valueFrom:
-                      secretKeyRef:
-                        name: backend-secrets
-                        key: ${SECRET_KEY}
-                  - name: ${DB_ENV}
-                    value: "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
+          # La migracion se ejecuta como initContainer del deployment ya desplegado: no se crea
+          # un pod nuevo, por lo que la cuota student-provisioner-quota no se ve afectada
+          # (los initContainers no suman al request efectivo del pod, se aplica max()).
+          MIGRATION_CONTAINER=$(cat <<EOF
+          {
+            "name": "prisma-migrate",
+            "image": "${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}",
+            "workingDir": "/app/apps/${MICROSERVICIO}",
+            "command": ["npx", "prisma", "migrate", "deploy"],
+            "resources": {
+              "requests": { "cpu": "25m", "memory": "64Mi" },
+              "limits": { "cpu": "250m", "memory": "128Mi" }
+            },
+            "env": [
+              {
+                "name": "DB_PASSWORD",
+                "valueFrom": { "secretKeyRef": { "name": "backend-secrets", "key": "${SECRET_KEY}" } }
+              },
+              {
+                "name": "${DB_ENV}",
+                "value": "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
+              }
+            ]
+          }
           EOF
+          )
 
-          PHASE=""
+          echo "::group::Parcheando el deployment $DEPLOYMENT con el initContainer de migracion"
+          kubectl patch deployment "$DEPLOYMENT" -n "$NAMESPACE" --type=strategic \
+            -p "{\"spec\":{\"template\":{\"spec\":{\"initContainers\":[${MIGRATION_CONTAINER}]}}}}"
+          echo "::endgroup::"
+
+          # Se espera a que termine el initContainer del pod recien creado. El resultado se
+          # toma del exit code del initContainer para no depender de la salud del contenedor
+          # de la aplicacion.
+          POD=""
+          MIGRATION_EXIT=""
           for i in $(seq 1 40); do
-            PHASE=$(kubectl get pod "$POD_NAME" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            echo "Intento $i - fase del pod: ${PHASE:-desconocida}"
-            case "$PHASE" in
-              Succeeded) break ;;
-              Failed) break ;;
-            esac
+            POD=$(kubectl get pods -n "$NAMESPACE" -l "app=$DEPLOYMENT" --sort-by=.metadata.creationTimestamp -o name 2>/dev/null | tail -1)
+            if [ -n "$POD" ]; then
+              MIGRATION_EXIT=$(kubectl get "$POD" -n "$NAMESPACE" -o jsonpath='{.status.initContainerStatuses[?(@.name=="prisma-migrate")].state.terminated.exitCode}' 2>/dev/null || echo "")
+              if [ -n "$MIGRATION_EXIT" ]; then
+                break
+              fi
+            fi
+            echo "Intento $i: esperando el initContainer de migracion..."
             sleep 15
           done
 
-          kubectl describe pod "$POD_NAME" || true
-          kubectl logs "$POD_NAME" || true
+          echo "::group::Log de la migracion Prisma"
+          kubectl logs "$POD" -c prisma-migrate --tail=200 || true
+          echo "::endgroup::"
 
-          if [ "$PHASE" != "Succeeded" ]; then
-            echo "::error::La migracion no se completo correctamente (fase: ${PHASE:-desconocida})"
-            kubectl get events -n student-daalvarez --sort-by=.lastTimestamp | tail -30 || true
-            kubectl delete pod "$POD_NAME" --ignore-not-found=true
+          # Se retira el initContainer para dejar el deployment en su estado original
+          kubectl patch deployment "$DEPLOYMENT" -n "$NAMESPACE" --type=strategic \
+            -p '{"spec":{"template":{"spec":{"initContainers":[]}}}}'
+          kubectl rollout status "deployment/$DEPLOYMENT" -n "$NAMESPACE" --timeout=300s || true
+
+          if [ "$MIGRATION_EXIT" != "0" ]; then
+            echo "::error::La migracion no se completo correctamente (exit code: ${MIGRATION_EXIT:-desconocido})"
+            kubectl describe "$POD" -n "$NAMESPACE" || true
+            kubectl get pods -n "$NAMESPACE" -o wide || true
             exit 1
           fi
-
-          kubectl delete pod "$POD_NAME" --ignore-not-found=true

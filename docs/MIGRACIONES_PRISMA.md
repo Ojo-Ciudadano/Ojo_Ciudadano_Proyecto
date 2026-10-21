@@ -91,15 +91,22 @@ All migrations have been successfully applied.
 
 > `migrate deploy` aplica las migraciones pendientes en orden y registra cada una en la tabla `_prisma_migrations` de la base de datos de Incidentes. No vuelve a ejecutar migraciones ya aplicadas.
 
-### 2.4 Alternativa: workflow manual en GitHub Actions
+### 2.4 Vía soportada: workflow manual en GitHub Actions
 
-El service account `ci-deployer` del clúster **no tiene permisos de `pods/portforward`**, por lo que el pipeline no puede abrir el túnel desde el runner. Por eso el job `migrate-prisma` de `.github/workflows/backend-ci.yml` ejecuta la migración **dentro del clúster**: construye una imagen liviana con el CLI de Prisma (`web/backend/Dockerfile.migrate`) y la ejecuta en un `Job` de Kubernetes que apunta directamente a `postgres-<servicio>-svc`.
+El service account `ci-deployer` del clúster **no tiene permisos de `pods/portforward`**, por lo que el pipeline no puede abrir el túnel desde el runner. Además, el namespace aplica la `ResourceQuota` `student-provisioner-quota` (`requests.memory=1G`, `limits.memory=2G`, ya casi agotada por los workloads del equipo) y un `LimitRange` por contenedor (mínimo 25m CPU / 64Mi de memoria, máximo 500m CPU / 512Mi de memoria), por lo que **no se pueden crear pods nuevos** para ejecutar la migración.
+
+Por eso el job `migrate-prisma` de `.github/workflows/backend-ci.yml` aplica la migración **como `initContainer` del deployment ya desplegado** del microservicio:
+
+- No se crea ningún pod: se parchea `deployment/<microservicio>` agregando un `initContainer` con la imagen `migrate-prisma:<sha>` (`web/backend/Dockerfile.migrate`), que ejecuta `npx prisma migrate deploy` con la contraseña del Secret `backend-secrets`.
+- Los `initContainers` **no suman** al request efectivo del pod (se aplica `max(sum(containers), max(initContainers))`), por lo que la cuota del namespace no se ve afectada.
+- El resultado se toma del *exit code* del `initContainer`, sin depender de la salud del contenedor de la aplicación.
+- Al finalizar se retira el `initContainer` y el deployment queda en su estado original.
 
 El job **solo se ejecuta de forma manual** (evento `workflow_dispatch`) y realiza las siguientes acciones:
 
 1. Construye y publica la imagen `migrate-prisma:<sha>` en el registro del proyecto.
-2. Crea un `Job` en el namespace `student-daalvarez` que corre `npx prisma migrate deploy` contra el PostgreSQL del microservicio, usando la contraseña del Secret `backend-secrets`.
-3. Espera el resultado, muestra los logs del Job y lo elimina.
+2. Parchea el deployment del microservicio con el `initContainer` de migración y espera su terminación.
+3. Muestra el log de la migración (salida de `prisma migrate deploy`) y restaura el deployment.
 
 Para ejecutarlo desde GitHub Actions → *Backend CI CD* → *Run workflow*:
 
@@ -109,6 +116,8 @@ Para ejecutarlo desde GitHub Actions → *Backend CI CD* → *Run workflow*:
 | `desplegar` | `true` / `false` | Si es `true`, además reconstruye y despliega las imágenes (por defecto `false`). |
 
 El pipeline por `push` a `integration` conserva su comportamiento original (construcción de imagen y despliegue); las migraciones nunca se aplican de forma automática.
+
+> Si en el futuro la plataforma libera cuota o agrega `pods/portforward` al Role `ci-deployer` (`infrastructure/k8s/ci-deployer.yaml`), el túnel local de las secciones 2.2 y 2.3 vuelve a ser una alternativa válida para aplicar migraciones a mano.
 
 ---
 
