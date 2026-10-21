@@ -8,6 +8,21 @@ on:
       - 'web/backend/**'
       - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
+    inputs:
+      microservicio:
+        description: 'Microservicio al que se aplican las migraciones Prisma'
+        required: true
+        default: incidentes
+        type: choice
+        options:
+          - incidentes
+          - auth-usuarios
+          - notificaciones
+      desplegar:
+        description: 'Construir y desplegar las imagenes de los microservicios'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -15,6 +30,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.desplegar)
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
@@ -58,3 +74,68 @@ jobs:
           kubectl set image deployment/${{ matrix.app }} ${{ matrix.app }}=${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.app }}:latest
           kubectl rollout restart deployment/${{ matrix.app }}
           kubectl rollout status deployment/${{ matrix.app }} --timeout=180s
+
+  migrate-prisma:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    env:
+      MICROSERVICIO: ${{ inputs.microservicio }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configurar kubectl
+        run: |
+          echo "${{ secrets.K8S_CA }}" | base64 -d > "$RUNNER_TEMP/ca.crt"
+          kubectl config set-cluster uct --server=https://k8s-estudiantes.dev.censei.cl --certificate-authority="$RUNNER_TEMP/ca.crt"
+          kubectl config set-credentials ci --token="${{ secrets.K8S_TOKEN }}"
+          kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
+          kubectl config use-context ci
+
+      - name: Exponer PostgreSQL del microservicio (port-forward)
+        run: |
+          case "$MICROSERVICIO" in
+            incidentes)      SVC=postgres-incidentes-svc;    SECRET_KEY=postgres-incidentes;    PG_USER=incidentes_user;      PG_DB=incidentes;      LOCAL_PORT=5433; DB_ENV=DATABASE_URL_INCIDENTES ;;
+            auth-usuarios)  SVC=postgres-auth-svc;            SECRET_KEY=postgres-auth;          PG_USER=auth_user;          PG_DB=auth_usuarios;  LOCAL_PORT=5432; DB_ENV=DATABASE_URL_AUTH ;;
+            notificaciones) SVC=postgres-notificaciones-svc; SECRET_KEY=postgres-notificaciones; PG_USER=notificaciones_user; PG_DB=notificaciones; LOCAL_PORT=5434; DB_ENV=DATABASE_URL_NOTIFICACIONES ;;
+            *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
+          esac
+          echo "SVC=$SVC" >> "$GITHUB_ENV"
+          echo "SECRET_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
+          echo "PG_USER=$PG_USER" >> "$GITHUB_ENV"
+          echo "PG_DB=$PG_DB" >> "$GITHUB_ENV"
+          echo "LOCAL_PORT=$LOCAL_PORT" >> "$GITHUB_ENV"
+          echo "DB_ENV=$DB_ENV" >> "$GITHUB_ENV"
+
+      - name: Instalar dependencias del backend
+        working-directory: web/backend
+        run: npm ci
+
+      - name: Aplicar migraciones Prisma
+        run: |
+          set -euo pipefail
+
+          kubectl port-forward "svc/$SVC" "$LOCAL_PORT:5432" &
+          PF_PID=$!
+          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/"$LOCAL_PORT") 2>/dev/null; then
+              echo "Port-forward listo en 127.0.0.1:$LOCAL_PORT"
+              break
+            fi
+            sleep 2
+          done
+          (echo > /dev/tcp/127.0.0.1/"$LOCAL_PORT") 2>/dev/null
+
+          PG_PASS=$(kubectl get secret backend-secrets -o jsonpath="{.data.$SECRET_KEY}" | base64 -d)
+          export "${DB_ENV}=postgresql://${PG_USER}:${PG_PASS}@127.0.0.1:${LOCAL_PORT}/${PG_DB}"
+
+          cd "web/backend/apps/$MICROSERVICIO"
+          npx prisma migrate deploy
+          npx prisma migrate status

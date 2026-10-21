@@ -91,6 +91,19 @@ All migrations have been successfully applied.
 
 > `migrate deploy` aplica las migraciones pendientes en orden y registra cada una en la tabla `_prisma_migrations` de la base de datos de Incidentes. No vuelve a ejecutar migraciones ya aplicadas.
 
+### 2.4 Alternativa: workflow manual en GitHub Actions
+
+El workflow `.github/workflows/backend-ci.yml` incluye un job `migrate-prisma` que se ejecuta **solo de forma manual** (evento `workflow_dispatch`) y realiza exactamente el procedimiento anterior: configura el contexto de Kubernetes, levanta el `port-forward` hacia el Service de PostgreSQL del microservicio seleccionado y ejecuta `npx prisma migrate deploy` con la contraseña leída del Secret `backend-secrets` del clúster.
+
+Para ejecutarlo desde GitHub Actions → *Backend CI CD* → *Run workflow*:
+
+| Input | Valores | Descripción |
+| :--- | :--- | :--- |
+| `microservicio` | `incidentes`, `auth-usuarios`, `notificaciones` | Base de datos destino de la migración. |
+| `desplegar` | `true` / `false` | Si es `true`, además reconstruye y despliega las imágenes (por defecto `false`). |
+
+El job nunca se ejecuta de forma automática en los `push` a `integration`: el pipeline conserva su comportamiento original (construcción de imagen y despliegue).
+
 ---
 
 ## 3. Modelo de evidencias (Issue #80)
