@@ -1,10 +1,11 @@
 import axios from 'axios'
 import type { ApiError } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000').trim()
+const normalizedApiUrl = rawApiUrl.replace(/\/+$/, '')
 
 export const apiClient = axios.create({
-  baseURL: `${API_URL}/api/v1`,
+  baseURL: `${normalizedApiUrl}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
