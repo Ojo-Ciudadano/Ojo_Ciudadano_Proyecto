@@ -6,7 +6,12 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
+import cl.uct.ojociudadano.data.session.SessionManager
+import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -19,14 +24,11 @@ class LoginRouteTest {
     @Test
     fun validLoginScreenEventInvokesAuthViewModelRepositoryFlow() {
         val repository = RecordingAuthRepository()
-        val viewModel = AuthViewModel(repository)
+        val viewModel = AuthViewModel(repository, RecordingSessionManager())
 
         composeTestRule.setContent {
             OjoCiudadanoTheme {
-                LoginRoute(
-                    viewModel = viewModel,
-                    onAuthenticated = {}
-                )
+                LoginRoute(viewModel = viewModel)
             }
         }
 
@@ -60,6 +62,29 @@ class LoginRouteTest {
                 name = "Ciudadano de prueba",
                 roles = listOf("CIUDADANO")
             )
+        }
+    }
+
+    private class RecordingSessionManager : SessionManager {
+
+        private val _state = MutableStateFlow<SessionState>(SessionState.Unauthenticated)
+        override val state: StateFlow<SessionState> = _state.asStateFlow()
+
+        override fun currentToken(): String? =
+            (state.value as? SessionState.Authenticated)?.session?.accessToken
+
+        override suspend fun restore(): SessionState = state.value
+
+        override suspend fun establish(session: AuthenticatedSession): SessionState.Authenticated {
+            return SessionState.Authenticated(session).also { _state.value = it }
+        }
+
+        override suspend fun logout() {
+            _state.value = SessionState.Unauthenticated
+        }
+
+        override fun onStoredSessionInvalidated() {
+            _state.value = SessionState.Unauthenticated
         }
     }
 }

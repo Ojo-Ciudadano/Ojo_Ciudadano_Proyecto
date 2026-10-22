@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
+import cl.uct.ojociudadano.data.session.SessionManager
 import java.io.IOException
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class AuthViewModel(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -40,6 +42,7 @@ class AuthViewModel(
                     email = email.trim(),
                     password = password
                 )
+                sessionManager.establish(session)
                 _uiState.value = AuthUiState.Success(session)
             } catch (exception: CancellationException) {
                 throw exception

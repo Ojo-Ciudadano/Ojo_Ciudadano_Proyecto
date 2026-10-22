@@ -33,10 +33,10 @@ class RealCategoryRepositoryIntegrationTest {
 
         val sessionStorage = InMemorySessionStorage()
         val apiService = RetrofitClient.createApiService(baseUrl, sessionStorage)
-        val authRepository = RemoteAuthRepository(apiService, sessionStorage)
+        val authRepository = RemoteAuthRepository(apiService)
         val repository = RemoteCategoryRepository(apiService)
 
-        authRepository.login(email, password)
+        sessionStorage.save(authRepository.login(email, password))
         val categories = repository.getCategories()
 
         assertEquals(8, categories.size)

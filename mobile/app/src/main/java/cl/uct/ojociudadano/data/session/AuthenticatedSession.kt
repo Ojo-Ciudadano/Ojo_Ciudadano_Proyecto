@@ -13,6 +13,16 @@ data class AuthenticatedSession(
     val roles: List<String>
 ) {
 
+    fun isLocallyValid(nowEpochSeconds: Long = System.currentTimeMillis() / 1000): Boolean {
+        return accessToken.isNotBlank() &&
+            tokenType.isNotBlank() &&
+            userId.isNotBlank() &&
+            email.isNotBlank() &&
+            name.isNotBlank() &&
+            roles.all { it.isNotBlank() } &&
+            !isExpired(nowEpochSeconds)
+    }
+
     fun isExpired(nowEpochSeconds: Long = System.currentTimeMillis() / 1000): Boolean {
         val parts = accessToken.split('.')
         if (parts.size != 3 || parts[1].isBlank()) {

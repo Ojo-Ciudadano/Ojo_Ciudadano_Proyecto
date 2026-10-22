@@ -51,8 +51,10 @@ class RealIncidentCreationIntegrationTest {
 
         // 3. Crear ApiService CON el sessionStorage y hacer login
         val apiService = RetrofitClient.createApiService(baseUrl, sessionStorage)
-        cl.uct.ojociudadano.data.repository.RemoteAuthRepository(apiService, sessionStorage)
-            .login(email, password)
+        sessionStorage.save(
+            cl.uct.ojociudadano.data.repository.RemoteAuthRepository(apiService)
+                .login(email, password)
+        )
 
         val categoryRepository = RemoteCategoryRepository(apiService)
         val incidentRepository = RemoteIncidentRepository(apiService)

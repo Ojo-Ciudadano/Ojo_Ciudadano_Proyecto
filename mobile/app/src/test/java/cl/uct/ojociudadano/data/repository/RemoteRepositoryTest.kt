@@ -11,8 +11,6 @@ import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
 import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
-import cl.uct.ojociudadano.data.session.AuthenticatedSession
-import cl.uct.ojociudadano.data.session.SessionStorage
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -21,10 +19,9 @@ import org.junit.Test
 class RemoteRepositoryTest {
 
     @Test
-    fun `login forwards credentials then persists mapped authenticated session`() = runTest {
+    fun `login forwards credentials and maps the authenticated session`() = runTest {
         val apiService = FakeApiService()
-        val sessionStorage = FakeSessionStorage()
-        val repository = RemoteAuthRepository(apiService, sessionStorage)
+        val repository = RemoteAuthRepository(apiService)
 
         val session = repository.login(
             email = "usuario@example.invalid",
@@ -36,7 +33,6 @@ class RemoteRepositoryTest {
         assertEquals("jwt-value", session.accessToken)
         assertEquals("Administrador", session.name)
         assertEquals(listOf("CIUDADANO"), session.roles)
-        assertEquals(session, sessionStorage.currentSession())
     }
 
     @Test
@@ -209,23 +205,6 @@ class RemoteRepositoryTest {
         ): IncidentDto {
             lastCreateRequest = request
             return incident
-        }
-    }
-
-    private class FakeSessionStorage : SessionStorage {
-
-        private var session: AuthenticatedSession? = null
-
-        override fun currentToken(): String? = session?.accessToken
-
-        override fun currentSession(): AuthenticatedSession? = session
-
-        override fun save(session: AuthenticatedSession) {
-            this.session = session
-        }
-
-        override fun clear() {
-            session = null
         }
     }
 
