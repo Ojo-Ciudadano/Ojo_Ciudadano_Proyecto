@@ -1,25 +1,32 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { evidenciaSelect } from './mappers/evidencia.mapper';
+import { toIncidenteResponse } from './mappers/incidente.mapper';
 
-const include = { categoria: true, estado: true, ubicacion: true };
-
+const include = {
+  categoria: true,
+  estado: true,
+  ubicacion: true,
+  evidencias: { select: evidenciaSelect, orderBy: { fechaCreacion: 'asc' as const } },
+};
 @Injectable()
 export class IncidentesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(usuarioReportaId?: string) {
-    return this.prisma.incidente.findMany({
+  async findAll(usuarioReportaId?: string) {
+    const incidentes = await this.prisma.incidente.findMany({
       where: usuarioReportaId ? { usuarioReportaId } : undefined,
       include,
       orderBy: { fechaCreacion: 'desc' },
     });
+    return incidentes.map(toIncidenteResponse);
   }
 
   async findOne(id: string) {
     const incidente = await this.prisma.incidente.findUnique({ where: { id }, include });
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
-    return incidente;
+    return toIncidenteResponse(incidente);
   }
 
   async create(dto: CreateIncidenteDto) {
@@ -41,7 +48,7 @@ export class IncidentesService {
         data: { incidenteId: incidente.id, estadoId: estado.id,
           usuarioId: dto.usuarioReportaId, observacion: 'Reporte creado' },
       });
-      return incidente;
+      return toIncidenteResponse(incidente);
     });
   }
 }
