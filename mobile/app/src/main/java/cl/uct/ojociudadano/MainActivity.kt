@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
             OjoCiudadanoTheme {
                 val container = (application as OjoCiudadanoApplication).container
                 SessionStartupGate(
-                    sessionBootstrapper = container.sessionBootstrapper,
+                    sessionManager = container.sessionManager,
                     authRepository = container.authRepository
                 )
             }

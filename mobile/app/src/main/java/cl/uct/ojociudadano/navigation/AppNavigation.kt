@@ -36,6 +36,7 @@ fun AppNavigation(
     navController: NavHostController = rememberNavController(),
     startDestination: String = AppRoutes.HOME,
     onLogin: (LoginCredentials) -> Unit = {},
+    onLogout: () -> Unit = {},
     loginContent: (@Composable () -> Unit)? = null
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -93,7 +94,7 @@ fun AppNavigation(
                 NotificationsScreen(onBack = navController::navigateUp)
             }
             composable(AppRoutes.MAP) { MapScreen() }
-            composable(AppRoutes.PROFILE) { ProfileScreen() }
+            composable(AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
         }
     }
 }

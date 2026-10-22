@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,7 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun ProfileScreen(modifier: Modifier = Modifier) {
+fun ProfileScreen(
+    modifier: Modifier = Modifier,
+    onLogout: () -> Unit = {}
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -69,6 +74,13 @@ fun ProfileScreen(modifier: Modifier = Modifier) {
                 Icon(Icons.Filled.Settings, contentDescription = null)
                 Text("Preferencias", style = MaterialTheme.typography.bodyLarge)
             }
+        }
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            Text("Cerrar sesión", modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

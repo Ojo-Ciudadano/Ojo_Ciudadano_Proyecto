@@ -10,16 +10,17 @@ import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
-import cl.uct.ojociudadano.data.session.SessionBootstrapper
+import cl.uct.ojociudadano.data.session.DefaultSessionManager
+import cl.uct.ojociudadano.data.session.EncryptedSharedPreferencesSessionStorage
+import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionStorage
-import cl.uct.ojociudadano.data.session.SharedPreferencesSessionStorage
 
 class AppContainer(
     context: Context,
     baseUrl: String = BuildConfig.API_BASE_URL
 ) {
     val sessionStorage: SessionStorage by lazy {
-        SharedPreferencesSessionStorage(
+        EncryptedSharedPreferencesSessionStorage(
             context = context,
             environmentBaseUrl = baseUrl
         )
@@ -30,14 +31,11 @@ class AppContainer(
     }
 
     val authRepository: AuthRepository by lazy {
-        RemoteAuthRepository(authApiService, sessionStorage)
+        RemoteAuthRepository(authApiService)
     }
 
-    val sessionBootstrapper: SessionBootstrapper by lazy {
-        SessionBootstrapper(
-            sessionStorage = sessionStorage,
-            authRepository = authRepository
-        )
+    val sessionManager: SessionManager by lazy {
+        DefaultSessionManager(sessionStorage)
     }
 
     val apiService: ApiService by lazy {
@@ -45,7 +43,7 @@ class AppContainer(
             baseUrl = baseUrl,
             tokenProvider = sessionStorage,
             onUnauthorizedRefreshToken = {
-                sessionBootstrapper.onSessionInvalidated()
+                sessionManager.onStoredSessionInvalidated()
                 null
             }
         )
