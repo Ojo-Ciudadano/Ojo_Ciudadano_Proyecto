@@ -53,8 +53,11 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
+import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -73,6 +76,7 @@ fun CreateReportScreen(
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onCategorySelected: (Category) -> Unit,
+    onTakePhotoClick: () -> Unit,
     onCreateReportClick: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {}
@@ -147,6 +151,14 @@ fun CreateReportScreen(
             loadErrorMessage = categoryLoadError,
             errorMessage = state.categoryError,
             onCategorySelected = onCategorySelected
+        )
+
+        EvidencePhotoSection(
+            evidencePhoto = state.evidencePhoto,
+            isCapturing = state.isCapturingPhoto,
+            errorMessage = state.photoCaptureError,
+            enabled = submissionState !is CreateReportSubmissionState.Loading,
+            onTakePhotoClick = onTakePhotoClick
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -333,6 +345,23 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         }
     )
 
+    val fileStore = remember(application) {
+        CacheEvidencePhotoFileStore(context = application)
+    }
+
+    val photoCaptureLauncher = rememberPhotoCaptureLauncher(
+        fileStore = fileStore,
+        onCaptured = { evidence ->
+            // La evidencia reemplazada deja de ser útil: se elimina su temporal.
+            viewModel.formState.evidencePhoto?.let { previous ->
+                fileStore.delete(previous.fileName)
+            }
+            viewModel.onPhotoCaptured(evidence)
+        },
+        onCancelled = viewModel::onPhotoCaptureCancelled,
+        onError = viewModel::onPhotoCaptureError
+    )
+
     CreateReportScreen(
         state = viewModel.formState,
         categories = viewModel.categoryUiState.categories,
@@ -342,6 +371,10 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onTitleChange = viewModel::onTitleChange,
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
+        onTakePhotoClick = {
+            viewModel.onPhotoCaptureStarted()
+            photoCaptureLauncher.launch()
+        },
         onCreateReportClick = viewModel::createReport,
         modifier = modifier,
         onBack = onBack
@@ -356,7 +389,8 @@ private fun CreateReportScreenPreview() {
             state = CreateReportFormState(
                 title = "Poste de alumbrado dañado",
                 description = "La luminaria lleva varios días sin funcionar",
-                selectedCategory = previewCategory
+                selectedCategory = previewCategory,
+                evidencePhoto = previewEvidencePhoto
             ),
             categories = listOf(previewCategory),
             isLoadingCategories = false,
@@ -365,10 +399,18 @@ private fun CreateReportScreenPreview() {
             onTitleChange = {},
             onDescriptionChange = {},
             onCategorySelected = {},
+            onTakePhotoClick = {},
             onCreateReportClick = {}
         )
     }
 }
+
+private val previewEvidencePhoto = IncidentPhotoEvidence(
+    localUri = "content://cl.uct.ojociudadano.fileprovider/evidence_photos/evidence_preview.jpg",
+    fileName = "evidence_preview.jpg",
+    sizeBytes = 1_258_291L,
+    capturedAt = 0L
+)
 
 private val previewCategory = Category(
     id = "preview-category",

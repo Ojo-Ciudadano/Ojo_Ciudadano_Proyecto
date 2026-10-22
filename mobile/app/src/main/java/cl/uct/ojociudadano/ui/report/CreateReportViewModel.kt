@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
@@ -50,6 +51,34 @@ class CreateReportViewModel(
     fun onCategorySelected(category: Category) {
         formState = formState.updateCategory(category)
         submissionState = CreateReportSubmissionState.Idle
+    }
+
+    /**
+     * Marca el inicio de una captura para bloquear el botón mientras la cámara
+     * del sistema toma el control de la pantalla.
+     */
+    fun onPhotoCaptureStarted() {
+        formState = formState.startPhotoCapture()
+    }
+
+    /**
+     * Conserva la evidencia solo en el estado del formulario: no se persiste ni
+     * se envía al backend en esta tarea.
+     */
+    fun onPhotoCaptured(evidence: IncidentPhotoEvidence) {
+        formState = formState.updateEvidencePhoto(evidence)
+    }
+
+    /**
+     * El usuario cerró la cámara sin capturar: no es un error y la fotografía
+     * anterior, si existía, se mantiene disponible.
+     */
+    fun onPhotoCaptureCancelled() {
+        formState = formState.cancelPhotoCapture()
+    }
+
+    fun onPhotoCaptureError(message: String) {
+        formState = formState.failPhotoCapture(message)
     }
 
     fun createReport() {
