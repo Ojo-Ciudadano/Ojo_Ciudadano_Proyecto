@@ -17,6 +17,7 @@ metadata:
   name: api-gateway-ingress
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
     external-dns.alpha.kubernetes.io/target: "proxy.inf.uct.cl"
 spec:
   ingressClassName: nginx

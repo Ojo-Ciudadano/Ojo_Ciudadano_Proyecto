@@ -1,22 +1,37 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 
 @Injectable()
 export class ProxyService {
   private readonly logger = new Logger(ProxyService.name);
 
+  constructor(@Optional() private readonly configService?: ConfigService) {}
+
   getServiceUrl(prefix: string): string | null {
     switch (prefix) {
       case 'auth':
       case 'usuarios':
       case 'roles':
-        return process.env.AUTH_SERVICE_URL ?? 'http://localhost:3001';
+        return (
+          this.configService?.get<string>('AUTH_SERVICE_URL') ??
+          process.env.AUTH_SERVICE_URL ??
+          'http://localhost:3001'
+        );
       case 'incidentes':
       case 'categorias':
       case 'evidencias':
-        return process.env.INCIDENTES_SERVICE_URL ?? 'http://localhost:3002';
+        return (
+          this.configService?.get<string>('INCIDENTES_SERVICE_URL') ??
+          process.env.INCIDENTES_SERVICE_URL ??
+          'http://localhost:3002'
+        );
       case 'notificaciones':
-        return process.env.NOTIFICACIONES_SERVICE_URL ?? 'http://localhost:3003';
+        return (
+          this.configService?.get<string>('NOTIFICACIONES_SERVICE_URL') ??
+          process.env.NOTIFICACIONES_SERVICE_URL ??
+          'http://localhost:3003'
+        );
       default:
         return null;
     }

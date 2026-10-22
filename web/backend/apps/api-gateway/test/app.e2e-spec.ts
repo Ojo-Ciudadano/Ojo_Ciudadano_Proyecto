@@ -1,13 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { ApiGatewayModule } from './../src/api-gateway.module';
 import { HttpExceptionFilter } from '../src/filters/http-exception.filter';
 import { AuthService } from '../src/auth/auth-service';
+import { buildCorsOptions } from '../src/config/cors.config';
 
 const JWT_SECRET = 'test-jwt-secret';
+const ALLOWED_WEB_ORIGIN = 'https://ojociudadano.dev.censei.cl';
+const UNAUTHORIZED_WEB_ORIGIN = 'https://sitio-no-autorizado.evil.cl';
+
 const CREDENCIALES_VALIDAS = {
   email: 'admin@ojociudadano.cl',
   password: 'password-seguro',
@@ -33,15 +42,21 @@ describe('ApiGatewayController (e2e)', () => {
 
   beforeEach(async () => {
     process.env.JWT_SECRET = JWT_SECRET;
+    process.env.CORS_ORIGINS = `${ALLOWED_WEB_ORIGIN},http://localhost:5173`;
     token = await new JwtService({ secret: JWT_SECRET }).signAsync({
       sub: '550e8400-e29b-41d4-a716-446655440001',
       email: CREDENCIALES_VALIDAS.email,
     });
 
     const authService = {
-      register: jest.fn().mockResolvedValue({ id: 'usuario-1', email: CREDENCIALES_VALIDAS.email }),
+      register: jest
+        .fn()
+        .mockResolvedValue({ id: 'usuario-1', email: CREDENCIALES_VALIDAS.email }),
       login: jest.fn(async (dto: typeof CREDENCIALES_VALIDAS) => {
-        if (dto.email !== CREDENCIALES_VALIDAS.email || dto.password !== CREDENCIALES_VALIDAS.password) {
+        if (
+          dto.email !== CREDENCIALES_VALIDAS.email ||
+          dto.password !== CREDENCIALES_VALIDAS.password
+        ) {
           throw new UnauthorizedException('Credenciales invalidas');
         }
         return { access_token: token, token_type: 'Bearer' };
@@ -56,9 +71,17 @@ describe('ApiGatewayController (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    const configService = app.get(ConfigService);
+    app.enableCors(buildCorsOptions(configService));
     app.setGlobalPrefix('api/v1');
     app.useGlobalFilters(new HttpExceptionFilter());
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 
@@ -87,11 +110,13 @@ describe('ApiGatewayController (e2e)', () => {
       .send({ email: CREDENCIALES_VALIDAS.email, password: 'incorrecta' })
       .expect(401)
       .expect(({ body }) => {
-        expect(body).toEqual(expect.objectContaining({
-          statusCode: 401,
-          error: 'Unauthorized',
-          path: '/api/v1/auth/login',
-        }));
+        expect(body).toEqual(
+          expect.objectContaining({
+            statusCode: 401,
+            error: 'Unauthorized',
+            path: '/api/v1/auth/login',
+          }),
+        );
         expect(body.access_token).toBeUndefined();
       });
   });
@@ -121,9 +146,51 @@ describe('ApiGatewayController (e2e)', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3002/incidentes',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify(INCIDENTE) }),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(INCIDENTE),
+      }),
     );
     fetchMock.mockRestore();
+  });
+
+  describe('CORS y Orígenes por Entorno (#127)', () => {
+    it('autoriza solicitud preflight OPTIONS con Authorization desde un origen permitido', async () => {
+      const response = await request(app.getHttpServer())
+        .options('/api/v1/incidentes')
+        .set('Origin', ALLOWED_WEB_ORIGIN)
+        .set('Access-Control-Request-Method', 'PATCH')
+        .set('Access-Control-Request-Headers', 'Authorization,Content-Type')
+        .expect(204);
+
+      expect(response.headers['access-control-allow-origin']).toBe(
+        ALLOWED_WEB_ORIGIN,
+      );
+      expect(response.headers['access-control-allow-methods']).toContain('PATCH');
+      expect(response.headers['access-control-allow-headers']).toContain(
+        'Authorization',
+      );
+    });
+
+    it('autoriza solicitud GET/POST desde un origen permitido devolviendo Access-Control-Allow-Origin', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1')
+        .set('Origin', ALLOWED_WEB_ORIGIN)
+        .expect(200);
+
+      expect(response.headers['access-control-allow-origin']).toBe(
+        ALLOWED_WEB_ORIGIN,
+      );
+    });
+
+    it('rechaza CORS para un origen no autorizado omitiendo Access-Control-Allow-Origin', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1')
+        .set('Origin', UNAUTHORIZED_WEB_ORIGIN)
+        .expect(200);
+
+      expect(response.headers['access-control-allow-origin']).toBeUndefined();
+    });
   });
 
   afterEach(async () => {
