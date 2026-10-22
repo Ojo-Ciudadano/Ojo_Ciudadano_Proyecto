@@ -3,6 +3,8 @@ package cl.uct.ojociudadano.ui.login
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
+import cl.uct.ojociudadano.data.session.SessionManager
+import cl.uct.ojociudadano.data.session.SessionState
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +13,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -34,7 +39,7 @@ class AuthViewModelTest {
 
     @Test
     fun `initial state is idle`() {
-        val viewModel = AuthViewModel(FakeAuthRepository())
+        val viewModel = AuthViewModel(FakeAuthRepository(), FakeSessionManager())
 
         assertEquals(AuthUiState.Idle, viewModel.uiState.value)
     }
@@ -50,7 +55,7 @@ class AuthViewModelTest {
                 sampleSession
             }
         )
-        val viewModel = AuthViewModel(repository)
+        val viewModel = AuthViewModel(repository, FakeSessionManager())
 
         viewModel.login(
             LoginCredentials(
@@ -73,8 +78,10 @@ class AuthViewModelTest {
 
     @Test
     fun `successful login exposes the authenticated session`() = runTest {
+        val sessionManager = FakeSessionManager()
         val viewModel = AuthViewModel(
-            FakeAuthRepository(onLogin = { sampleSession })
+            FakeAuthRepository(onLogin = { sampleSession }),
+            sessionManager
         )
 
         viewModel.login("ciudadano@ojociudadano.cl", "password-not-stored")
@@ -82,6 +89,11 @@ class AuthViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state is AuthUiState.Success)
         assertEquals(sampleSession, (state as AuthUiState.Success).session)
+        assertEquals(sampleSession, sessionManager.establishedSession)
+        assertEquals(
+            SessionState.Authenticated(sampleSession),
+            sessionManager.state.value
+        )
     }
 
     @Test
@@ -151,6 +163,18 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun `session persistence failure is controlled after a successful remote login`() = runTest {
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(onLogin = { sampleSession }),
+            FakeSessionManager(establishFailure = IllegalStateException("storage failed"))
+        )
+
+        viewModel.login("ciudadano@ojociudadano.cl", "password-not-stored")
+
+        assertEquals(AuthUiState.Error(AuthError.Unexpected), viewModel.uiState.value)
+    }
+
+    @Test
     fun `a new attempt replaces an error and can succeed`() = runTest {
         val repository = FakeAuthRepository(
             outcomes = ArrayDeque(
@@ -160,7 +184,7 @@ class AuthViewModelTest {
                 )
             )
         )
-        val viewModel = AuthViewModel(repository)
+        val viewModel = AuthViewModel(repository, FakeSessionManager())
 
         viewModel.login("ciudadano@ojociudadano.cl", "password-not-stored")
         assertEquals(AuthUiState.Error(AuthError.Network), viewModel.uiState.value)
@@ -182,7 +206,7 @@ class AuthViewModelTest {
                 sampleSession
             }
         )
-        val viewModel = AuthViewModel(repository)
+        val viewModel = AuthViewModel(repository, FakeSessionManager())
 
         viewModel.login("ciudadano@ojociudadano.cl", "password-not-stored")
         loginStarted.await()
@@ -200,10 +224,42 @@ class AuthViewModelTest {
 
     private fun errorViewModel(error: Throwable): AuthViewModel {
         return AuthViewModel(
-            FakeAuthRepository(onLogin = { throw error })
+            FakeAuthRepository(onLogin = { throw error }),
+            FakeSessionManager()
         ).also { viewModel ->
             viewModel.login("ciudadano@ojociudadano.cl", "password-not-stored")
         }
+    }
+}
+
+private class FakeSessionManager(
+    private val establishFailure: Throwable? = null
+) : SessionManager {
+
+    private val _state = MutableStateFlow<SessionState>(SessionState.Unauthenticated)
+    override val state: StateFlow<SessionState> = _state.asStateFlow()
+
+    var establishedSession: AuthenticatedSession? = null
+        private set
+
+    override fun currentToken(): String? = establishedSession?.accessToken
+
+    override suspend fun restore(): SessionState = state.value
+
+    override suspend fun establish(session: AuthenticatedSession): SessionState.Authenticated {
+        establishFailure?.let { throw it }
+        establishedSession = session
+        return SessionState.Authenticated(session).also { _state.value = it }
+    }
+
+    override suspend fun logout() {
+        establishedSession = null
+        _state.value = SessionState.Unauthenticated
+    }
+
+    override fun onStoredSessionInvalidated() {
+        establishedSession = null
+        _state.value = SessionState.Unauthenticated
     }
 }
 

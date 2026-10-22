@@ -15,7 +15,7 @@ import org.junit.Test
 class AuthenticatedCategoriesFlowTest {
 
     @Test
-    fun `login persists JWT and categories request sends it through interceptor`() = runTest {
+    fun `established session sends JWT through interceptor`() = runTest {
         val server = MockWebServer()
         server.enqueue(MockResponse().setResponseCode(200).setBody(loginResponse))
         server.enqueue(MockResponse().setResponseCode(200).setBody(categoriesResponse))
@@ -27,10 +27,12 @@ class AuthenticatedCategoriesFlowTest {
                 baseUrl = server.url("/").toString(),
                 tokenProvider = sessionStorage
             )
-            val authRepository = RemoteAuthRepository(apiService, sessionStorage)
+            val authRepository = RemoteAuthRepository(apiService)
             val categoryRepository = RemoteCategoryRepository(apiService)
 
-            authRepository.login("ciudadano@ojociudadano.cl", "password-not-stored")
+            sessionStorage.save(
+                authRepository.login("ciudadano@ojociudadano.cl", "password-not-stored")
+            )
             val categories = categoryRepository.getCategories()
 
             val loginRequest = server.takeRequest()
