@@ -228,6 +228,12 @@ export default defineConfig({
 ### 6.3 Almacenamiento de Evidencias (Supabase Storage)
 * Las imágenes y evidencias de incidentes se almacenan en un bucket dedicado en **Supabase Storage**.
 * La base de datos de `incidentes` almacena únicamente las URLs o identificadores del archivo generado por Supabase Storage, sin guardar binarios directamente en PostgreSQL.
+* El modelo `Evidencia` persiste la metadata de cada evidencia (`clave_archivo`, `tipo_mime`, `tamano_archivo`, `fecha_creacion`) y la relaciona con su incidente mediante clave foránea. El detalle de los campos se documenta en [MIGRACIONES_PRISMA.md](MIGRACIONES_PRISMA.md).
+
+### 6.4 Aplicación de Migraciones
+* El pipeline CI/CD **no** aplica migraciones automáticamente: cada migración se ejecuta de forma manual con `npx prisma migrate deploy`.
+* En el clúster UCT, PostgreSQL es un `ClusterIP`; el procedimiento completo (contexto de Kubernetes, `kubectl port-forward` hacia `postgres-incidentes-svc` y ejecución de la migración) está en [MIGRACIONES_PRISMA.md](MIGRACIONES_PRISMA.md).
+* En desarrollo local se aplican las migraciones sobre los contenedores de `docker-compose.yml` (`postgres-incidentes` en el puerto `5433`).
 
 ---
 

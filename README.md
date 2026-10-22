@@ -9,7 +9,8 @@ Sistema colaborativo para el reporte, seguimiento y gestión de incidentes urban
 ```text
 Ojo_Ciudadano_Proyecto/
 ├── docs/                      # Documentación transversal de arquitectura y contratos
-│   └── CONVENCIONES_ARQUITECTURA.md
+│   ├── CONVENCIONES_ARQUITECTURA.md
+│   └── MIGRACIONES_PRISMA.md
 ├── mobile/                    # Aplicación Móvil Android (4° Año) - Kotlin nativo, GPS, Cámara
 ├── web/                       # Plataforma Web y Backend de Microservicios (2° Año)
 │   ├── frontend/              # Plataforma Web de Gestión (React + TypeScript + Vite + Leaflet)
@@ -82,7 +83,16 @@ npx prisma generate --schema=apps/incidentes/prisma/schema.prisma
 npx prisma generate --schema=apps/notificaciones/prisma/schema.prisma
 ```
 
-### 6. Ejecución en Modo Desarrollo
+### 6. Aplicar Migraciones Prisma
+```bash
+# Microservicio de Incidentes (base de datos locales)
+cd web/backend/apps/incidentes
+npx prisma migrate deploy
+npx prisma migrate status
+```
+> El pipeline CI/CD **no** aplica migraciones automáticamente. Para la base de datos remota del clúster UCT se debe usar `kubectl port-forward` contra `postgres-incidentes-svc`. El procedimiento completo está en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md).
+
+### 7. Ejecución en Modo Desarrollo
 Puedes iniciar cada servicio de forma individual según se requiera:
 
 ```bash
@@ -99,7 +109,7 @@ npm run start:dev incidentes
 npm run start:dev notificaciones
 ```
 
-### 7. Pruebas y Calidad de Código
+### 8. Pruebas y Calidad de Código
 ```bash
 # Ejecutar suite de pruebas unitarias
 npm test

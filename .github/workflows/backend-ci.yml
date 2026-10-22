@@ -8,6 +8,21 @@ on:
       - 'web/backend/**'
       - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
+    inputs:
+      microservicio:
+        description: 'Microservicio al que se aplican las migraciones Prisma'
+        required: true
+        default: incidentes
+        type: choice
+        options:
+          - incidentes
+          - auth-usuarios
+          - notificaciones
+      desplegar:
+        description: 'Construir y desplegar las imagenes de los microservicios'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -15,6 +30,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.desplegar)
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
@@ -58,3 +74,124 @@ jobs:
           kubectl set image deployment/${{ matrix.app }} ${{ matrix.app }}=${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.app }}:latest
           kubectl rollout restart deployment/${{ matrix.app }}
           kubectl rollout status deployment/${{ matrix.app }} --timeout=180s
+
+  migrate-prisma:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      MICROSERVICIO: ${{ inputs.microservicio }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar kubectl
+        run: |
+          echo "${{ secrets.K8S_CA }}" | base64 -d > "$RUNNER_TEMP/ca.crt"
+          kubectl config set-cluster uct --server=https://k8s-estudiantes.dev.censei.cl --certificate-authority="$RUNNER_TEMP/ca.crt"
+          kubectl config set-credentials ci --token="${{ secrets.K8S_TOKEN }}"
+          kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
+          kubectl config use-context ci
+
+      - name: Construir imagen de migraciones
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web/backend
+          file: ./web/backend/Dockerfile.migrate
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO }}/migrate-prisma:${{ github.sha }}
+
+      - name: Aplicar migraciones Prisma en el clúster
+        run: |
+          set -euo pipefail
+
+          case "$MICROSERVICIO" in
+            incidentes)      PG_USER=incidentes_user;      PG_DB=incidentes;      PG_HOST=postgres-incidentes-svc;    SECRET_KEY=postgres-incidentes;    DB_ENV=DATABASE_URL_INCIDENTES ;;
+            auth-usuarios)  PG_USER=auth_user;              PG_DB=auth_usuarios;  PG_HOST=postgres-auth-svc;            SECRET_KEY=postgres-auth;          DB_ENV=DATABASE_URL_AUTH ;;
+            notificaciones) PG_USER=notificaciones_user;   PG_DB=notificaciones; PG_HOST=postgres-notificaciones-svc; SECRET_KEY=postgres-notificaciones; DB_ENV=DATABASE_URL_NOTIFICACIONES ;;
+            *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
+          esac
+
+          DEPLOYMENT="$MICROSERVICIO"
+          NAMESPACE="student-daalvarez"
+
+          echo "::group::Estado del namespace $NAMESPACE"
+          kubectl get pods -n "$NAMESPACE" -o wide || true
+          echo "::endgroup::"
+
+          # La migracion se ejecuta como initContainer del deployment ya desplegado: no se crea
+          # un pod nuevo, por lo que la cuota student-provisioner-quota no se ve afectada
+          # (los initContainers no suman al request efectivo del pod, se aplica max()).
+          MIGRATION_CONTAINER=$(cat <<EOF
+          {
+            "name": "prisma-migrate",
+            "image": "${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}",
+            "workingDir": "/app/apps/${MICROSERVICIO}",
+            "command": ["npx", "prisma", "migrate", "deploy"],
+            "resources": {
+              "requests": { "cpu": "25m", "memory": "64Mi" },
+              "limits": { "cpu": "250m", "memory": "128Mi" }
+            },
+            "env": [
+              {
+                "name": "DB_PASSWORD",
+                "valueFrom": { "secretKeyRef": { "name": "backend-secrets", "key": "${SECRET_KEY}" } }
+              },
+              {
+                "name": "${DB_ENV}",
+                "value": "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
+              }
+            ]
+          }
+          EOF
+          )
+
+          echo "::group::Parcheando el deployment $DEPLOYMENT con el initContainer de migracion"
+          kubectl patch deployment "$DEPLOYMENT" -n "$NAMESPACE" --type=strategic \
+            -p "{\"spec\":{\"template\":{\"spec\":{\"initContainers\":[${MIGRATION_CONTAINER}]}}}}"
+          echo "::endgroup::"
+
+          # Se espera a que termine el initContainer del pod recien creado. El resultado se
+          # toma del exit code del initContainer para no depender de la salud del contenedor
+          # de la aplicacion.
+          POD=""
+          MIGRATION_EXIT=""
+          for i in $(seq 1 40); do
+            POD=$(kubectl get pods -n "$NAMESPACE" -l "app=$DEPLOYMENT" --sort-by=.metadata.creationTimestamp -o name 2>/dev/null | tail -1)
+            if [ -n "$POD" ]; then
+              MIGRATION_EXIT=$(kubectl get "$POD" -n "$NAMESPACE" -o jsonpath='{.status.initContainerStatuses[?(@.name=="prisma-migrate")].state.terminated.exitCode}' 2>/dev/null || echo "")
+              if [ -n "$MIGRATION_EXIT" ]; then
+                break
+              fi
+            fi
+            echo "Intento $i: esperando el initContainer de migracion..."
+            sleep 15
+          done
+
+          echo "::group::Log de la migracion Prisma"
+          kubectl logs "$POD" -c prisma-migrate --tail=200 || true
+          echo "::endgroup::"
+
+          # Se retira el initContainer para dejar el deployment en su estado original
+          kubectl patch deployment "$DEPLOYMENT" -n "$NAMESPACE" --type=strategic \
+            -p '{"spec":{"template":{"spec":{"initContainers":[]}}}}'
+          kubectl rollout status "deployment/$DEPLOYMENT" -n "$NAMESPACE" --timeout=300s || true
+
+          if [ "$MIGRATION_EXIT" != "0" ]; then
+            echo "::error::La migracion no se completo correctamente (exit code: ${MIGRATION_EXIT:-desconocido})"
+            kubectl describe "$POD" -n "$NAMESPACE" || true
+            kubectl get pods -n "$NAMESPACE" -o wide || true
+            exit 1
+          fi
