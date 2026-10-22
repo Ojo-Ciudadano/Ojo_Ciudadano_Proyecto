@@ -14,11 +14,21 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Se requiere un token Bearer valido');
     }
 
-    try {
-      request.user = await this.jwtService.verifyAsync(token);
-      return true;
-    } catch {
-      throw new UnauthorizedException('Token invalido o expirado');
-    }
+   try {
+  const payload = await this.jwtService.verifyAsync<{
+    sub?: string;
+    email?: string;
+    roles?: string[];
+  }>(token);
+
+  if (!payload?.sub || typeof payload.sub !== 'string') {
+    throw new UnauthorizedException('Token sin usuario válido');
+  }
+
+  (request as Request & { user?: typeof payload }).user = payload;
+  return true;
+} catch {
+  throw new UnauthorizedException('Token inválido o expirado');
+}
   }
 }

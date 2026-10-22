@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { IncidentesController } from './incidentes.controller';
 import { IncidentesService } from './incidentes.service';
 
@@ -11,10 +12,19 @@ describe('IncidentesController', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [IncidentesController],
-      providers: [{ provide: IncidentesService, useValue: mockService }],
-    }).compile();
+
+  const module: TestingModule = await Test.createTestingModule({
+  controllers: [IncidentesController],
+  providers: [
+    { provide: IncidentesService, useValue: mockService },
+  ],
+})
+  .overrideGuard(JwtAuthGuard)
+  .useValue({
+    canActivate: () => true,
+  })
+  .compile();
+
     controller = module.get<IncidentesController>(IncidentesController);
     jest.clearAllMocks();
   });
