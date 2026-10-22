@@ -4,11 +4,14 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.IncidentStatus
+import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionStorage
+import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -191,6 +194,107 @@ class CreateReportViewModelTest {
 
         assertEquals(CreateReportSubmissionState.Success, viewModel.submissionState)
     }
+
+    @Test
+    fun `stores the captured photo while keeping the rest of the form`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository()
+        )
+        viewModel.onTitleChange("Poste dañado")
+
+        viewModel.onPhotoCaptureStarted()
+
+        assertTrue(viewModel.formState.isCapturingPhoto)
+        assertNull(viewModel.formState.photoCaptureError)
+
+        viewModel.onPhotoCaptured(samplePhoto)
+
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertFalse(viewModel.formState.isCapturingPhoto)
+        assertNull(viewModel.formState.photoCaptureError)
+        assertEquals("Poste dañado", viewModel.formState.title)
+    }
+
+    @Test
+    fun `cancelling the capture keeps the previous photo and reports no error`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository()
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+        viewModel.onPhotoCaptureStarted()
+
+        viewModel.onPhotoCaptureCancelled()
+
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertFalse(viewModel.formState.isCapturingPhoto)
+        assertNull(viewModel.formState.photoCaptureError)
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+    }
+
+    @Test
+    fun `exposes the camera error and keeps the previous photo`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository()
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+        viewModel.onPhotoCaptureStarted()
+
+        viewModel.onPhotoCaptureError(PhotoCaptureErrors.PERMISSION_REQUIRED)
+
+        assertEquals(
+            PhotoCaptureErrors.PERMISSION_REQUIRED,
+            viewModel.formState.photoCaptureError
+        )
+        assertFalse(viewModel.formState.isCapturingPhoto)
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+    }
+
+    @Test
+    fun `replaces the previous photo when a new capture succeeds`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository()
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+        viewModel.onPhotoCaptureStarted()
+
+        viewModel.onPhotoCaptured(secondSamplePhoto)
+
+        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertFalse(viewModel.formState.isCapturingPhoto)
+        assertNull(viewModel.formState.photoCaptureError)
+    }
+
+    @Test
+    fun `creates the report without sending the evidence photo`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            sessionStorage = FakeSessionStorage(sampleSession)
+        )
+
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.onDescriptionChange("El poste bloquea la vereda")
+        viewModel.onCategorySelected(sampleCategory)
+        viewModel.onPhotoCaptured(samplePhoto)
+
+        viewModel.createReport()
+
+        assertEquals(CreateReportSubmissionState.Success, viewModel.submissionState)
+        assertEquals(
+            CreateIncidentInput(
+                title = "Poste dañado",
+                description = "El poste bloquea la vereda",
+                categoryId = sampleCategory.id,
+                reporterUserId = sampleSession.userId,
+                location = Sprint1TemporaryLocation.incidentLocation
+            ),
+            incidentRepository.createInputs.single()
+        )
+    }
 }
 
 private fun createViewModel(
@@ -285,4 +389,18 @@ private val sampleCategory = Category(
     basePriority = 0,
     isCriticalEmergency = false,
     officialContactChannel = null
+)
+
+private val samplePhoto = IncidentPhotoEvidence(
+    localUri = "content://cl.uct.ojociudadano.fileprovider/evidences/evidence_1.jpg",
+    fileName = "evidence_1.jpg",
+    sizeBytes = 1024L,
+    capturedAt = 1_700_000_000_000L
+)
+
+private val secondSamplePhoto = samplePhoto.copy(
+    localUri = "content://cl.uct.ojociudadano.fileprovider/evidences/evidence_2.jpg",
+    fileName = "evidence_2.jpg",
+    sizeBytes = 2048L,
+    capturedAt = 1_700_000_001_000L
 )
