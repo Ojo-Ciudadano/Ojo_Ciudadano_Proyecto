@@ -12,7 +12,7 @@ describe('IncidentesController', () => {
   };
 
   beforeEach(async () => {
-   
+
   const module: TestingModule = await Test.createTestingModule({
   controllers: [IncidentesController],
   providers: [
