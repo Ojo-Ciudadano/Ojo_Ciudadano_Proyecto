@@ -1,10 +1,12 @@
 package cl.uct.ojociudadano.ui.report.photo
 
+import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +19,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.PendingPhotoCapture
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
@@ -31,14 +35,19 @@ fun interface PhotoCaptureLauncher {
 /**
  * Prepara el mecanismo de captura con la aplicación de cámara del dispositivo.
  *
- * El archivo temporal se reserva antes de abrir la cámara y se resuelve cuando
- * la actividad de cámara devuelve el control a la aplicación. El estado de la
- * captura pendiente se conserva ante cambios de configuración para recuperar
- * correctamente la fotografía si el dispositivo rota mientras la cámara está
- * abierta.
+ * Antes de abrir la cámara se verifica que exista una aplicación para capturar
+ * imágenes y que el permiso [Manifest.permission.CAMERA] esté concedido. Si no
+ * lo está, se solicita al usuario y solo se abre la cámara cuando lo acepta.
  *
- * No se solicita permiso de cámara en esta etapa: la aplicación de cámara
- * gestiona sus propios permisos.
+ * El archivo temporal se reserva después de obtener el permiso y se resuelve
+ * cuando la actividad de cámara devuelve el control a la aplicación. El estado
+ * de la captura pendiente se conserva ante cambios de configuración para
+ * recuperar correctamente la fotografía si el dispositivo rota mientras la
+ * cámara está abierta.
+ *
+ * La cancelación y los errores se informan mediante [onCancelled] y [onError]
+ * para que el formulario mantenga su propio estado sin conocer detalles del
+ * permiso ni del resultado de la actividad.
  */
 @Composable
 fun rememberPhotoCaptureLauncher(
@@ -69,39 +78,61 @@ fun rememberPhotoCaptureLauncher(
         }
     }
 
-    return remember(fileStore, takePictureLauncher) {
-        PhotoCaptureLauncher {
-            pendingCapture?.let { stale -> fileStore.delete(stale.fileName) }
-            pendingCapture = null
+    val startCamera: () -> Unit = startCamera@{
+        pendingCapture?.let { stale -> fileStore.delete(stale.fileName) }
+        pendingCapture = null
 
+        val capture = try {
+            fileStore.create()
+        } catch (exception: Exception) {
+            currentOnError(exception.message ?: PhotoCaptureErrors.PREPARE_FILE_FAILED)
+            return@startCamera
+        }
+
+        pendingCapture = capture
+
+        try {
+            takePictureLauncher.launch(capture.localUri.toUri())
+        } catch (exception: Exception) {
+            fileStore.delete(capture.fileName)
+            pendingCapture = null
+            currentOnError(
+                if (exception is ActivityNotFoundException) {
+                    PhotoCaptureErrors.CAMERA_UNAVAILABLE
+                } else {
+                    PhotoCaptureErrors.OPEN_CAMERA_FAILED
+                }
+            )
+        }
+    }
+
+    val currentStartCamera by rememberUpdatedState(startCamera)
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            currentStartCamera()
+        } else {
+            currentOnError(
+                CameraPermissionPolicy.denialMessage(
+                    shouldShowRationale = context.shouldShowCameraRationale()
+                )
+            )
+        }
+    }
+
+    return remember(fileStore, takePictureLauncher, cameraPermissionLauncher, context) {
+        PhotoCaptureLauncher {
             if (!context.hasCameraApplication()) {
                 currentOnError(PhotoCaptureErrors.CAMERA_UNAVAILABLE)
                 return@PhotoCaptureLauncher
             }
 
-            val capture = try {
-                fileStore.create()
-            } catch (exception: Exception) {
-                currentOnError(
-                    exception.message ?: PhotoCaptureErrors.PREPARE_FILE_FAILED
-                )
-                return@PhotoCaptureLauncher
-            }
-
-            pendingCapture = capture
-
-            try {
-                takePictureLauncher.launch(Uri.parse(capture.localUri))
-            } catch (exception: Exception) {
-                fileStore.delete(capture.fileName)
-                pendingCapture = null
-                currentOnError(
-                    if (exception is ActivityNotFoundException) {
-                        PhotoCaptureErrors.CAMERA_UNAVAILABLE
-                    } else {
-                        PhotoCaptureErrors.OPEN_CAMERA_FAILED
-                    }
-                )
+            if (CameraPermissionPolicy.needsRequest(context.isCameraPermissionGranted())) {
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            } else {
+                currentStartCamera()
             }
         }
     }
@@ -128,6 +159,23 @@ private val PendingPhotoCaptureSaver = listSaver<PendingPhotoCapture?, String>(
         }
     }
 )
+
+private fun Context.isCameraPermissionGranted(): Boolean =
+    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+        PackageManager.PERMISSION_GRANTED
+
+/**
+ * El sistema solo puede volver a mostrar la solicitud mientras el usuario no
+ * haya marcado la denegación permanente.
+ */
+private fun Context.shouldShowCameraRationale(): Boolean =
+    findActivity()?.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) == true
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 @Suppress("DEPRECATION")
 private fun Context.hasCameraApplication(): Boolean =

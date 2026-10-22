@@ -4,6 +4,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+        Al declarar CAMERA, Android exige que el permiso esté concedido antes de
+        lanzar ACTION_IMAGE_CAPTURE; por eso se solicita en tiempo de ejecución.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
