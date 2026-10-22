@@ -1,8 +1,11 @@
 package cl.uct.ojociudadano.ui.report
 
 import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CreateReportFormStateTest {
@@ -63,6 +66,71 @@ class CreateReportFormStateTest {
         assertEquals(state.titleError, updatedState.titleError)
         assertEquals(state.descriptionError, updatedState.descriptionError)
     }
+
+    @Test
+    fun `starts without evidence or photo capture errors`() {
+        val state = CreateReportFormState()
+
+        assertNull(state.evidencePhoto)
+        assertFalse(state.isCapturingPhoto)
+        assertNull(state.photoCaptureError)
+    }
+
+    @Test
+    fun `starting a capture clears the previous error and keeps the current photo`() {
+        val state = CreateReportFormState(
+            evidencePhoto = samplePhoto,
+            isCapturingPhoto = false,
+            photoCaptureError = "No fue posible abrir la cámara"
+        )
+
+        val updatedState = state.startPhotoCapture()
+
+        assertTrue(updatedState.isCapturingPhoto)
+        assertNull(updatedState.photoCaptureError)
+        assertEquals(samplePhoto, updatedState.evidencePhoto)
+    }
+
+    @Test
+    fun `storing a captured photo stops the capture and clears the error`() {
+        val newPhoto = samplePhoto.copy(fileName = "evidence_2.jpg")
+        val state = CreateReportFormState(
+            evidencePhoto = samplePhoto,
+            isCapturingPhoto = true,
+            photoCaptureError = "Error previo"
+        )
+
+        val updatedState = state.updateEvidencePhoto(newPhoto)
+
+        assertEquals(newPhoto, updatedState.evidencePhoto)
+        assertFalse(updatedState.isCapturingPhoto)
+        assertNull(updatedState.photoCaptureError)
+    }
+
+    @Test
+    fun `cancelling a capture keeps the previous photo without an error`() {
+        val state = CreateReportFormState(evidencePhoto = samplePhoto).startPhotoCapture()
+
+        val updatedState = state.cancelPhotoCapture()
+
+        assertFalse(updatedState.isCapturingPhoto)
+        assertEquals(samplePhoto, updatedState.evidencePhoto)
+        assertNull(updatedState.photoCaptureError)
+    }
+
+    @Test
+    fun `failing a capture exposes the message and keeps the previous photo`() {
+        val state = CreateReportFormState(
+            evidencePhoto = samplePhoto,
+            isCapturingPhoto = true
+        )
+
+        val updatedState = state.failPhotoCapture("Se necesita permiso de cámara")
+
+        assertFalse(updatedState.isCapturingPhoto)
+        assertEquals("Se necesita permiso de cámara", updatedState.photoCaptureError)
+        assertEquals(samplePhoto, updatedState.evidencePhoto)
+    }
 }
 
 private val sampleCategory = Category(
@@ -72,4 +140,11 @@ private val sampleCategory = Category(
     basePriority = 0,
     isCriticalEmergency = false,
     officialContactChannel = null
+)
+
+private val samplePhoto = IncidentPhotoEvidence(
+    localUri = "content://cl.uct.ojociudadano.fileprovider/evidences/evidence_1.jpg",
+    fileName = "evidence_1.jpg",
+    sizeBytes = 1024L,
+    capturedAt = 1_700_000_000_000L
 )
