@@ -6,7 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
-import cl.uct.ojociudadano.data.session.SessionBootstrapper
+import cl.uct.ojociudadano.data.session.DefaultSessionManager
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.ui.login.LoginTestTags
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
@@ -21,15 +21,12 @@ class SessionStartupGateTest {
     @Test
     fun noPersistedSessionShowsLoginWithoutCallingRepository() {
         val repository = FailingAuthRepository()
-        val bootstrapper = SessionBootstrapper(
-            sessionStorage = EmptySessionStorage(),
-            authRepository = repository
-        )
+        val sessionManager = DefaultSessionManager(EmptySessionStorage())
 
         composeTestRule.setContent {
             OjoCiudadanoTheme {
                 SessionStartupGate(
-                    sessionBootstrapper = bootstrapper,
+                    sessionManager = sessionManager,
                     authRepository = repository
                 )
             }
