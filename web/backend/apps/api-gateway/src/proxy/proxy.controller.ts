@@ -1,4 +1,5 @@
 import { All, Controller, Req, Res, UseGuards } from '@nestjs/common';
+import { RolesGuard } from './roles.guard';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ProxyService } from './proxy.service';
@@ -13,7 +14,7 @@ export class ProxyController {
   }
 
   @All(['incidentes', 'incidentes/*', 'categorias', 'categorias/*', 'evidencias', 'evidencias/*'])
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   async handleIncidentesProxy(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.proxyService.forward(req, res);
   }

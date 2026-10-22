@@ -50,6 +50,7 @@ describe('AuthService', () => {
 
      expect(result).toEqual({
   access_token: 'jwt-firmado',
+  token_type: 'Bearer',
   usuario: {
     id: usuario.id,
     nombre: usuario.nombre,
