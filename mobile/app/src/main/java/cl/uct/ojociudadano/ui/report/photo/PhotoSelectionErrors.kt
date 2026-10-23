@@ -18,6 +18,9 @@ object PhotoSelectionErrors {
 
     const val NOT_AN_IMAGE = "El archivo seleccionado no es una imagen"
 
+    const val INVALID_IMAGE =
+        "La fotografía seleccionada no contiene una imagen válida"
+
     const val EMPTY_FILE = "La fotografía seleccionada está vacía"
 
     const val FILE_TOO_LARGE =

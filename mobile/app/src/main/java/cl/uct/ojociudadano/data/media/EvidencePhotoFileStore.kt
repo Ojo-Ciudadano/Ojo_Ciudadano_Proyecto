@@ -32,12 +32,14 @@ interface EvidencePhotoFileStore {
      * de ese permiso y puede reutilizarse mientras se completa el formulario.
      *
      * La copia se interrumpe si el contenido supera el tamaño máximo permitido,
-     * incluso cuando el proveedor no informa el tamaño de antemano.
+     * incluso cuando el proveedor no informa el tamaño de antemano. El formato
+     * se determina a partir del contenido real del archivo, no del MIME
+     * declarado por el proveedor.
      *
      * @param contentUri URI `content://` de la fotografía seleccionada.
      * @return la evidencia asociada al archivo copiado.
-     * @throws PhotoImportException si el contenido no es una imagen, está
-     * vacío, es demasiado grande o no puede leerse.
+     * @throws PhotoImportException si el contenido no es una imagen válida,
+     * está vacío, es demasiado grande o no puede leerse.
      */
     suspend fun import(contentUri: String): IncidentPhotoEvidence
 

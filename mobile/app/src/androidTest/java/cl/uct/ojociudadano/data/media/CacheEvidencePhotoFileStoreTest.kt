@@ -1,9 +1,11 @@
 package cl.uct.ojociudadano.data.media
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -78,7 +80,7 @@ class CacheEvidencePhotoFileStoreTest {
     fun importsImageFromContentUriIntoTheCache() {
         val source = store.create()
         createdFileNames += source.fileName
-        val content = byteArrayOf(1, 2, 3, 4)
+        val content = validImageBytes(Bitmap.CompressFormat.JPEG)
 
         context.contentResolver.openOutputStream(Uri.parse(source.localUri))!!.use { output ->
             output.write(content)
@@ -101,7 +103,7 @@ class CacheEvidencePhotoFileStoreTest {
 
     @Test
     fun preservesTheMimeTypeOfAnImportedPngImage() {
-        val content = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+        val content = validImageBytes(Bitmap.CompressFormat.PNG)
         val sourceFile = temporaryFile(extension = "png", content = content)
         val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
 
@@ -113,6 +115,59 @@ class CacheEvidencePhotoFileStoreTest {
             assertTrue(imported.fileName.endsWith(".png"))
             assertEquals(content.size.toLong(), imported.sizeBytes)
             assertArrayEquals(content, fileFor(imported.fileName).readBytes())
+        } finally {
+            sourceFile.delete()
+        }
+    }
+
+    @Test
+    fun usesTheDetectedMimeTypeWhenTheExtensionIsMisleading() {
+        val content = validImageBytes(Bitmap.CompressFormat.PNG)
+        val sourceFile = temporaryFile(extension = "jpg", content = content)
+        val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
+
+        try {
+            val imported = runBlocking { store.import(sourceUri.toString()) }
+            createdFileNames += imported.fileName
+
+            assertEquals("image/png", imported.mimeType)
+            assertTrue(imported.fileName.endsWith(".png"))
+            assertArrayEquals(content, fileFor(imported.fileName).readBytes())
+        } finally {
+            sourceFile.delete()
+        }
+    }
+
+    @Test
+    fun rejectsImageBytesWithAnImageExtensionButInvalidContent() {
+        val sourceFile = temporaryFile(extension = "jpg", content = "no es una imagen")
+        val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
+        val filesBefore = evidenceFileNames()
+
+        try {
+            runBlocking { store.import(sourceUri.toString()) }
+            fail("Se esperaba PhotoImportException")
+        } catch (exception: PhotoImportException) {
+            assertEquals(PhotoImportFailure.NOT_AN_IMAGE, exception.failure)
+            assertEquals(filesBefore, evidenceFileNames())
+        } finally {
+            sourceFile.delete()
+        }
+    }
+
+    @Test
+    fun rejectsACorruptedImageWithAValidHeaderAndRemovesThePartialFile() {
+        val corruptedPng = pngHeader() + "contenido incompleto".toByteArray()
+        val sourceFile = temporaryFile(extension = "png", content = corruptedPng)
+        val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
+        val filesBefore = evidenceFileNames()
+
+        try {
+            runBlocking { store.import(sourceUri.toString()) }
+            fail("Se esperaba PhotoImportException")
+        } catch (exception: PhotoImportException) {
+            assertEquals(PhotoImportFailure.INVALID_IMAGE, exception.failure)
+            assertEquals(filesBefore, evidenceFileNames())
         } finally {
             sourceFile.delete()
         }
@@ -202,6 +257,30 @@ class CacheEvidencePhotoFileStoreTest {
             assertEquals(filesBefore, evidenceFileNames())
         }
     }
+
+    private fun validImageBytes(format: Bitmap.CompressFormat): ByteArray =
+        ByteArrayOutputStream().use { output ->
+            val bitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
+
+            try {
+                assertTrue(bitmap.compress(format, 100, output))
+            } finally {
+                bitmap.recycle()
+            }
+
+            output.toByteArray()
+        }
+
+    private fun pngHeader(): ByteArray = byteArrayOf(
+        0x89.toByte(),
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A
+    )
 
     private fun temporaryFile(extension: String, content: String = ""): File =
         temporaryFile(extension = extension, content = content.toByteArray())

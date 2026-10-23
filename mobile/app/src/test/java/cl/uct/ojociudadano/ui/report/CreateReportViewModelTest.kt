@@ -332,6 +332,7 @@ class CreateReportViewModelTest {
     fun `translates gallery import failures and keeps the previous photo`() = runTest {
         val cases = listOf(
             PhotoImportFailure.NOT_AN_IMAGE to PhotoSelectionErrors.NOT_AN_IMAGE,
+            PhotoImportFailure.INVALID_IMAGE to PhotoSelectionErrors.INVALID_IMAGE,
             PhotoImportFailure.EMPTY_FILE to PhotoSelectionErrors.EMPTY_FILE,
             PhotoImportFailure.FILE_TOO_LARGE to PhotoSelectionErrors.FILE_TOO_LARGE,
             PhotoImportFailure.UNREADABLE to PhotoSelectionErrors.ACCESS_DENIED
