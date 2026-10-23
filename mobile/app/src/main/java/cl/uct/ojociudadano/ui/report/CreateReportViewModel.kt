@@ -45,6 +45,7 @@ class CreateReportViewModel(
 
     init {
         loadCategories()
+        cleanupExpiredPhotoFiles()
     }
 
     fun onTitleChange(title: String) {
@@ -230,6 +231,30 @@ class CreateReportViewModel(
                 )
             }
         }
+    }
+
+    private fun cleanupExpiredPhotoFiles() {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                photoFileStore.cleanupExpired()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                // La limpieza es de mejor esfuerzo: no debe afectar el formulario.
+                runCatching {
+                    Log.w(
+                        "CreateReportViewModel",
+                        "No fue posible limpiar las evidencias temporales: " +
+                            "type=${exception::class.java.name}, message=${exception.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        formState.evidencePhoto?.let { photoFileStore.delete(it.fileName) }
     }
 
     private fun replaceEvidencePhoto(evidence: IncidentPhotoEvidence) {

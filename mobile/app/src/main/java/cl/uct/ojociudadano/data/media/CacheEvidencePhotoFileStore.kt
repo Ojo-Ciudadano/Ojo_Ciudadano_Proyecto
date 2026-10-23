@@ -162,6 +162,24 @@ class CacheEvidencePhotoFileStore(
         runCatching { fileFor(fileName).delete() }
     }
 
+    override fun cleanupExpired(maxAgeMillis: Long): Int {
+        val directory = evidenceDirectory
+
+        if (!directory.isDirectory) {
+            return 0
+        }
+
+        val expirationThreshold = clock() - maxAgeMillis
+
+        return directory.listFiles()
+            ?.count { file ->
+                file.isFile &&
+                    file.lastModified() < expirationThreshold &&
+                    runCatching { file.delete() }.getOrDefault(false)
+            }
+            ?: 0
+    }
+
     /**
      * Devuelve el tamaño informado por el proveedor, o `null` cuando no está
      * disponible. El límite real se sigue aplicando durante la copia.

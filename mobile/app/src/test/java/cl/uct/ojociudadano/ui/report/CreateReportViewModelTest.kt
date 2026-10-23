@@ -4,6 +4,7 @@ import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.PendingPhotoCapture
 import cl.uct.ojociudadano.data.media.PhotoImportException
 import cl.uct.ojociudadano.data.media.PhotoImportFailure
+import cl.uct.ojociudadano.data.media.TEMP_EVIDENCE_MAX_AGE_MILLIS
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
@@ -17,6 +18,8 @@ import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CreateReportViewModelTest {
@@ -429,6 +433,41 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `cleans expired evidence files when the view model is created`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+
+        createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore,
+            ioDispatcher = testDispatcher
+        )
+
+        assertEquals(
+            listOf(TEMP_EVIDENCE_MAX_AGE_MILLIS),
+            photoFileStore.cleanupMaxAges
+        )
+    }
+
+    @Test
+    fun `deletes the current evidence when the view model is cleared`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModelStore = ViewModelStore()
+        val factory = CreateReportViewModelFactory(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = FakeIncidentRepository(),
+            sessionStorage = FakeSessionStorage(),
+            photoFileStore = photoFileStore
+        )
+        val viewModel = ViewModelProvider(viewModelStore, factory)
+            .get(CreateReportViewModel::class.java)
+
+        viewModel.onPhotoCaptured(samplePhoto)
+        viewModelStore.clear()
+
+        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+    }
+
+    @Test
     fun `creates the report without sending the evidence photo`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val viewModel = createViewModel(
@@ -478,6 +517,7 @@ private class FakeEvidencePhotoFileStore(
 ) : EvidencePhotoFileStore {
 
     val deletedFileNames = mutableListOf<String>()
+    val cleanupMaxAges = CopyOnWriteArrayList<Long>()
 
     override fun create(): PendingPhotoCapture = error("No usado en estas pruebas")
 
@@ -490,6 +530,11 @@ private class FakeEvidencePhotoFileStore(
 
     override fun delete(fileName: String) {
         deletedFileNames += fileName
+    }
+
+    override fun cleanupExpired(maxAgeMillis: Long): Int {
+        cleanupMaxAges += maxAgeMillis
+        return 0
     }
 }
 

@@ -47,4 +47,25 @@ interface EvidencePhotoFileStore {
      * Elimina el archivo temporal identificado por [fileName].
      */
     fun delete(fileName: String)
+
+    /**
+     * Elimina las evidencias temporales más antiguas que [maxAgeMillis].
+     *
+     * Se usa para limpiar archivos huérfanos que quedaron en la caché después
+     * de un cierre abrupto o de la muerte del proceso. La limpieza es de mejor
+     * esfuerzo: si un archivo no puede borrarse, se conserva.
+     *
+     * @return la cantidad de archivos eliminados.
+     */
+    fun cleanupExpired(
+        maxAgeMillis: Long = TEMP_EVIDENCE_MAX_AGE_MILLIS
+    ): Int
 }
+
+/**
+ * Antigüedad a partir de la cual una evidencia temporal se considera huérfana.
+ *
+ * Se mantiene en 24 horas para no borrar archivos recientes que podrían
+ * pertenecer a una captura o selección todavía en curso.
+ */
+const val TEMP_EVIDENCE_MAX_AGE_MILLIS = 24L * 60L * 60L * 1000L

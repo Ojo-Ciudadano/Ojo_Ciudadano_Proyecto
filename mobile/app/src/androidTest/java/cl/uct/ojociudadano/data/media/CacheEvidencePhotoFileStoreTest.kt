@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -74,6 +75,56 @@ class CacheEvidencePhotoFileStoreTest {
         store.delete(pending.fileName)
 
         assertNull(store.complete(pending))
+    }
+
+    @Test
+    fun removesExpiredEvidenceFilesAndKeepsRecentOnes() {
+        val now = 1_700_000_000_000L
+        val directoryName = "evidences_cleanup_${System.nanoTime()}"
+        val agingStore = CacheEvidencePhotoFileStore(
+            context = context,
+            directoryName = directoryName,
+            clock = { now }
+        )
+        val directory = File(context.cacheDir, directoryName).apply { mkdirs() }
+        val expired = File(directory, "expired_${System.nanoTime()}.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+            assertTrue(setLastModified(now - TWO_HOURS_MILLIS))
+        }
+        val expiredPartial = File(directory, "expired_${System.nanoTime()}.part").apply {
+            writeBytes(byteArrayOf(4, 5, 6))
+            assertTrue(setLastModified(now - TWO_HOURS_MILLIS))
+        }
+        val recent = File(directory, "recent_${System.nanoTime()}.jpg").apply {
+            writeBytes(byteArrayOf(7, 8, 9))
+            assertTrue(setLastModified(now - ONE_MINUTE_MILLIS))
+        }
+
+        try {
+            val deleted = agingStore.cleanupExpired(maxAgeMillis = ONE_HOUR_MILLIS)
+
+            assertEquals(2, deleted)
+            assertFalse(expired.exists())
+            assertFalse(expiredPartial.exists())
+            assertTrue(recent.exists())
+        } finally {
+            expired.delete()
+            expiredPartial.delete()
+            recent.delete()
+            directory.delete()
+        }
+    }
+
+    @Test
+    fun cleanupDoesNothingWhenTheEvidenceDirectoryDoesNotExist() {
+        val directoryName = "evidences_missing_${System.nanoTime()}"
+        val missingStore = CacheEvidencePhotoFileStore(
+            context = context,
+            directoryName = directoryName
+        )
+
+        assertEquals(0, missingStore.cleanupExpired(maxAgeMillis = ONE_HOUR_MILLIS))
+        assertFalse(File(context.cacheDir, directoryName).exists())
     }
 
     @Test
@@ -309,3 +360,7 @@ class CacheEvidencePhotoFileStoreTest {
     private val authority: String
         get() = "${context.packageName}.fileprovider"
 }
+
+private const val ONE_MINUTE_MILLIS = 60_000L
+private const val ONE_HOUR_MILLIS = 60L * ONE_MINUTE_MILLIS
+private const val TWO_HOURS_MILLIS = 2L * ONE_HOUR_MILLIS

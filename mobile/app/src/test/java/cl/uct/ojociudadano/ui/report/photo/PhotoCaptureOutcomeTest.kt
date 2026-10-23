@@ -69,6 +69,8 @@ private class FakeEvidencePhotoFileStore(
     override fun delete(fileName: String) {
         deletedFileNames += fileName
     }
+
+    override fun cleanupExpired(maxAgeMillis: Long): Int = 0
 }
 
 private val pendingCapture = PendingPhotoCapture(
