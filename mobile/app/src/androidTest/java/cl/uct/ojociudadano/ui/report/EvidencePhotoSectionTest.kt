@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
+import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -20,12 +21,14 @@ class EvidencePhotoSectionTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsTheCaptureButtonWithoutEvidence() {
+    fun showsBothPhotoActionsWithoutEvidence() {
         setSection()
 
         composeTestRule.onNodeWithTag(ReportPhotoTestTags.SECTION).assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReportPhotoTestTags.CAPTURE_BUTTON).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReportPhotoTestTags.GALLERY_BUTTON).assertIsDisplayed()
         composeTestRule.onNodeWithText("Tomar fotografía").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Elegir de la galería").assertIsDisplayed()
         composeTestRule.onNodeWithTag(ReportPhotoTestTags.CAPTURED_CARD).assertDoesNotExist()
     }
 
@@ -42,7 +45,19 @@ class EvidencePhotoSectionTest {
     }
 
     @Test
-    fun showsProgressAndDisablesTheButtonWhileCapturing() {
+    fun notifiesTheFormWhenTheUserAsksToPickFromTheGallery() {
+        var galleryRequests = 0
+        setSection(onPickPhotoClick = { galleryRequests += 1 })
+
+        composeTestRule.onNodeWithTag(ReportPhotoTestTags.GALLERY_BUTTON).performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals(1, galleryRequests)
+        }
+    }
+
+    @Test
+    fun showsProgressAndDisablesBothButtonsWhileCapturing() {
         setSection(activePhotoOperation = PhotoOperation.CAMERA)
 
         composeTestRule
@@ -52,14 +67,36 @@ class EvidencePhotoSectionTest {
         composeTestRule
             .onNodeWithTag(ReportPhotoTestTags.CAPTURE_BUTTON)
             .assertIsNotEnabled()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.GALLERY_BUTTON)
+            .assertIsNotEnabled()
     }
 
     @Test
-    fun disablesTheButtonWhileTheFormIsSubmitting() {
+    fun showsProgressAndDisablesBothButtonsWhilePickingFromTheGallery() {
+        setSection(activePhotoOperation = PhotoOperation.GALLERY)
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.GALLERY_INDICATOR)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Procesando fotografía...").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.GALLERY_BUTTON)
+            .assertIsNotEnabled()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.CAPTURE_BUTTON)
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun disablesBothButtonsWhileTheFormIsSubmitting() {
         setSection(enabled = false)
 
         composeTestRule
             .onNodeWithTag(ReportPhotoTestTags.CAPTURE_BUTTON)
+            .assertIsNotEnabled()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.GALLERY_BUTTON)
             .assertIsNotEnabled()
     }
 
@@ -71,6 +108,16 @@ class EvidencePhotoSectionTest {
             .onNodeWithTag(ReportPhotoTestTags.ERROR_MESSAGE)
             .assertIsDisplayed()
             .assertTextEquals(PhotoCaptureErrors.PERMISSION_REQUIRED)
+    }
+
+    @Test
+    fun showsTheGalleryErrorMessage() {
+        setSection(errorMessage = PhotoSelectionErrors.RECOVER_PHOTO_FAILED)
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.ERROR_MESSAGE)
+            .assertIsDisplayed()
+            .assertTextEquals(PhotoSelectionErrors.RECOVER_PHOTO_FAILED)
     }
 
     @Test

@@ -99,6 +99,25 @@ class CacheEvidencePhotoFileStoreTest {
     }
 
     @Test
+    fun preservesTheMimeTypeOfAnImportedPngImage() {
+        val content = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+        val sourceFile = temporaryFile(extension = "png", content = content)
+        val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
+
+        try {
+            val imported = store.import(sourceUri.toString())
+            createdFileNames += imported.fileName
+
+            assertEquals("image/png", imported.mimeType)
+            assertTrue(imported.fileName.endsWith(".png"))
+            assertEquals(content.size.toLong(), imported.sizeBytes)
+            assertArrayEquals(content, fileFor(imported.fileName).readBytes())
+        } finally {
+            sourceFile.delete()
+        }
+    }
+
+    @Test
     fun rejectsContentThatIsNotAnImage() {
         val sourceFile = temporaryFile(extension = "txt", content = "no es una imagen")
         val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
@@ -150,12 +169,15 @@ class CacheEvidencePhotoFileStoreTest {
         }
     }
 
-    private fun temporaryFile(extension: String, content: String = ""): File {
+    private fun temporaryFile(extension: String, content: String = ""): File =
+        temporaryFile(extension = extension, content = content.toByteArray())
+
+    private fun temporaryFile(extension: String, content: ByteArray): File {
         val directory = File(context.cacheDir, CacheEvidencePhotoFileStore.EVIDENCE_DIRECTORY_NAME)
         directory.mkdirs()
 
         return File(directory, "import_test_${System.nanoTime()}.$extension").apply {
-            writeText(content)
+            writeBytes(content)
         }
     }
 

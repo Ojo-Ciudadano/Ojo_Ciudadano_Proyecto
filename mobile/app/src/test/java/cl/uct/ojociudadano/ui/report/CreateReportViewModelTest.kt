@@ -2,6 +2,8 @@ package cl.uct.ojociudadano.ui.report
 
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.PendingPhotoCapture
+import cl.uct.ojociudadano.data.media.PhotoImportException
+import cl.uct.ojociudadano.data.media.PhotoImportFailure
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
@@ -14,6 +16,7 @@ import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
+import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -268,6 +271,159 @@ class CreateReportViewModelTest {
         assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
+    }
+
+    @Test
+    fun `stores the photo selected from the gallery and clears the operation`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            ioDispatcher = testDispatcher
+        )
+        viewModel.onTitleChange("Poste dañado")
+
+        viewModel.onGallerySelectionStarted()
+
+        assertEquals(PhotoOperation.GALLERY, viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
+
+        viewModel.onGalleryPhotoSelected("content://media/picker/photo")
+
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
+        assertEquals("Poste dañado", viewModel.formState.title)
+    }
+
+    @Test
+    fun `cancelling the gallery selection keeps the previous photo without error`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            ioDispatcher = testDispatcher
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+        viewModel.onGallerySelectionStarted()
+
+        viewModel.onGallerySelectionCancelled()
+
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
+    }
+
+    @Test
+    fun `reports picker launch errors and keeps the previous photo`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            ioDispatcher = testDispatcher
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+        viewModel.onGallerySelectionStarted()
+
+        viewModel.onGallerySelectionError(PhotoSelectionErrors.PICKER_UNAVAILABLE)
+
+        assertEquals(PhotoSelectionErrors.PICKER_UNAVAILABLE, viewModel.formState.photoError)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+    }
+
+    @Test
+    fun `translates gallery import failures and keeps the previous photo`() = runTest {
+        val cases = listOf(
+            PhotoImportFailure.NOT_AN_IMAGE to PhotoSelectionErrors.NOT_AN_IMAGE,
+            PhotoImportFailure.EMPTY_FILE to PhotoSelectionErrors.EMPTY_FILE,
+            PhotoImportFailure.UNREADABLE to PhotoSelectionErrors.ACCESS_DENIED
+        )
+
+        cases.forEach { (failure, expectedMessage) ->
+            val viewModel = createViewModel(
+                categoryRepository = FakeCategoryRepository(),
+                photoFileStore = FakeEvidencePhotoFileStore(
+                    importFailure = PhotoImportException(failure, "Fallo de importación")
+                ),
+                ioDispatcher = testDispatcher
+            )
+            viewModel.onPhotoCaptured(samplePhoto)
+
+            viewModel.onGalleryPhotoSelected("content://media/picker/photo")
+
+            assertEquals(expectedMessage, viewModel.formState.photoError)
+            assertNull(viewModel.formState.activePhotoOperation)
+            assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        }
+    }
+
+    @Test
+    fun `reports access denied when the selected photo cannot be read`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = FakeEvidencePhotoFileStore(
+                importFailure = SecurityException("Permiso revocado")
+            ),
+            ioDispatcher = testDispatcher
+        )
+        viewModel.onPhotoCaptured(samplePhoto)
+
+        viewModel.onGalleryPhotoSelected("content://media/picker/photo")
+
+        assertEquals(PhotoSelectionErrors.ACCESS_DENIED, viewModel.formState.photoError)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+    }
+
+    @Test
+    fun `reports a generic error for unexpected gallery import failures`() = runTest {
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = FakeEvidencePhotoFileStore(
+                importFailure = IllegalStateException("Fallo inesperado")
+            ),
+            ioDispatcher = testDispatcher
+        )
+        viewModel.onPhotoCaptured(samplePhoto)
+
+        viewModel.onGalleryPhotoSelected("content://media/picker/photo")
+
+        assertEquals(PhotoSelectionErrors.RECOVER_PHOTO_FAILED, viewModel.formState.photoError)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+    }
+
+    @Test
+    fun `replaces the previous photo with the gallery selection and deletes its file`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore(importedPhoto = secondSamplePhoto)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore,
+            ioDispatcher = testDispatcher
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+
+        viewModel.onGalleryPhotoSelected("content://media/picker/photo")
+
+        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
+    }
+
+    @Test
+    fun `keeps the current file when the gallery selection resolves to the same photo`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore(importedPhoto = samplePhoto)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore,
+            ioDispatcher = testDispatcher
+        )
+
+        viewModel.onPhotoCaptured(samplePhoto)
+
+        viewModel.onGalleryPhotoSelected("content://media/picker/photo")
+
+        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
     }
 
     @Test
