@@ -25,6 +25,20 @@ interface EvidencePhotoFileStore {
     fun complete(pending: PendingPhotoCapture): IncidentPhotoEvidence?
 
     /**
+     * Copia a la caché temporal una fotografía existente en el dispositivo.
+     *
+     * La URI entregada por un selector de contenido suele tener un permiso de
+     * lectura temporal. Al copiar su contenido, la evidencia deja de depender
+     * de ese permiso y puede reutilizarse mientras se completa el formulario.
+     *
+     * @param contentUri URI `content://` de la fotografía seleccionada.
+     * @return la evidencia asociada al archivo copiado.
+     * @throws PhotoImportException si el contenido no es una imagen, está
+     * vacío o no puede leerse.
+     */
+    fun import(contentUri: String): IncidentPhotoEvidence
+
+    /**
      * Elimina el archivo temporal identificado por [fileName].
      */
     fun delete(fileName: String)
