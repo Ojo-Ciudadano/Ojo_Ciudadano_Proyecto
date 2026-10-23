@@ -14,10 +14,25 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
-    <!-- Visibilidad necesaria para detectar la aplicación de cámara en Android 11+. -->
+    <!--
+        Visibilidad necesaria para detectar las aplicaciones de cámara y los
+        selectores de fotografías disponibles en Android 11+.
+    -->
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.provider.action.PICK_IMAGES" />
+        </intent>
+        <intent>
+            <action android:name="androidx.activity.result.contract.action.PICK_IMAGES" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
         </intent>
     </queries>
 
