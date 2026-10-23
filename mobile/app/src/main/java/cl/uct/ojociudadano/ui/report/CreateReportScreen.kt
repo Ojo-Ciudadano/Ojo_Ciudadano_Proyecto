@@ -155,8 +155,8 @@ fun CreateReportScreen(
 
         EvidencePhotoSection(
             evidencePhoto = state.evidencePhoto,
-            isCapturing = state.isCapturingPhoto,
-            errorMessage = state.photoCaptureError,
+            activePhotoOperation = state.activePhotoOperation,
+            errorMessage = state.photoError,
             enabled = submissionState !is CreateReportSubmissionState.Loading,
             onTakePhotoClick = onTakePhotoClick
         )

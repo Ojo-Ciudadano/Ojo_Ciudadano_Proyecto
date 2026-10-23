@@ -35,17 +35,21 @@ object ReportPhotoTestTags {
 }
 
 /**
- * Sección del formulario que permite capturar una fotografía de evidencia.
+ * Sección del formulario que permite incorporar una fotografía de evidencia.
  *
- * Únicamente representa el resultado de la captura. La previsualización, la
+ * Únicamente representa el resultado de la operación. La previsualización, la
  * eliminación y el envío de la evidencia pertenecen a tareas posteriores, por
  * lo que aquí solo se confirma que la fotografía quedó disponible para el
  * flujo de creación del incidente.
+ *
+ * [activePhotoOperation] indica si la cámara o la galería están en curso. La
+ * sección solo necesita conocer que hay una operación activa para bloquear sus
+ * acciones y mostrar el progreso correspondiente.
  */
 @Composable
 internal fun EvidencePhotoSection(
     evidencePhoto: IncidentPhotoEvidence?,
-    isCapturing: Boolean,
+    activePhotoOperation: PhotoOperation?,
     errorMessage: String?,
     enabled: Boolean,
     onTakePhotoClick: () -> Unit,
@@ -78,9 +82,9 @@ internal fun EvidencePhotoSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(ReportPhotoTestTags.CAPTURE_BUTTON),
-            enabled = enabled && !isCapturing
+            enabled = enabled && activePhotoOperation == null
         ) {
-            if (isCapturing) {
+            if (activePhotoOperation != null) {
                 CircularProgressIndicator(
                     modifier = Modifier
                         .size(18.dp)
@@ -88,7 +92,12 @@ internal fun EvidencePhotoSection(
                     strokeWidth = 2.dp
                 )
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Abriendo cámara...")
+                Text(
+                    when (activePhotoOperation) {
+                        PhotoOperation.CAMERA -> "Abriendo cámara..."
+                        PhotoOperation.GALLERY -> "Procesando fotografía..."
+                    }
+                )
             } else {
                 Icon(Icons.Filled.PhotoCamera, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))

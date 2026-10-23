@@ -43,7 +43,7 @@ class EvidencePhotoSectionTest {
 
     @Test
     fun showsProgressAndDisablesTheButtonWhileCapturing() {
-        setSection(isCapturing = true)
+        setSection(activePhotoOperation = PhotoOperation.CAMERA)
 
         composeTestRule
             .onNodeWithTag(ReportPhotoTestTags.CAPTURING_INDICATOR)
@@ -84,7 +84,7 @@ class EvidencePhotoSectionTest {
 
     private fun setSection(
         evidencePhoto: IncidentPhotoEvidence? = null,
-        isCapturing: Boolean = false,
+        activePhotoOperation: PhotoOperation? = null,
         errorMessage: String? = null,
         enabled: Boolean = true,
         onTakePhotoClick: () -> Unit = {}
@@ -93,7 +93,7 @@ class EvidencePhotoSectionTest {
             OjoCiudadanoTheme {
                 EvidencePhotoSection(
                     evidencePhoto = evidencePhoto,
-                    isCapturing = isCapturing,
+                    activePhotoOperation = activePhotoOperation,
                     errorMessage = errorMessage,
                     enabled = enabled,
                     onTakePhotoClick = onTakePhotoClick

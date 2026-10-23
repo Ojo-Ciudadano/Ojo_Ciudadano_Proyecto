@@ -54,11 +54,11 @@ class CreateReportViewModel(
     }
 
     /**
-     * Marca el inicio de una captura para bloquear el botón mientras la cámara
-     * del sistema toma el control de la pantalla.
+     * Marca el inicio de una captura para bloquear las acciones de fotografía
+     * mientras la cámara del sistema toma el control de la pantalla.
      */
     fun onPhotoCaptureStarted() {
-        formState = formState.startPhotoCapture()
+        formState = formState.startPhotoOperation(PhotoOperation.CAMERA)
     }
 
     /**
@@ -74,11 +74,11 @@ class CreateReportViewModel(
      * anterior, si existía, se mantiene disponible.
      */
     fun onPhotoCaptureCancelled() {
-        formState = formState.cancelPhotoCapture()
+        formState = formState.cancelPhotoOperation()
     }
 
     fun onPhotoCaptureError(message: String) {
-        formState = formState.failPhotoCapture(message)
+        formState = formState.failPhotoOperation(message)
     }
 
     fun createReport() {

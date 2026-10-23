@@ -204,14 +204,14 @@ class CreateReportViewModelTest {
 
         viewModel.onPhotoCaptureStarted()
 
-        assertTrue(viewModel.formState.isCapturingPhoto)
-        assertNull(viewModel.formState.photoCaptureError)
+        assertEquals(PhotoOperation.CAMERA, viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
 
         viewModel.onPhotoCaptured(samplePhoto)
 
         assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
-        assertFalse(viewModel.formState.isCapturingPhoto)
-        assertNull(viewModel.formState.photoCaptureError)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
         assertEquals("Poste dañado", viewModel.formState.title)
     }
 
@@ -227,8 +227,8 @@ class CreateReportViewModelTest {
         viewModel.onPhotoCaptureCancelled()
 
         assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
-        assertFalse(viewModel.formState.isCapturingPhoto)
-        assertNull(viewModel.formState.photoCaptureError)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
         assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
     }
 
@@ -245,9 +245,9 @@ class CreateReportViewModelTest {
 
         assertEquals(
             PhotoCaptureErrors.PERMISSION_REQUIRED,
-            viewModel.formState.photoCaptureError
+            viewModel.formState.photoError
         )
-        assertFalse(viewModel.formState.isCapturingPhoto)
+        assertNull(viewModel.formState.activePhotoOperation)
         assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
     }
 
@@ -263,8 +263,8 @@ class CreateReportViewModelTest {
         viewModel.onPhotoCaptured(secondSamplePhoto)
 
         assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
-        assertFalse(viewModel.formState.isCapturingPhoto)
-        assertNull(viewModel.formState.photoCaptureError)
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
     }
 
     @Test
