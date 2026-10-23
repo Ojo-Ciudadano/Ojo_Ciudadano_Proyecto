@@ -351,12 +351,14 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
 
     val photoCaptureLauncher = rememberPhotoCaptureLauncher(
         fileStore = fileStore,
+        onStart = viewModel::onPhotoCaptureStarted,
         onCaptured = viewModel::onPhotoCaptured,
         onCancelled = viewModel::onPhotoCaptureCancelled,
         onError = viewModel::onPhotoCaptureError
     )
 
     val galleryPhotoPickerLauncher = rememberGalleryPhotoPickerLauncher(
+        onStart = viewModel::onGallerySelectionStarted,
         onSelected = viewModel::onGalleryPhotoSelected,
         onCancelled = viewModel::onGallerySelectionCancelled,
         onError = viewModel::onGallerySelectionError
@@ -371,14 +373,8 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onTitleChange = viewModel::onTitleChange,
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
-        onTakePhotoClick = {
-            viewModel.onPhotoCaptureStarted()
-            photoCaptureLauncher.launch()
-        },
-        onPickPhotoClick = {
-            viewModel.onGallerySelectionStarted()
-            galleryPhotoPickerLauncher.launch()
-        },
+        onTakePhotoClick = photoCaptureLauncher::launch,
+        onPickPhotoClick = galleryPhotoPickerLauncher::launch,
         onCreateReportClick = viewModel::createReport,
         modifier = modifier,
         onBack = onBack

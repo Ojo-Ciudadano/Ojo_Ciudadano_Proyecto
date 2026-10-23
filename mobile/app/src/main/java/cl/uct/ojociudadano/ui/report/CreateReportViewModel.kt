@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class CreateReportViewModel(
     private val categoryRepository: CategoryRepository,
@@ -42,6 +43,16 @@ class CreateReportViewModel(
         CreateReportSubmissionState.Idle
     )
         private set
+
+    /**
+     * Serializa el inicio y la finalización de las operaciones fotográficas.
+     *
+     * Solo la operación dueña de [activePhotoToken] puede modificar la evidencia.
+     * Una operación nueva invalida a la anterior incluso si esta última todavía
+     * está copiando contenido desde el selector.
+     */
+    private val photoOperationLock = Any()
+    private var activePhotoToken: PhotoOperationToken? = null
 
     init {
         loadCategories()
@@ -64,40 +75,53 @@ class CreateReportViewModel(
     }
 
     /**
-     * Marca el inicio de una captura para bloquear las acciones de fotografía
-     * mientras la cámara del sistema toma el control de la pantalla.
+     * Marca el inicio de una captura y entrega el token que identificará sus
+     * resultados. Una captura nueva invalida cualquier operación anterior.
      */
-    fun onPhotoCaptureStarted() {
-        formState = formState.startPhotoOperation(PhotoOperation.CAMERA)
-    }
+    fun onPhotoCaptureStarted(): PhotoOperationToken =
+        beginPhotoOperation(PhotoOperation.CAMERA)
 
     /**
      * Conserva la evidencia solo en el estado del formulario: no se persiste ni
      * se envía al backend en esta tarea.
+     *
+     * Si la captura ya fue reemplazada por otra operación, se descarta el
+     * archivo para no dejar evidencias huérfanas ni sobrescribir la selección
+     * más reciente.
      */
-    fun onPhotoCaptured(evidence: IncidentPhotoEvidence) {
-        replaceEvidencePhoto(evidence)
+    fun onPhotoCaptured(
+        token: PhotoOperationToken,
+        evidence: IncidentPhotoEvidence
+    ) {
+        if (claimPhotoOperation(token)) {
+            replaceEvidencePhoto(evidence)
+        } else {
+            discardEvidencePhoto(evidence)
+        }
     }
 
     /**
      * El usuario cerró la cámara sin capturar: no es un error y la fotografía
      * anterior, si existía, se mantiene disponible.
      */
-    fun onPhotoCaptureCancelled() {
-        formState = formState.cancelPhotoOperation()
+    fun onPhotoCaptureCancelled(token: PhotoOperationToken) {
+        if (claimPhotoOperation(token)) {
+            formState = formState.cancelPhotoOperation()
+        }
     }
 
-    fun onPhotoCaptureError(message: String) {
-        formState = formState.failPhotoOperation(message)
+    fun onPhotoCaptureError(token: PhotoOperationToken, message: String) {
+        if (claimPhotoOperation(token)) {
+            formState = formState.failPhotoOperation(message)
+        }
     }
 
     /**
-     * Marca el inicio de la selección desde galería para bloquear las acciones
-     * de fotografía mientras el selector del sistema toma el control.
+     * Marca el inicio de la selección desde galería y entrega el token que
+     * identificará su resultado.
      */
-    fun onGallerySelectionStarted() {
-        formState = formState.startPhotoOperation(PhotoOperation.GALLERY)
-    }
+    fun onGallerySelectionStarted(): PhotoOperationToken =
+        beginPhotoOperation(PhotoOperation.GALLERY)
 
     /**
      * Copia la fotografía elegida a la caché temporal fuera del hilo principal.
@@ -105,24 +129,42 @@ class CreateReportViewModel(
      * La URI del selector tiene un permiso de lectura temporal; por eso no se
      * guarda como evidencia directamente, sino que se importa al almacén local
      * para que pueda reutilizarse mientras el formulario permanezca abierto.
+     *
+     * Al terminar se comprueba nuevamente el token: si mientras tanto se inició
+     * otra operación, la evidencia importada se elimina y no se publica.
      */
-    fun onGalleryPhotoSelected(contentUri: String) {
-        formState = formState.startPhotoOperation(PhotoOperation.GALLERY)
+    fun onGalleryPhotoSelected(
+        token: PhotoOperationToken,
+        contentUri: String
+    ) {
+        if (!isCurrentPhotoOperation(token)) return
 
         viewModelScope.launch {
+            var importedEvidence: IncidentPhotoEvidence? = null
+
             try {
                 val evidence = withContext(ioDispatcher) {
                     photoFileStore.import(contentUri)
                 }
-                replaceEvidencePhoto(evidence)
+                importedEvidence = evidence
+
+                if (claimPhotoOperation(token)) {
+                    replaceEvidencePhoto(evidence)
+                } else {
+                    discardEvidencePhoto(evidence)
+                }
             } catch (exception: CancellationException) {
+                // Si la copia alcanzó a terminar antes de la cancelación, su
+                // archivo tampoco debe quedar huérfano.
+                importedEvidence?.let(::discardEvidencePhoto)
                 throw exception
             } catch (exception: PhotoImportException) {
-                formState = formState.failPhotoOperation(exception.toUserMessage())
+                failPhotoOperationIfCurrent(token, exception.toUserMessage())
             } catch (exception: SecurityException) {
-                formState = formState.failPhotoOperation(PhotoSelectionErrors.ACCESS_DENIED)
+                failPhotoOperationIfCurrent(token, PhotoSelectionErrors.ACCESS_DENIED)
             } catch (exception: Exception) {
-                formState = formState.failPhotoOperation(
+                failPhotoOperationIfCurrent(
+                    token,
                     PhotoSelectionErrors.RECOVER_PHOTO_FAILED
                 )
             }
@@ -133,12 +175,16 @@ class CreateReportViewModel(
      * El usuario cerró el selector sin elegir una fotografía: no es un error y
      * la evidencia anterior, si existía, se mantiene disponible.
      */
-    fun onGallerySelectionCancelled() {
-        formState = formState.cancelPhotoOperation()
+    fun onGallerySelectionCancelled(token: PhotoOperationToken) {
+        if (claimPhotoOperation(token)) {
+            formState = formState.cancelPhotoOperation()
+        }
     }
 
-    fun onGallerySelectionError(message: String) {
-        formState = formState.failPhotoOperation(message)
+    fun onGallerySelectionError(token: PhotoOperationToken, message: String) {
+        if (claimPhotoOperation(token)) {
+            formState = formState.failPhotoOperation(message)
+        }
     }
 
     fun createReport() {
@@ -254,7 +300,48 @@ class CreateReportViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        synchronized(photoOperationLock) {
+            activePhotoToken = null
+        }
         formState.evidencePhoto?.let { photoFileStore.delete(it.fileName) }
+    }
+
+    private fun beginPhotoOperation(operation: PhotoOperation): PhotoOperationToken =
+        synchronized(photoOperationLock) {
+            val token = UUID.randomUUID().toString()
+            activePhotoToken = token
+            formState = formState.startPhotoOperation(operation)
+            token
+        }
+
+    private fun isCurrentPhotoOperation(token: PhotoOperationToken): Boolean =
+        synchronized(photoOperationLock) {
+            activePhotoToken == token
+        }
+
+    /**
+     * Finaliza la operación identificada por [token] si sigue siendo la activa.
+     *
+     * La comprobación y el cambio de token ocurren en la misma sección crítica
+     * para que dos resultados cercanos no puedan publicar a la vez.
+     */
+    private fun claimPhotoOperation(token: PhotoOperationToken): Boolean =
+        synchronized(photoOperationLock) {
+            if (activePhotoToken != token) {
+                false
+            } else {
+                activePhotoToken = null
+                true
+            }
+        }
+
+    private fun failPhotoOperationIfCurrent(
+        token: PhotoOperationToken,
+        message: String
+    ) {
+        if (claimPhotoOperation(token)) {
+            formState = formState.failPhotoOperation(message)
+        }
     }
 
     private fun replaceEvidencePhoto(evidence: IncidentPhotoEvidence) {
@@ -263,6 +350,16 @@ class CreateReportViewModel(
             ?.let { previous -> photoFileStore.delete(previous.fileName) }
 
         formState = formState.updateEvidencePhoto(evidence)
+    }
+
+    /**
+     * Elimina el archivo de un resultado que ya no corresponde a la operación
+     * activa, salvo que coincida con la evidencia vigente.
+     */
+    private fun discardEvidencePhoto(evidence: IncidentPhotoEvidence) {
+        if (formState.evidencePhoto?.fileName != evidence.fileName) {
+            photoFileStore.delete(evidence.fileName)
+        }
     }
 
     private fun PhotoImportException.toUserMessage(): String = when (failure) {
