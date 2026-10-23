@@ -243,6 +243,7 @@ class CreateReportViewModel(
     private fun PhotoImportException.toUserMessage(): String = when (failure) {
         PhotoImportFailure.NOT_AN_IMAGE -> PhotoSelectionErrors.NOT_AN_IMAGE
         PhotoImportFailure.EMPTY_FILE -> PhotoSelectionErrors.EMPTY_FILE
+        PhotoImportFailure.FILE_TOO_LARGE -> PhotoSelectionErrors.FILE_TOO_LARGE
         PhotoImportFailure.UNREADABLE -> PhotoSelectionErrors.ACCESS_DENIED
     }
 

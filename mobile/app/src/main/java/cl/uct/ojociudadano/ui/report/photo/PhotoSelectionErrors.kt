@@ -20,5 +20,8 @@ object PhotoSelectionErrors {
 
     const val EMPTY_FILE = "La fotografía seleccionada está vacía"
 
+    const val FILE_TOO_LARGE =
+        "La fotografía seleccionada supera el tamaño máximo permitido"
+
     const val RECOVER_PHOTO_FAILED = "No se pudo recuperar la fotografía seleccionada"
 }

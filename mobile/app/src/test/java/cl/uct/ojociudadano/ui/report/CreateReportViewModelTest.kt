@@ -333,6 +333,7 @@ class CreateReportViewModelTest {
         val cases = listOf(
             PhotoImportFailure.NOT_AN_IMAGE to PhotoSelectionErrors.NOT_AN_IMAGE,
             PhotoImportFailure.EMPTY_FILE to PhotoSelectionErrors.EMPTY_FILE,
+            PhotoImportFailure.FILE_TOO_LARGE to PhotoSelectionErrors.FILE_TOO_LARGE,
             PhotoImportFailure.UNREADABLE to PhotoSelectionErrors.ACCESS_DENIED
         )
 
@@ -481,7 +482,7 @@ private class FakeEvidencePhotoFileStore(
 
     override fun complete(pending: PendingPhotoCapture): IncidentPhotoEvidence? = null
 
-    override fun import(contentUri: String): IncidentPhotoEvidence {
+    override suspend fun import(contentUri: String): IncidentPhotoEvidence {
         importFailure?.let { throw it }
         return importedPhoto
     }

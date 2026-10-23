@@ -23,8 +23,13 @@ class CacheEvidencePhotoFileStore(
     context: Context,
     private val authority: String = "${context.packageName}.fileprovider",
     private val directoryName: String = EVIDENCE_DIRECTORY_NAME,
+    private val maxImportBytes: Long = MAX_IMPORT_BYTES,
     private val clock: () -> Long = System::currentTimeMillis
 ) : EvidencePhotoFileStore {
+
+    init {
+        require(maxImportBytes > 0L) { "El tamaño máximo de importación debe ser positivo" }
+    }
 
     private val appContext = context.applicationContext
 
@@ -62,7 +67,7 @@ class CacheEvidencePhotoFileStore(
         )
     }
 
-    override fun import(contentUri: String): IncidentPhotoEvidence {
+    override suspend fun import(contentUri: String): IncidentPhotoEvidence {
         val uri = contentUri.toUri()
         val mimeType = try {
             resolveImageMimeType(uri)
@@ -75,6 +80,11 @@ class CacheEvidencePhotoFileStore(
                 exception
             )
         }
+
+        EvidencePhotoContentCopier.requireDeclaredSizeWithinLimit(
+            declaredSize = queryDeclaredSize(uri),
+            maxBytes = maxImportBytes
+        )
 
         val extension = MimeTypeMap.getSingleton()
             .getExtensionFromMimeType(mimeType)
@@ -102,7 +112,11 @@ class CacheEvidencePhotoFileStore(
 
             source.use { input ->
                 file.outputStream().use { output ->
-                    input.copyTo(output)
+                    EvidencePhotoContentCopier.copy(
+                        input = input,
+                        output = output,
+                        maxBytes = maxImportBytes
+                    )
                 }
             }
 
@@ -199,6 +213,29 @@ class CacheEvidencePhotoFileStore(
             }
         }
 
+    /**
+     * Devuelve el tamaño informado por el proveedor, o `null` cuando no está
+     * disponible. El límite real se sigue aplicando durante la copia.
+     */
+    private fun queryDeclaredSize(uri: Uri): Long? =
+        runCatching {
+            appContext.contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.SIZE),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+
+                if (sizeIndex >= 0 && cursor.moveToFirst() && !cursor.isNull(sizeIndex)) {
+                    cursor.getLong(sizeIndex).takeIf { it > 0L }
+                } else {
+                    null
+                }
+            }
+        }.getOrNull()
+
     private fun ensureDirectory(): File {
         val directory = evidenceDirectory
 
@@ -219,6 +256,7 @@ class CacheEvidencePhotoFileStore(
     companion object {
         const val EVIDENCE_DIRECTORY_NAME = "evidences"
         const val JPEG_MIME_TYPE = "image/jpeg"
+        const val MAX_IMPORT_BYTES = 20L * 1024L * 1024L
 
         private const val DEFAULT_EXTENSION = "jpg"
         private const val IMAGE_MIME_PREFIX = "image/"

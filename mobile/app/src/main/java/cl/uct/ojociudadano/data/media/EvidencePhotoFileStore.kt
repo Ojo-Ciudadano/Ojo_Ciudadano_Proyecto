@@ -31,12 +31,15 @@ interface EvidencePhotoFileStore {
      * lectura temporal. Al copiar su contenido, la evidencia deja de depender
      * de ese permiso y puede reutilizarse mientras se completa el formulario.
      *
+     * La copia se interrumpe si el contenido supera el tamaño máximo permitido,
+     * incluso cuando el proveedor no informa el tamaño de antemano.
+     *
      * @param contentUri URI `content://` de la fotografía seleccionada.
      * @return la evidencia asociada al archivo copiado.
      * @throws PhotoImportException si el contenido no es una imagen, está
-     * vacío o no puede leerse.
+     * vacío, es demasiado grande o no puede leerse.
      */
-    fun import(contentUri: String): IncidentPhotoEvidence
+    suspend fun import(contentUri: String): IncidentPhotoEvidence
 
     /**
      * Elimina el archivo temporal identificado por [fileName].

@@ -5,6 +5,7 @@ import androidx.core.content.FileProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -83,7 +84,7 @@ class CacheEvidencePhotoFileStoreTest {
             output.write(content)
         }
 
-        val imported = store.import(source.localUri)
+        val imported = runBlocking { store.import(source.localUri) }
         createdFileNames += imported.fileName
 
         assertNotEquals(source.fileName, imported.fileName)
@@ -105,7 +106,7 @@ class CacheEvidencePhotoFileStoreTest {
         val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
 
         try {
-            val imported = store.import(sourceUri.toString())
+            val imported = runBlocking { store.import(sourceUri.toString()) }
             createdFileNames += imported.fileName
 
             assertEquals("image/png", imported.mimeType)
@@ -123,7 +124,7 @@ class CacheEvidencePhotoFileStoreTest {
         val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
 
         try {
-            store.import(sourceUri.toString())
+            runBlocking { store.import(sourceUri.toString()) }
             fail("Se esperaba PhotoImportException")
         } catch (exception: PhotoImportException) {
             assertEquals(PhotoImportFailure.NOT_AN_IMAGE, exception.failure)
@@ -139,13 +140,46 @@ class CacheEvidencePhotoFileStoreTest {
         val filesBefore = evidenceFileNames()
 
         try {
-            store.import(sourceUri.toString())
+            runBlocking { store.import(sourceUri.toString()) }
             fail("Se esperaba PhotoImportException")
         } catch (exception: PhotoImportException) {
             assertEquals(PhotoImportFailure.EMPTY_FILE, exception.failure)
             assertEquals(filesBefore, evidenceFileNames())
         } finally {
             sourceFile.delete()
+        }
+    }
+
+    @Test
+    fun rejectsAnImageWhoseDeclaredSizeExceedsTheLimit() {
+        val sourceFile = temporaryFile(extension = "jpg", content = ByteArray(64))
+        val sourceUri = FileProvider.getUriForFile(context, authority, sourceFile)
+        val limitedStore = CacheEvidencePhotoFileStore(context, maxImportBytes = 16L)
+        val filesBefore = evidenceFileNames()
+
+        try {
+            runBlocking { limitedStore.import(sourceUri.toString()) }
+            fail("Se esperaba PhotoImportException")
+        } catch (exception: PhotoImportException) {
+            assertEquals(PhotoImportFailure.FILE_TOO_LARGE, exception.failure)
+            assertEquals(filesBefore, evidenceFileNames())
+        } finally {
+            sourceFile.delete()
+        }
+    }
+
+    @Test
+    fun rejectsAnImageWithoutDeclaredSizeWhenCopiedContentExceedsTheLimit() {
+        val sourceUri = Uri.parse("content://${UnknownSizeImageProvider.AUTHORITY}/image")
+        val limitedStore = CacheEvidencePhotoFileStore(context, maxImportBytes = 16L)
+        val filesBefore = evidenceFileNames()
+
+        try {
+            runBlocking { limitedStore.import(sourceUri.toString()) }
+            fail("Se esperaba PhotoImportException")
+        } catch (exception: PhotoImportException) {
+            assertEquals(PhotoImportFailure.FILE_TOO_LARGE, exception.failure)
+            assertEquals(filesBefore, evidenceFileNames())
         }
     }
 
@@ -161,7 +195,7 @@ class CacheEvidencePhotoFileStoreTest {
         val filesBefore = evidenceFileNames()
 
         try {
-            store.import(contentUri)
+            runBlocking { store.import(contentUri) }
             fail("Se esperaba PhotoImportException")
         } catch (exception: PhotoImportException) {
             assertEquals(PhotoImportFailure.UNREADABLE, exception.failure)

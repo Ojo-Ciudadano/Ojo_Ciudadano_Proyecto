@@ -10,6 +10,7 @@ package cl.uct.ojociudadano.data.media
 enum class PhotoImportFailure {
     NOT_AN_IMAGE,
     EMPTY_FILE,
+    FILE_TOO_LARGE,
     UNREADABLE
 }
 
