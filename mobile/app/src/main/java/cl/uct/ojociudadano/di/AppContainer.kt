@@ -2,6 +2,8 @@ package cl.uct.ojociudadano.di
 
 import android.content.Context
 import cl.uct.ojociudadano.BuildConfig
+import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
+import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.AuthRepository
@@ -36,6 +38,10 @@ class AppContainer(
 
     val sessionManager: SessionManager by lazy {
         DefaultSessionManager(sessionStorage)
+    }
+
+    val evidencePhotoStore: EvidencePhotoFileStore by lazy {
+        CacheEvidencePhotoFileStore(context.applicationContext)
     }
 
     val apiService: ApiService by lazy {

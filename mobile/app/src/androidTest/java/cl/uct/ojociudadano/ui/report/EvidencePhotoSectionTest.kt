@@ -78,8 +78,9 @@ class EvidencePhotoSectionTest {
         setSection(evidencePhoto = samplePhoto)
 
         composeTestRule.onNodeWithTag(ReportPhotoTestTags.CAPTURED_CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Fotografía capturada").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Fotografía adjunta").assertIsDisplayed()
         composeTestRule.onNodeWithText("Tomar otra fotografía").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Elegir otra fotografía").assertIsDisplayed()
     }
 
     private fun setSection(
@@ -87,7 +88,8 @@ class EvidencePhotoSectionTest {
         activePhotoOperation: PhotoOperation? = null,
         errorMessage: String? = null,
         enabled: Boolean = true,
-        onTakePhotoClick: () -> Unit = {}
+        onTakePhotoClick: () -> Unit = {},
+        onPickPhotoClick: () -> Unit = {}
     ) {
         composeTestRule.setContent {
             OjoCiudadanoTheme {
@@ -96,7 +98,8 @@ class EvidencePhotoSectionTest {
                     activePhotoOperation = activePhotoOperation,
                     errorMessage = errorMessage,
                     enabled = enabled,
-                    onTakePhotoClick = onTakePhotoClick
+                    onTakePhotoClick = onTakePhotoClick,
+                    onPickPhotoClick = onPickPhotoClick
                 )
             }
         }

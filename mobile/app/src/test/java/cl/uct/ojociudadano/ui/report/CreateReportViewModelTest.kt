@@ -1,5 +1,7 @@
 package cl.uct.ojociudadano.ui.report
 
+import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
+import cl.uct.ojociudadano.data.media.PendingPhotoCapture
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
@@ -13,6 +15,7 @@ import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -300,12 +303,37 @@ class CreateReportViewModelTest {
 private fun createViewModel(
     categoryRepository: CategoryRepository,
     incidentRepository: IncidentRepository = FakeIncidentRepository(),
-    sessionStorage: SessionStorage = FakeSessionStorage()
+    sessionStorage: SessionStorage = FakeSessionStorage(),
+    photoFileStore: EvidencePhotoFileStore = FakeEvidencePhotoFileStore(),
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ): CreateReportViewModel = CreateReportViewModel(
     categoryRepository = categoryRepository,
     incidentRepository = incidentRepository,
-    sessionStorage = sessionStorage
+    sessionStorage = sessionStorage,
+    photoFileStore = photoFileStore,
+    ioDispatcher = ioDispatcher
 )
+
+private class FakeEvidencePhotoFileStore(
+    private val importedPhoto: IncidentPhotoEvidence = samplePhoto,
+    private val importFailure: Throwable? = null
+) : EvidencePhotoFileStore {
+
+    val deletedFileNames = mutableListOf<String>()
+
+    override fun create(): PendingPhotoCapture = error("No usado en estas pruebas")
+
+    override fun complete(pending: PendingPhotoCapture): IncidentPhotoEvidence? = null
+
+    override fun import(contentUri: String): IncidentPhotoEvidence {
+        importFailure?.let { throw it }
+        return importedPhoto
+    }
+
+    override fun delete(fileName: String) {
+        deletedFileNames += fileName
+    }
+}
 
 private class FakeCategoryRepository(
     private val categories: List<Category> = emptyList(),
