@@ -24,6 +24,7 @@ import androidx.core.net.toUri
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.PendingPhotoCapture
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+import cl.uct.ojociudadano.ui.report.PhotoOperationToken
 
 /**
  * Acción con la que el formulario inicia la captura de una fotografía.
@@ -48,15 +49,21 @@ fun interface PhotoCaptureLauncher {
  * La cancelación y los errores se informan mediante [onCancelled] y [onError]
  * para que el formulario mantenga su propio estado sin conocer detalles del
  * permiso ni del resultado de la actividad.
+ *
+ * [onStart] entrega el token de la nueva operación. Ese token viaja con todos
+ * los callbacks para que el formulario pueda descartar el resultado de una
+ * captura que ya fue reemplazada por otra operación.
  */
 @Composable
 fun rememberPhotoCaptureLauncher(
     fileStore: EvidencePhotoFileStore,
-    onCaptured: (IncidentPhotoEvidence) -> Unit,
-    onCancelled: () -> Unit,
-    onError: (String) -> Unit
+    onStart: () -> PhotoOperationToken,
+    onCaptured: (PhotoOperationToken, IncidentPhotoEvidence) -> Unit,
+    onCancelled: (PhotoOperationToken) -> Unit,
+    onError: (PhotoOperationToken, String) -> Unit
 ): PhotoCaptureLauncher {
     val context = LocalContext.current
+    val currentOnStart by rememberUpdatedState(onStart)
     val currentOnCaptured by rememberUpdatedState(onCaptured)
     val currentOnCancelled by rememberUpdatedState(onCancelled)
     val currentOnError by rememberUpdatedState(onError)
@@ -65,27 +72,42 @@ fun rememberPhotoCaptureLauncher(
         mutableStateOf<PendingPhotoCapture?>(null)
     }
 
+    var activeToken by rememberSaveable {
+        mutableStateOf<PhotoOperationToken?>(null)
+    }
+
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { captured ->
+        val token = activeToken
         val pending = pendingCapture
         pendingCapture = null
+        activeToken = null
+
+        if (token == null) {
+            pending?.let { stale -> fileStore.delete(stale.fileName) }
+            return@rememberLauncherForActivityResult
+        }
 
         when (val outcome = fileStore.resolveCaptureOutcome(pending, captured)) {
-            is PhotoCaptureOutcome.Captured -> currentOnCaptured(outcome.evidence)
-            PhotoCaptureOutcome.Cancelled -> currentOnCancelled()
-            is PhotoCaptureOutcome.Failed -> currentOnError(outcome.message)
+            is PhotoCaptureOutcome.Captured -> currentOnCaptured(token, outcome.evidence)
+            PhotoCaptureOutcome.Cancelled -> currentOnCancelled(token)
+            is PhotoCaptureOutcome.Failed -> currentOnError(token, outcome.message)
         }
     }
 
-    val startCamera: () -> Unit = startCamera@{
+    val startCamera: (PhotoOperationToken) -> Unit = startCamera@{ token ->
         pendingCapture?.let { stale -> fileStore.delete(stale.fileName) }
         pendingCapture = null
 
         val capture = try {
             fileStore.create()
         } catch (exception: Exception) {
-            currentOnError(exception.message ?: PhotoCaptureErrors.PREPARE_FILE_FAILED)
+            activeToken = null
+            currentOnError(
+                token,
+                exception.message ?: PhotoCaptureErrors.PREPARE_FILE_FAILED
+            )
             return@startCamera
         }
 
@@ -96,7 +118,9 @@ fun rememberPhotoCaptureLauncher(
         } catch (exception: Exception) {
             fileStore.delete(capture.fileName)
             pendingCapture = null
+            activeToken = null
             currentOnError(
+                token,
                 if (exception is ActivityNotFoundException) {
                     PhotoCaptureErrors.CAMERA_UNAVAILABLE
                 } else {
@@ -111,10 +135,18 @@ fun rememberPhotoCaptureLauncher(
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
+        val token = activeToken
+
+        if (token == null) {
+            return@rememberLauncherForActivityResult
+        }
+
         if (granted) {
-            currentStartCamera()
+            currentStartCamera(token)
         } else {
+            activeToken = null
             currentOnError(
+                token,
                 CameraPermissionPolicy.denialMessage(
                     shouldShowRationale = context.shouldShowCameraRationale()
                 )
@@ -124,15 +156,19 @@ fun rememberPhotoCaptureLauncher(
 
     return remember(fileStore, takePictureLauncher, cameraPermissionLauncher, context) {
         PhotoCaptureLauncher {
+            val token = currentOnStart()
+            activeToken = token
+
             if (!context.hasCameraApplication()) {
-                currentOnError(PhotoCaptureErrors.CAMERA_UNAVAILABLE)
+                activeToken = null
+                currentOnError(token, PhotoCaptureErrors.CAMERA_UNAVAILABLE)
                 return@PhotoCaptureLauncher
             }
 
             if (CameraPermissionPolicy.needsRequest(context.isCameraPermissionGranted())) {
                 cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
             } else {
-                currentStartCamera()
+                currentStartCamera(token)
             }
         }
     }

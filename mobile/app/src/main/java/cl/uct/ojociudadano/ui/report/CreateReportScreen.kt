@@ -53,10 +53,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
-import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -77,6 +77,7 @@ fun CreateReportScreen(
     onDescriptionChange: (String) -> Unit,
     onCategorySelected: (Category) -> Unit,
     onTakePhotoClick: () -> Unit,
+    onPickPhotoClick: () -> Unit,
     onCreateReportClick: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {}
@@ -155,10 +156,11 @@ fun CreateReportScreen(
 
         EvidencePhotoSection(
             evidencePhoto = state.evidencePhoto,
-            isCapturing = state.isCapturingPhoto,
-            errorMessage = state.photoCaptureError,
+            activePhotoOperation = state.activePhotoOperation,
+            errorMessage = state.photoError,
             enabled = submissionState !is CreateReportSubmissionState.Loading,
-            onTakePhotoClick = onTakePhotoClick
+            onTakePhotoClick = onTakePhotoClick,
+            onPickPhotoClick = onPickPhotoClick
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -335,31 +337,31 @@ private fun ReportTextField(
 @Composable
 fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val fileStore = application.container.evidencePhotoStore
     val viewModel: CreateReportViewModel = viewModel(
         factory = remember(application) {
             CreateReportViewModelFactory(
                 categoryRepository = application.container.categoryRepository,
                 incidentRepository = application.container.incidentRepository,
-                sessionStorage = application.container.sessionStorage
+                sessionStorage = application.container.sessionStorage,
+                photoFileStore = fileStore
             )
         }
     )
 
-    val fileStore = remember(application) {
-        CacheEvidencePhotoFileStore(context = application)
-    }
-
     val photoCaptureLauncher = rememberPhotoCaptureLauncher(
         fileStore = fileStore,
-        onCaptured = { evidence ->
-            // La evidencia reemplazada deja de ser útil: se elimina su temporal.
-            viewModel.formState.evidencePhoto?.let { previous ->
-                fileStore.delete(previous.fileName)
-            }
-            viewModel.onPhotoCaptured(evidence)
-        },
+        onStart = viewModel::onPhotoCaptureStarted,
+        onCaptured = viewModel::onPhotoCaptured,
         onCancelled = viewModel::onPhotoCaptureCancelled,
         onError = viewModel::onPhotoCaptureError
+    )
+
+    val galleryPhotoPickerLauncher = rememberGalleryPhotoPickerLauncher(
+        onStart = viewModel::onGallerySelectionStarted,
+        onSelected = viewModel::onGalleryPhotoSelected,
+        onCancelled = viewModel::onGallerySelectionCancelled,
+        onError = viewModel::onGallerySelectionError
     )
 
     CreateReportScreen(
@@ -371,10 +373,8 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onTitleChange = viewModel::onTitleChange,
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
-        onTakePhotoClick = {
-            viewModel.onPhotoCaptureStarted()
-            photoCaptureLauncher.launch()
-        },
+        onTakePhotoClick = photoCaptureLauncher::launch,
+        onPickPhotoClick = galleryPhotoPickerLauncher::launch,
         onCreateReportClick = viewModel::createReport,
         modifier = modifier,
         onBack = onBack
@@ -400,6 +400,7 @@ private fun CreateReportScreenPreview() {
             onDescriptionChange = {},
             onCategorySelected = {},
             onTakePhotoClick = {},
+            onPickPhotoClick = {},
             onCreateReportClick = {}
         )
     }

@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,28 +32,37 @@ import java.util.Locale
 object ReportPhotoTestTags {
     const val SECTION = "report_photo_section"
     const val CAPTURE_BUTTON = "report_photo_capture_button"
+    const val GALLERY_BUTTON = "report_photo_gallery_button"
     const val CAPTURING_INDICATOR = "report_photo_capturing_indicator"
+    const val GALLERY_INDICATOR = "report_photo_gallery_indicator"
     const val CAPTURED_CARD = "report_photo_captured_card"
     const val ERROR_MESSAGE = "report_photo_error_message"
 }
 
 /**
- * Sección del formulario que permite capturar una fotografía de evidencia.
+ * Sección del formulario que permite incorporar una fotografía de evidencia.
  *
- * Únicamente representa el resultado de la captura. La previsualización, la
+ * Únicamente representa el resultado de la operación. La previsualización, la
  * eliminación y el envío de la evidencia pertenecen a tareas posteriores, por
  * lo que aquí solo se confirma que la fotografía quedó disponible para el
  * flujo de creación del incidente.
+ *
+ * [activePhotoOperation] indica si la cámara o la galería están en curso. La
+ * sección solo necesita conocer que hay una operación activa para bloquear sus
+ * acciones y mostrar el progreso correspondiente.
  */
 @Composable
 internal fun EvidencePhotoSection(
     evidencePhoto: IncidentPhotoEvidence?,
-    isCapturing: Boolean,
+    activePhotoOperation: PhotoOperation?,
     errorMessage: String?,
     enabled: Boolean,
     onTakePhotoClick: () -> Unit,
+    onPickPhotoClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isPhotoOperationActive = activePhotoOperation != null
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -73,34 +85,35 @@ internal fun EvidencePhotoSection(
             CapturedPhotoCard(evidencePhoto = evidencePhoto)
         }
 
-        OutlinedButton(
-            onClick = onTakePhotoClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(ReportPhotoTestTags.CAPTURE_BUTTON),
-            enabled = enabled && !isCapturing
-        ) {
-            if (isCapturing) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .testTag(ReportPhotoTestTags.CAPTURING_INDICATOR),
-                    strokeWidth = 2.dp
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Abriendo cámara...")
+        PhotoActionButton(
+            label = if (evidencePhoto == null) {
+                "Tomar fotografía"
             } else {
-                Icon(Icons.Filled.PhotoCamera, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(
-                    if (evidencePhoto == null) {
-                        "Tomar fotografía"
-                    } else {
-                        "Tomar otra fotografía"
-                    }
-                )
-            }
-        }
+                "Tomar otra fotografía"
+            },
+            icon = Icons.Filled.PhotoCamera,
+            testTag = ReportPhotoTestTags.CAPTURE_BUTTON,
+            isProcessing = activePhotoOperation == PhotoOperation.CAMERA,
+            processingText = "Abriendo cámara...",
+            processingTestTag = ReportPhotoTestTags.CAPTURING_INDICATOR,
+            enabled = enabled && !isPhotoOperationActive,
+            onClick = onTakePhotoClick
+        )
+
+        PhotoActionButton(
+            label = if (evidencePhoto == null) {
+                "Elegir de la galería"
+            } else {
+                "Elegir otra fotografía"
+            },
+            icon = Icons.Filled.PhotoLibrary,
+            testTag = ReportPhotoTestTags.GALLERY_BUTTON,
+            isProcessing = activePhotoOperation == PhotoOperation.GALLERY,
+            processingText = "Procesando fotografía...",
+            processingTestTag = ReportPhotoTestTags.GALLERY_INDICATOR,
+            enabled = enabled && !isPhotoOperationActive,
+            onClick = onPickPhotoClick
+        )
 
         if (errorMessage != null) {
             Text(
@@ -109,6 +122,41 @@ internal fun EvidencePhotoSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
+        }
+    }
+}
+
+@Composable
+private fun PhotoActionButton(
+    label: String,
+    icon: ImageVector,
+    testTag: String,
+    isProcessing: Boolean,
+    processingText: String,
+    processingTestTag: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag),
+        enabled = enabled
+    ) {
+        if (isProcessing) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(18.dp)
+                    .testTag(processingTestTag),
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(processingText)
+        } else {
+            Icon(icon, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(label)
         }
     }
 }
@@ -129,13 +177,13 @@ private fun CapturedPhotoCard(evidencePhoto: IncidentPhotoEvidence) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
-                imageVector = Icons.Filled.PhotoCamera,
+                imageVector = Icons.Filled.Image,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Fotografía capturada",
+                    text = "Fotografía adjunta",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )

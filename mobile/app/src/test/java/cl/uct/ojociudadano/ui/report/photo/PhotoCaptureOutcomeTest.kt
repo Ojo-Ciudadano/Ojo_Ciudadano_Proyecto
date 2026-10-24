@@ -63,9 +63,14 @@ private class FakeEvidencePhotoFileStore(
 
     override fun complete(pending: PendingPhotoCapture): IncidentPhotoEvidence? = completed
 
+    override suspend fun import(contentUri: String): IncidentPhotoEvidence =
+        requireNotNull(completed) { "No hay una evidencia importada configurada" }
+
     override fun delete(fileName: String) {
         deletedFileNames += fileName
     }
+
+    override fun cleanupExpired(maxAgeMillis: Long): Int = 0
 }
 
 private val pendingCapture = PendingPhotoCapture(

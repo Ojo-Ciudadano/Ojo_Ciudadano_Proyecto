@@ -3,9 +3,7 @@ package cl.uct.ojociudadano.ui.report
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CreateReportFormStateTest {
@@ -68,67 +66,130 @@ class CreateReportFormStateTest {
     }
 
     @Test
-    fun `starts without evidence or photo capture errors`() {
+    fun `starts without evidence or photo errors`() {
         val state = CreateReportFormState()
 
         assertNull(state.evidencePhoto)
-        assertFalse(state.isCapturingPhoto)
-        assertNull(state.photoCaptureError)
+        assertNull(state.activePhotoOperation)
+        assertNull(state.photoError)
     }
 
     @Test
-    fun `starting a capture clears the previous error and keeps the current photo`() {
+    fun `starting a photo operation clears the previous error and keeps the current photo`() {
         val state = CreateReportFormState(
             evidencePhoto = samplePhoto,
-            isCapturingPhoto = false,
-            photoCaptureError = "No fue posible abrir la cámara"
+            activePhotoOperation = null,
+            photoError = "No fue posible abrir la cámara"
         )
 
-        val updatedState = state.startPhotoCapture()
+        val updatedState = state.startPhotoOperation(PhotoOperation.CAMERA)
 
-        assertTrue(updatedState.isCapturingPhoto)
-        assertNull(updatedState.photoCaptureError)
+        assertEquals(PhotoOperation.CAMERA, updatedState.activePhotoOperation)
+        assertNull(updatedState.photoError)
         assertEquals(samplePhoto, updatedState.evidencePhoto)
     }
 
     @Test
-    fun `storing a captured photo stops the capture and clears the error`() {
+    fun `storing a photo stops the operation and clears the error`() {
         val newPhoto = samplePhoto.copy(fileName = "evidence_2.jpg")
         val state = CreateReportFormState(
             evidencePhoto = samplePhoto,
-            isCapturingPhoto = true,
-            photoCaptureError = "Error previo"
+            activePhotoOperation = PhotoOperation.CAMERA,
+            photoError = "Error previo"
         )
 
         val updatedState = state.updateEvidencePhoto(newPhoto)
 
         assertEquals(newPhoto, updatedState.evidencePhoto)
-        assertFalse(updatedState.isCapturingPhoto)
-        assertNull(updatedState.photoCaptureError)
+        assertNull(updatedState.activePhotoOperation)
+        assertNull(updatedState.photoError)
     }
 
     @Test
-    fun `cancelling a capture keeps the previous photo without an error`() {
-        val state = CreateReportFormState(evidencePhoto = samplePhoto).startPhotoCapture()
+    fun `cancelling a photo operation keeps the previous photo without an error`() {
+        val state = CreateReportFormState(evidencePhoto = samplePhoto)
+            .startPhotoOperation(PhotoOperation.CAMERA)
 
-        val updatedState = state.cancelPhotoCapture()
+        val updatedState = state.cancelPhotoOperation()
 
-        assertFalse(updatedState.isCapturingPhoto)
+        assertNull(updatedState.activePhotoOperation)
         assertEquals(samplePhoto, updatedState.evidencePhoto)
-        assertNull(updatedState.photoCaptureError)
+        assertNull(updatedState.photoError)
     }
 
     @Test
-    fun `failing a capture exposes the message and keeps the previous photo`() {
+    fun `failing a photo operation exposes the message and keeps the previous photo`() {
         val state = CreateReportFormState(
             evidencePhoto = samplePhoto,
-            isCapturingPhoto = true
+            activePhotoOperation = PhotoOperation.CAMERA
         )
 
-        val updatedState = state.failPhotoCapture("Se necesita permiso de cámara")
+        val updatedState = state.failPhotoOperation("Se necesita permiso de cámara")
 
-        assertFalse(updatedState.isCapturingPhoto)
-        assertEquals("Se necesita permiso de cámara", updatedState.photoCaptureError)
+        assertNull(updatedState.activePhotoOperation)
+        assertEquals("Se necesita permiso de cámara", updatedState.photoError)
+        assertEquals(samplePhoto, updatedState.evidencePhoto)
+    }
+
+    @Test
+    fun `starting a gallery operation clears the previous error and keeps the photo`() {
+        val state = CreateReportFormState(
+            evidencePhoto = samplePhoto,
+            activePhotoOperation = PhotoOperation.CAMERA,
+            photoError = "Error previo"
+        )
+
+        val updatedState = state.startPhotoOperation(PhotoOperation.GALLERY)
+
+        assertEquals(PhotoOperation.GALLERY, updatedState.activePhotoOperation)
+        assertNull(updatedState.photoError)
+        assertEquals(samplePhoto, updatedState.evidencePhoto)
+    }
+
+    @Test
+    fun `storing a gallery photo stops the gallery operation and clears the error`() {
+        val newPhoto = samplePhoto.copy(fileName = "evidence_gallery.jpg")
+        val state = CreateReportFormState(
+            evidencePhoto = samplePhoto,
+            activePhotoOperation = PhotoOperation.GALLERY,
+            photoError = "Error previo"
+        )
+
+        val updatedState = state.updateEvidencePhoto(newPhoto)
+
+        assertEquals(newPhoto, updatedState.evidencePhoto)
+        assertNull(updatedState.activePhotoOperation)
+        assertNull(updatedState.photoError)
+    }
+
+    @Test
+    fun `cancelling a gallery operation keeps the previous photo without an error`() {
+        val state = CreateReportFormState(evidencePhoto = samplePhoto)
+            .startPhotoOperation(PhotoOperation.GALLERY)
+
+        val updatedState = state.cancelPhotoOperation()
+
+        assertNull(updatedState.activePhotoOperation)
+        assertEquals(samplePhoto, updatedState.evidencePhoto)
+        assertNull(updatedState.photoError)
+    }
+
+    @Test
+    fun `failing a gallery operation exposes the message and keeps the previous photo`() {
+        val state = CreateReportFormState(
+            evidencePhoto = samplePhoto,
+            activePhotoOperation = PhotoOperation.GALLERY
+        )
+
+        val updatedState = state.failPhotoOperation(
+            "No se pudo recuperar la fotografía seleccionada"
+        )
+
+        assertNull(updatedState.activePhotoOperation)
+        assertEquals(
+            "No se pudo recuperar la fotografía seleccionada",
+            updatedState.photoError
+        )
         assertEquals(samplePhoto, updatedState.evidencePhoto)
     }
 }
