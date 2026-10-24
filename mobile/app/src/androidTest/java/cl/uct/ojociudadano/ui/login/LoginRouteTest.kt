@@ -8,6 +8,7 @@ import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionState
+import cl.uct.ojociudadano.data.session.TokenSnapshot
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,8 +84,10 @@ class LoginRouteTest {
             _state.value = SessionState.Unauthenticated
         }
 
-        override fun onStoredSessionInvalidated() {
-            _state.value = SessionState.Unauthenticated
+        override fun invalidateIfCurrent(rejectedToken: TokenSnapshot) {
+            if (currentToken() == rejectedToken.value) {
+                _state.value = SessionState.Unauthenticated
+            }
         }
     }
 }

@@ -1,12 +1,16 @@
 package cl.uct.ojociudadano.data.remote.auth
 
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
+import cl.uct.ojociudadano.data.session.DefaultSessionManager
+import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.data.session.TokenProvider
+import cl.uct.ojociudadano.data.session.TokenSnapshot
+import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.Dispatcher
@@ -28,184 +32,136 @@ class BearerTokenInterceptorTest {
     }
 
     @Test
-    fun `does not add authorization header when no token is available`() {
-        executeRequest(token = null) { request ->
-            assertNull(request.getHeader("Authorization"))
-        }
-    }
-
-    @Test
-    fun `clears session and performs single controlled retry on 401`() {
-        val server = MockWebServer()
-        server.enqueue(MockResponse().setResponseCode(401))
-        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
-        server.start()
-
-        try {
-            val storage = FakeSessionStorage("stale-local-jwt")
-            var refreshCalls = 0
-            val client = OkHttpClient.Builder()
-                .addInterceptor(
-                    BearerTokenInterceptor(
-                        tokenProvider = storage,
-                        onUnauthorizedRefreshToken = {
-                            refreshCalls += 1
-                            storage.save(sampleSession("fresh-uct-jwt"))
-                            "fresh-uct-jwt"
-                        }
-                    )
-                )
-                .build()
-
-            val request = Request.Builder()
-                .url(server.url("/api/v1/categorias"))
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                assertEquals(200, response.code)
+    fun `does not add authorization header when token is absent or blank`() {
+        listOf(null, "", "   ").forEach { token ->
+            executeRequest(token = token) { request ->
+                assertNull(request.getHeader("Authorization"))
             }
-
-            val firstAttempt = server.takeRequest()
-            val retryAttempt = server.takeRequest()
-
-            assertEquals("Bearer stale-local-jwt", firstAttempt.getHeader("Authorization"))
-            assertEquals("Bearer fresh-uct-jwt", retryAttempt.getHeader("Authorization"))
-            assertEquals(1, refreshCalls)
-            assertEquals("fresh-uct-jwt", storage.currentToken())
-        } finally {
-            server.shutdown()
         }
     }
 
     @Test
-    fun `clears session and returns 401 without retry when refresh fails`() {
+    fun `does not overwrite an existing authorization header`() {
+        executeRequest(
+            token = "session-jwt",
+            authorizationHeader = "Custom existing-credential"
+        ) { request ->
+            assertEquals(
+                "Custom existing-credential",
+                request.getHeader("Authorization")
+            )
+        }
+    }
+
+    @Test
+    fun `401 invalidates the token used by the request without retrying`() {
+        val rejectedTokens = mutableListOf<String>()
         val server = MockWebServer()
         server.enqueue(MockResponse().setResponseCode(401))
         server.start()
 
         try {
-            val storage = FakeSessionStorage("stale-local-jwt")
-            var refreshCalls = 0
-            val client = OkHttpClient.Builder()
-                .addInterceptor(
-                    BearerTokenInterceptor(
-                        tokenProvider = storage,
-                        onUnauthorizedRefreshToken = {
-                            refreshCalls += 1
-                            null
-                        }
-                    )
-                )
-                .build()
+            val client = client(
+                tokenProvider = FakeTokenProvider("rejected-jwt"),
+                onUnauthorized = { rejectedTokens += it.value }
+            )
 
-            val request = Request.Builder()
-                .url(server.url("/api/v1/categorias"))
-                .build()
-
-            client.newCall(request).execute().use { response ->
+            client.newCall(request(server)).execute().use { response ->
                 assertEquals(401, response.code)
             }
 
+            assertEquals(listOf("rejected-jwt"), rejectedTokens)
             assertEquals(1, server.requestCount)
-            assertEquals(1, refreshCalls)
-            assertNull(storage.currentToken())
         } finally {
             server.shutdown()
         }
     }
 
     @Test
-    fun `does not loop on double 401 and leaves session cleared`() {
+    fun `401 without a session token does not request invalidation`() {
+        var invalidationCalls = 0
         val server = MockWebServer()
-        server.enqueue(MockResponse().setResponseCode(401))
         server.enqueue(MockResponse().setResponseCode(401))
         server.start()
 
         try {
-            val storage = FakeSessionStorage("stale-local-jwt")
-            var refreshCalls = 0
-            val client = OkHttpClient.Builder()
-                .addInterceptor(
-                    BearerTokenInterceptor(
-                        tokenProvider = storage,
-                        onUnauthorizedRefreshToken = {
-                            refreshCalls += 1
-                            storage.save(sampleSession("still-invalid-jwt"))
-                            "still-invalid-jwt"
-                        }
-                    )
-                )
-                .build()
+            val client = client(
+                tokenProvider = FakeTokenProvider(null),
+                onUnauthorized = { invalidationCalls += 1 }
+            )
 
-            val request = Request.Builder()
-                .url(server.url("/api/v1/categorias"))
-                .build()
+            client.newCall(request(server)).execute().close()
 
-            client.newCall(request).execute().use { response ->
-                assertEquals(401, response.code)
-            }
-
-            assertEquals(2, server.requestCount)
-            assertEquals(1, refreshCalls)
-            assertNull(storage.currentToken())
+            assertEquals(0, invalidationCalls)
+            assertEquals(1, server.requestCount)
         } finally {
             server.shutdown()
         }
     }
 
     @Test
-    fun `concurrent 401 responses perform only one token refresh`() {
+    fun `403 preserves the authenticated session`() {
+        var invalidationCalls = 0
         val server = MockWebServer()
-        val bothInitialRequestsArrived = CountDownLatch(2)
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.start()
 
+        try {
+            val client = client(
+                tokenProvider = FakeTokenProvider("valid-jwt"),
+                onUnauthorized = { invalidationCalls += 1 }
+            )
+
+            client.newCall(request(server)).execute().use { response ->
+                assertEquals(403, response.code)
+            }
+
+            assertEquals(0, invalidationCalls)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `delayed 401 cannot clear a newer authenticated session`() = runTest {
+        val oldRequestArrived = CountDownLatch(1)
+        val releaseOldResponse = CountDownLatch(1)
+        val server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                return if (request.getHeader("Authorization") == "Bearer stale-local-jwt") {
-                    bothInitialRequestsArrived.countDown()
-                    bothInitialRequestsArrived.await(5, TimeUnit.SECONDS)
-                    MockResponse().setResponseCode(401)
-                } else if (request.getHeader("Authorization") == "Bearer fresh-uct-jwt") {
-                    MockResponse().setResponseCode(200).setBody("[]")
-                } else {
-                    MockResponse().setResponseCode(401)
-                }
+                oldRequestArrived.countDown()
+                releaseOldResponse.await(5, TimeUnit.SECONDS)
+                return MockResponse().setResponseCode(401)
             }
         }
         server.start()
 
-        val executor = Executors.newFixedThreadPool(2)
+        val executor = Executors.newSingleThreadExecutor()
         try {
-            val storage = FakeSessionStorage("stale-local-jwt")
-            val refreshCalls = AtomicInteger(0)
-            val client = OkHttpClient.Builder()
-                .addInterceptor(
-                    BearerTokenInterceptor(
-                        tokenProvider = storage,
-                        onUnauthorizedRefreshToken = {
-                            refreshCalls.incrementAndGet()
-                            storage.save(sampleSession("fresh-uct-jwt"))
-                            "fresh-uct-jwt"
-                        }
-                    )
-                )
-                .build()
+            val storage = FakeSessionStorage()
+            val sessionManager = DefaultSessionManager(storage)
+            val oldSession = sampleSession("old-session")
+            val newSession = oldSession.copy(name = "New login, same JWT")
+            sessionManager.establish(oldSession)
 
-            val callTask = {
-                val request = Request.Builder()
-                    .url(server.url("/api/v1/categorias"))
-                    .build()
-                client.newCall(request).execute().use { it.code }
+            val client = client(
+                tokenProvider = sessionManager,
+                onUnauthorized = sessionManager::invalidateIfCurrent
+            )
+            val responseCode = executor.submit<Int> {
+                client.newCall(request(server)).execute().use { it.code }
             }
 
-            val future1 = executor.submit(callTask)
-            val future2 = executor.submit(callTask)
+            assertTrue(oldRequestArrived.await(5, TimeUnit.SECONDS))
+            sessionManager.establish(newSession)
+            releaseOldResponse.countDown()
 
-            assertEquals(200, future1.get(5, TimeUnit.SECONDS))
-            assertEquals(200, future2.get(5, TimeUnit.SECONDS))
-            assertEquals(1, refreshCalls.get())
-            assertEquals("fresh-uct-jwt", storage.currentToken())
-            assertTrue(server.requestCount == 4)
+            assertEquals(401, responseCode.get(5, TimeUnit.SECONDS))
+            assertEquals(newSession.accessToken, sessionManager.currentToken())
+            assertEquals(SessionState.Authenticated(newSession), sessionManager.state.value)
+            assertEquals(newSession, storage.currentSession())
         } finally {
+            releaseOldResponse.countDown()
             executor.shutdownNow()
             server.shutdown()
         }
@@ -213,6 +169,7 @@ class BearerTokenInterceptorTest {
 
     private fun executeRequest(
         token: String?,
+        authorizationHeader: String? = null,
         assertions: (RecordedRequest) -> Unit
     ) {
         val server = MockWebServer()
@@ -220,19 +177,33 @@ class BearerTokenInterceptorTest {
         server.start()
 
         try {
-            val client = OkHttpClient.Builder()
-                .addInterceptor(BearerTokenInterceptor(FakeTokenProvider(token)))
-                .build()
-            val request = Request.Builder()
-                .url(server.url("/api/v1/categorias"))
-                .build()
-
-            client.newCall(request).execute().close()
-
+            val request = request(server, authorizationHeader)
+            client(FakeTokenProvider(token)).newCall(request).execute().close()
             assertions(server.takeRequest())
         } finally {
             server.shutdown()
         }
+    }
+
+    private fun client(
+        tokenProvider: TokenProvider,
+        onUnauthorized: ((TokenSnapshot) -> Unit)? = null
+    ): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor(BearerTokenInterceptor(tokenProvider, onUnauthorized))
+            .build()
+    }
+
+    private fun request(
+        server: MockWebServer,
+        authorizationHeader: String? = null
+    ): Request {
+        return Request.Builder()
+            .url(server.url("/api/v1/categorias"))
+            .apply {
+                authorizationHeader?.let { header("Authorization", it) }
+            }
+            .build()
     }
 
     private class FakeTokenProvider(
@@ -242,12 +213,10 @@ class BearerTokenInterceptorTest {
         override fun currentToken(): String? = token
     }
 
-    private class FakeSessionStorage(
-        initialToken: String?
-    ) : SessionStorage {
+    private class FakeSessionStorage : SessionStorage {
 
         @Volatile
-        private var session: AuthenticatedSession? = initialToken?.let(::sampleSession)
+        private var session: AuthenticatedSession? = null
 
         override fun currentToken(): String? = session?.accessToken
 
@@ -263,13 +232,18 @@ class BearerTokenInterceptorTest {
     }
 
     private companion object {
-        fun sampleSession(token: String) = AuthenticatedSession(
-            accessToken = token,
-            tokenType = "Bearer",
-            userId = "user-id",
-            email = "dev@ojociudadano.cl",
-            name = "Dev",
-            roles = listOf("CIUDADANO")
-        )
+        fun sampleSession(subject: String): AuthenticatedSession {
+            val payload = Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString("""{"sub":"$subject","exp":4102444800}""".toByteArray())
+            return AuthenticatedSession(
+                accessToken = "eyJhbGciOiJIUzI1NiJ9.$payload.signature-$subject",
+                tokenType = "Bearer",
+                userId = subject,
+                email = "$subject@ojociudadano.cl",
+                name = subject,
+                roles = listOf("CIUDADANO")
+            )
+        }
     }
 }
