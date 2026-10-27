@@ -37,7 +37,7 @@ El checklist se estructura en **dos niveles**:
 
 - [ ] **Cumplimiento de Criterios de Aceptación**: Se verificó punto por punto cada ítem listado en la sección **Criterios de aceptación** de la Issue correspondiente.
 - [ ] **Evidencia de funcionamiento y pruebas**:
-  - En cambios de **código (Backend / Web / Android)**: Las pruebas unitarias y/o de integración pertinentes al cambio pasan satisfactoriamente y los checks de CI/CD en GitHub Actions finalizan con éxito.
+  - En cambios de **código (Backend / Web / Android)**: Las pruebas unitarias y/o de integración pertinentes al cambio pasan satisfactoriamente (`npm test`, `npm run build` o `./gradlew testDebugUnitTest`). Mientras el workflow `backend-ci.yml` se ejecute únicamente en `push` hacia `integration`, en el PR de backend se valida la ejecución local de pruebas/compilación y, inmediatamente después del `merge`, se verifica que los trabajos en GitHub Actions finalicen en verde (`5/5`).
   - En cambios de **interfaz o infraestructura**: Se adjunta o describe la evidencia de compilación, capturas o validación técnica correspondiente.
   - En cambios **documentales**: Los enlaces internos son válidos, la sintaxis Markdown es correcta y el contenido cubre todos los puntos exigidos por la Issue.
 
@@ -45,7 +45,7 @@ El checklist se estructura en **dos niveles**:
 
 ### 2.4. Seguridad y Ausencia de Secretos (Obligatorio)
 
-- [ ] **Sin credenciales ni secretos versionados**: El diff del PR **no** contiene archivos `.env` reales, contraseñas de PostgreSQL, tokens JWT firmados de producción, claves privadas de certificados TLS, tokens de acceso a Kubernetes (`K8S_TOKEN`) ni llaves administrativas de Supabase Storage (`SUPABASE_SERVICE_ROLE_KEY`).
+- [ ] **Sin credenciales ni secretos versionados**: El diff del PR **no** contiene archivos `.env` reales, contraseñas de PostgreSQL, tokens JWT firmados de producción, claves privadas de certificados TLS, tokens de acceso a Kubernetes (`K8S_TOKEN`) ni llaves administrativas de Supabase Storage (`SUPABASE_SERVICE_ROLE_KEY`). En caso de que una credencial o llave real haya sido expuesta accidentalmente en un commit, además de retirarla del historial/código se debe **rotar o revocar inmediatamente la llave comprometida**.
 - [ ] **Uso de plantillas seguras**: Si el cambio introduce nuevas variables de entorno, solo se versionan nombres o valores de ejemplo no sensibles en `.env.example` o en `ConfigMap` (`backend-config.yaml`).
 - [ ] **Encapsulación en respuestas**: Los endpoints no filtran información sensible interna (como `passwordHash`, rutas privadas de buckets de almacenamiento o trazas crudas de base de datos).
 
@@ -60,7 +60,7 @@ El checklist se estructura en **dos niveles**:
   - No se eliminan, renombran ni cambian de tipo los campos existentes en las respuestas JSON consumidas por la plataforma Web o la app Android.
   - Las nuevas colecciones en respuestas se inicializan de forma consistente como arreglo vacío `[]` cuando no existen registros asociados.
   - Los nuevos filtros o parámetros de consulta (`@Query()`) son opcionales para no romper llamadas existentes.
-- [ ] **Estándar de errores y códigos HTTP**: Los errores de validación (`400`), autenticación (`401`), autorización (`403`), recurso inexistente (`404`), exceso de tamaño (`413`) o fallo de servicio externo (`502`/`503`) mantienen el formato uniforme de excepción del proyecto.
+- [ ] **Estándar de errores y códigos HTTP**: Los errores de validación (`400`), autenticación (`401`), autorización (`403`), recurso inexistente (`404`), conflicto o transición de estado inválida (`409`), exceso de tamaño (`413`) o fallo de servicio externo (`502`/`503`) mantienen el formato uniforme de excepción del proyecto.
 
 ---
 
@@ -97,23 +97,23 @@ Durante la revisión cruzada en GitHub, el revisor y el autor deben seguir el si
 
 ### Paso 3: Verificación del cierre y Aprobación Final
 1. El revisor comprueba los nuevos commits en el PR y verifica que la observación haya sido efectivamente subsanada.
-2. Una vez verificado, marca el hilo como resuelto (**Resolve conversation**), emite la aprobación (**Approve**) y, tras confirmar que los trabajos de CI/CD aplicables se encuentran en verde, se procede con el **Merge pull request** hacia `integration`.
+2. Una vez verificado, marca el hilo como resuelto (**Resolve conversation**), emite la aprobación (**Approve**) y se procede con el **Merge pull request** hacia `integration` (verificando en la pestaña **Actions** que el pipeline correspondiente complete sus trabajos en verde, incluyendo el `5/5` de `Backend CI CD` cuando aplique).
 
 ---
 
 ## 4. Plantilla Copiable para Comentarios de Revisión en GitHub
 
-Los revisores pueden copiar y pegar la siguiente plantilla en el comentario de revisión de cualquier Pull Request:
+Los revisores pueden copiar y pegar la siguiente plantilla en el comentario de revisión de cualquier Pull Request, marcando con `[x]` cada ítem a medida que lo verifican:
 
 ```markdown
 ### Revisión Cruzada de Pull Request — Issue #<NUMERO>
 
 #### 1. Flujo Git y Alcance
-- [x] Rama `feature/<numero-issue>-<slug>` apuntando a `integration`
-- [x] Vinculación `Closes #<numero>` presente y correcta
-- [x] Cambios acotados al alcance de la Issue (sin elementos fuera de alcance)
-- [x] Criterios de aceptación cumplidos y con evidencia / pruebas pasando
-- [x] Ausencia de secretos, tokens o credenciales en el diff
+- [ ] Rama `feature/<numero-issue>-<slug>` apuntando a `integration`
+- [ ] Vinculación `Closes #<numero>` presente y correcta
+- [ ] Cambios acotados al alcance de la Issue (sin elementos fuera de alcance)
+- [ ] Criterios de aceptación cumplidos y con evidencia / pruebas pasando
+- [ ] Ausencia de secretos, tokens o credenciales en el diff
 
 #### 2. Verificaciones Técnicas Condicionales (marcar N/A si no aplica)
 - [ ] Contratos `/api/v1` y compatibilidad con consumidores (Web / Android) — `[Cumple / N/A]`
