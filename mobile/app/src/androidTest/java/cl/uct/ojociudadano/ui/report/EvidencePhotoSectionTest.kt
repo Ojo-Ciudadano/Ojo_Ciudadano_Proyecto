@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -119,6 +120,15 @@ class EvidencePhotoSectionTest {
     }
 
     @Test
+    fun disablesTheRemoveActionWhileTheFormIsSubmitting() {
+        setSection(evidencePhotos = listOf(cameraPhoto), enabled = false)
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.removeButton(cameraPhoto.fileName))
+            .assertIsNotEnabled()
+    }
+
+    @Test
     fun showsTheCaptureErrorMessage() {
         setSection(errorMessage = PhotoCaptureErrors.PERMISSION_REQUIRED)
 
@@ -192,6 +202,29 @@ class EvidencePhotoSectionTest {
     }
 
     @Test
+    fun removesTheMiddlePhotoWithoutAffectingTheOthers() {
+        var photos by mutableStateOf(listOf(cameraPhoto, galleryPhoto, thirdPhoto))
+        setSectionWithState(
+            photos = { photos },
+            onRemovePhoto = { removed -> photos = photos - removed }
+        )
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.removeButton(galleryPhoto.fileName))
+            .performClick()
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.thumbnail(cameraPhoto.fileName))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.thumbnail(galleryPhoto.fileName))
+            .assertDoesNotExist()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.thumbnail(thirdPhoto.fileName))
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun updatesTheListWhenAPhotoIsAdded() {
         var photos by mutableStateOf(emptyList<IncidentPhotoEvidence>())
         setSectionWithState(
@@ -224,6 +257,29 @@ class EvidencePhotoSectionTest {
             .performClick()
 
         composeTestRule.onNodeWithTag(ReportPhotoTestTags.PREVIEW_DIALOG).assertDoesNotExist()
+    }
+
+    @Test
+    fun closesThePreviewDialogWhenTheOpenPhotoIsRemoved() {
+        var photos by mutableStateOf(listOf(cameraPhoto, galleryPhoto))
+        setSectionWithState(
+            photos = { photos },
+            onRemovePhoto = { removed -> photos = photos - removed }
+        )
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.thumbnail(cameraPhoto.fileName))
+            .performClick()
+        composeTestRule.onNodeWithTag(ReportPhotoTestTags.PREVIEW_DIALOG).assertIsDisplayed()
+
+        composeTestRule.runOnIdle {
+            photos = photos - cameraPhoto
+        }
+
+        composeTestRule.onNodeWithTag(ReportPhotoTestTags.PREVIEW_DIALOG).assertDoesNotExist()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.thumbnail(galleryPhoto.fileName))
+            .assertIsDisplayed()
     }
 
     @Test
@@ -261,6 +317,58 @@ class EvidencePhotoSectionTest {
 
         composeTestRule.runOnIdle {
             assertEquals(1, previewErrors)
+        }
+    }
+
+    @Test
+    fun showsThePreviewFallbackInsideTheDialog() {
+        setSection(evidencePhotos = listOf(unavailablePhoto))
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.thumbnail(unavailablePhoto.fileName))
+            .performClick()
+
+        composeTestRule.onNodeWithTag(ReportPhotoTestTags.PREVIEW_DIALOG).assertIsDisplayed()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule
+                .onAllNodesWithText("No fue posible mostrar la fotografía")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        composeTestRule
+            .onNodeWithText("No fue posible mostrar la fotografía")
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.CLOSE_PREVIEW_BUTTON)
+            .performClick()
+        composeTestRule.onNodeWithTag(ReportPhotoTestTags.PREVIEW_DIALOG).assertDoesNotExist()
+    }
+
+    @Test
+    fun allowsRemovingAPhotoWhosePreviewFailed() {
+        var removedPhoto: IncidentPhotoEvidence? = null
+        setSection(
+            evidencePhotos = listOf(unavailablePhoto),
+            onRemovePhoto = { removedPhoto = it }
+        )
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule
+                .onAllNodesWithTag(
+                    ReportPhotoTestTags.previewError(unavailablePhoto.fileName)
+                )
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        composeTestRule
+            .onNodeWithTag(ReportPhotoTestTags.removeButton(unavailablePhoto.fileName))
+            .performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals(unavailablePhoto, removedPhoto)
         }
     }
 
@@ -362,11 +470,18 @@ class EvidencePhotoSectionTest {
             capturedAt = 1_700_000_001_000L
         )
 
+        val thirdPhoto = IncidentPhotoEvidence(
+            localUri = "content://cl.uct.ojociudadano.fileprovider/evidences/third.jpg",
+            fileName = "third.jpg",
+            sizeBytes = 512_000L,
+            capturedAt = 1_700_000_002_000L
+        )
+
         val unavailablePhoto = IncidentPhotoEvidence(
             localUri = "content://cl.uct.ojociudadano.invalid/missing.jpg",
             fileName = "missing.jpg",
             sizeBytes = 1_024L,
-            capturedAt = 1_700_000_002_000L
+            capturedAt = 1_700_000_003_000L
         )
     }
 }
