@@ -43,7 +43,8 @@ private val ThumbnailSize = 112.dp
  *
  * La imagen se carga desde su URI local. Si el archivo ya no está disponible o
  * no puede decodificarse, se muestra un marcador visual en lugar de propagar
- * el error y la miniatura sigue siendo eliminable.
+ * el error, se informa una sola vez mediante [onPreviewError] y la miniatura
+ * sigue siendo eliminable.
  */
 @Composable
 internal fun EvidencePhotoThumbnail(
@@ -53,10 +54,12 @@ internal fun EvidencePhotoThumbnail(
     enabled: Boolean,
     onRemove: () -> Unit,
     onOpenPreview: () -> Unit,
+    onPreviewError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var loaded by remember(photo.localUri) { mutableStateOf(false) }
     var loadFailed by remember(photo.localUri) { mutableStateOf(false) }
+    var errorReported by remember(photo.localUri) { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -87,6 +90,11 @@ internal fun EvidencePhotoThumbnail(
                 onError = {
                     loaded = false
                     loadFailed = true
+
+                    if (!errorReported) {
+                        errorReported = true
+                        onPreviewError()
+                    }
                 }
             )
 
@@ -149,14 +157,17 @@ internal fun EvidencePhotoThumbnail(
  * Vista previa a pantalla completa de una fotografía.
  *
  * Se apoya en el mismo URI local que la miniatura. Un fallo de carga se
- * representa dentro del diálogo para que la pantalla de creación no se cierre.
+ * representa dentro del diálogo y se informa una sola vez mediante
+ * [onPreviewError] para que la pantalla de creación no se cierre.
  */
 @Composable
 internal fun EvidencePhotoPreviewDialog(
     photo: IncidentPhotoEvidence,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onPreviewError: () -> Unit
 ) {
     var loadFailed by remember(photo.localUri) { mutableStateOf(false) }
+    var errorReported by remember(photo.localUri) { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -177,7 +188,14 @@ internal fun EvidencePhotoPreviewDialog(
                         .fillMaxSize()
                         .padding(16.dp),
                     onSuccess = { loadFailed = false },
-                    onError = { loadFailed = true }
+                    onError = {
+                        loadFailed = true
+
+                        if (!errorReported) {
+                            errorReported = true
+                            onPreviewError()
+                        }
+                    }
                 )
 
                 if (loadFailed) {

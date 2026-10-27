@@ -16,6 +16,7 @@ import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionStorage
+import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -206,6 +207,32 @@ class CreateReportViewModel(
         deleteEvidenceFile(current.fileName)
     }
 
+    /**
+     * Gestiona un fallo al previsualizar una evidencia local.
+     *
+     * Si el archivo temporal ya no existe, la referencia se elimina para no
+     * conservar una evidencia inválida. Si el archivo sigue disponible pero no
+     * puede decodificarse, se conserva y solo se informa el fallo para que el
+     * usuario decida eliminarla.
+     */
+    fun onPhotoPreviewError(photo: IncidentPhotoEvidence) {
+        val current = formState.evidencePhotos.firstOrNull {
+            it.fileName == photo.fileName
+        } ?: return
+
+        if (isEvidenceFileAvailable(current.fileName)) {
+            formState = formState.reportPhotoPreviewError(
+                PhotoPreviewErrors.RENDER_FAILED
+            )
+        } else {
+            formState = formState.removeUnavailablePhoto(
+                current.fileName,
+                PhotoPreviewErrors.UNAVAILABLE
+            )
+            deleteEvidenceFile(current.fileName)
+        }
+    }
+
     fun createReport() {
         if (submissionState is CreateReportSubmissionState.Loading) return
 
@@ -368,17 +395,27 @@ class CreateReportViewModel(
     /**
      * Incorpora una evidencia a la colección del formulario.
      *
-     * El estado puede rechazarla, por ejemplo cuando se alcanza
-     * [MAX_EVIDENCE_PHOTOS]. En ese caso el archivo recién creado se elimina
-     * para no dejar una evidencia huérfana.
+     * Si el archivo temporal ya no está disponible, la evidencia se descarta y
+     * se informa un error controlado. El estado también puede rechazarla, por
+     * ejemplo cuando se alcanza [MAX_EVIDENCE_PHOTOS]. En ambos casos el archivo
+     * recién creado se elimina para no dejar una evidencia huérfana.
      */
     private fun addEvidencePhoto(evidence: IncidentPhotoEvidence) {
+        if (!isEvidenceFileAvailable(evidence.fileName)) {
+            discardEvidencePhoto(evidence)
+            formState = formState.failPhotoOperation(PhotoPreviewErrors.UNAVAILABLE)
+            return
+        }
+
         formState = formState.addEvidencePhoto(evidence)
 
         if (formState.evidencePhotos.none { it.fileName == evidence.fileName }) {
             discardEvidencePhoto(evidence)
         }
     }
+
+    private fun isEvidenceFileAvailable(fileName: String): Boolean =
+        runCatching { photoFileStore.exists(fileName) }.getOrDefault(false)
 
     /**
      * Elimina el archivo de un resultado que ya no corresponde a la operación

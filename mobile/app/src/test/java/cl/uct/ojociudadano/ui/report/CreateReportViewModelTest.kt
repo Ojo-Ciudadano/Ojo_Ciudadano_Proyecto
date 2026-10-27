@@ -17,6 +17,7 @@ import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
+import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
@@ -687,6 +688,98 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `removes a photo whose file is no longer available`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        photoFileStore.markMissing(samplePhoto.fileName)
+
+        viewModel.onPhotoPreviewError(samplePhoto)
+
+        assertEquals(
+            listOf(secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertEquals(PhotoPreviewErrors.UNAVAILABLE, viewModel.formState.photoError)
+        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+    }
+
+    @Test
+    fun `keeps a photo whose file exists but cannot be rendered`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+
+        viewModel.onPhotoPreviewError(samplePhoto)
+
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertEquals(PhotoPreviewErrors.RENDER_FAILED, viewModel.formState.photoError)
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+    }
+
+    @Test
+    fun `ignores preview errors for photos outside the collection`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        viewModel.seedPhoto(samplePhoto)
+
+        viewModel.onPhotoPreviewError(secondSamplePhoto)
+
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+        assertNull(viewModel.formState.photoError)
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+    }
+
+    @Test
+    fun `rejects a captured photo whose file is not available`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        photoFileStore.markMissing(samplePhoto.fileName)
+
+        val token = viewModel.onPhotoCaptureStarted()
+        viewModel.onPhotoCaptured(token, samplePhoto)
+
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+        assertEquals(PhotoPreviewErrors.UNAVAILABLE, viewModel.formState.photoError)
+        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertNull(viewModel.formState.activePhotoOperation)
+    }
+
+    @Test
+    fun `rejects a gallery photo whose imported file is not available`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore(importedPhoto = samplePhoto)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore,
+            ioDispatcher = testDispatcher
+        )
+        photoFileStore.markMissing(samplePhoto.fileName)
+
+        val token = viewModel.onGallerySelectionStarted()
+        viewModel.onGalleryPhotoSelected(token, "content://media/picker/photo")
+
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+        assertEquals(PhotoPreviewErrors.UNAVAILABLE, viewModel.formState.photoError)
+        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertNull(viewModel.formState.activePhotoOperation)
+    }
+
+    @Test
     fun `rejects a photo beyond the maximum and deletes its file`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore()
         val viewModel = createViewModel(
@@ -853,6 +946,7 @@ private class FakeEvidencePhotoFileStore(
 
     val deletedFileNames = mutableListOf<String>()
     val cleanupMaxAges = CopyOnWriteArrayList<Long>()
+    private val missingFileNames = mutableSetOf<String>()
 
     override fun create(): PendingPhotoCapture = error("No usado en estas pruebas")
 
@@ -863,7 +957,11 @@ private class FakeEvidencePhotoFileStore(
         return importedPhoto
     }
 
-    override fun exists(fileName: String): Boolean = true
+    override fun exists(fileName: String): Boolean = fileName !in missingFileNames
+
+    fun markMissing(fileName: String) {
+        missingFileNames += fileName
+    }
 
     override fun delete(fileName: String) {
         deletedFileNames += fileName

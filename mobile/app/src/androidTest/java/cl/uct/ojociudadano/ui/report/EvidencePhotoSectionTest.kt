@@ -243,6 +243,28 @@ class EvidencePhotoSectionTest {
     }
 
     @Test
+    fun notifiesTheFormWhenAPhotoCannotBePreviewed() {
+        var previewErrors = 0
+        setSection(
+            evidencePhotos = listOf(unavailablePhoto),
+            onPhotoPreviewError = { previewErrors += 1 }
+        )
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule
+                .onAllNodesWithTag(
+                    ReportPhotoTestTags.previewError(unavailablePhoto.fileName)
+                )
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
+        composeTestRule.runOnIdle {
+            assertEquals(1, previewErrors)
+        }
+    }
+
+    @Test
     fun displaysPreviewForAnAvailableLocalPhoto() {
         val evidence = createRealEvidence()
         setSection(evidencePhotos = listOf(evidence))
@@ -266,7 +288,8 @@ class EvidencePhotoSectionTest {
         enabled: Boolean = true,
         onTakePhotoClick: () -> Unit = {},
         onPickPhotoClick: () -> Unit = {},
-        onRemovePhoto: (IncidentPhotoEvidence) -> Unit = {}
+        onRemovePhoto: (IncidentPhotoEvidence) -> Unit = {},
+        onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit = {}
     ) {
         composeTestRule.setContent {
             OjoCiudadanoTheme {
@@ -277,7 +300,8 @@ class EvidencePhotoSectionTest {
                     enabled = enabled,
                     onTakePhotoClick = onTakePhotoClick,
                     onPickPhotoClick = onPickPhotoClick,
-                    onRemovePhoto = onRemovePhoto
+                    onRemovePhoto = onRemovePhoto,
+                    onPhotoPreviewError = onPhotoPreviewError
                 )
             }
         }
@@ -285,7 +309,8 @@ class EvidencePhotoSectionTest {
 
     private fun setSectionWithState(
         photos: () -> List<IncidentPhotoEvidence>,
-        onRemovePhoto: (IncidentPhotoEvidence) -> Unit
+        onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
+        onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit = {}
     ) {
         composeTestRule.setContent {
             OjoCiudadanoTheme {
@@ -296,7 +321,8 @@ class EvidencePhotoSectionTest {
                     enabled = true,
                     onTakePhotoClick = {},
                     onPickPhotoClick = {},
-                    onRemovePhoto = onRemovePhoto
+                    onRemovePhoto = onRemovePhoto,
+                    onPhotoPreviewError = onPhotoPreviewError
                 )
             }
         }

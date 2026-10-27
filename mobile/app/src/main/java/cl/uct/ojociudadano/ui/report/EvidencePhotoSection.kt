@@ -58,9 +58,9 @@ object ReportPhotoTestTags {
  * evidencia.
  *
  * La sección solo conoce las evidencias locales y notifica al formulario
- * cuándo se solicita capturar, elegir o eliminar una fotografía. La carga de
- * las imágenes se resuelve desde su URI local, sin depender de que hayan sido
- * subidas al backend.
+ * cuándo se solicita capturar, elegir o eliminar una fotografía, además de
+ * cuándo una miniatura no puede cargarse. La carga de las imágenes se resuelve
+ * desde su URI local, sin depender de que hayan sido subidas al backend.
  *
  * [activePhotoOperation] indica si la cámara o la galería están en curso. La
  * sección bloquea sus acciones mientras el sistema toma el control de la
@@ -75,6 +75,7 @@ internal fun EvidencePhotoSection(
     onTakePhotoClick: () -> Unit,
     onPickPhotoClick: () -> Unit,
     onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
+    onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var previewFileName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -124,7 +125,8 @@ internal fun EvidencePhotoSection(
                         total = evidencePhotos.size,
                         enabled = enabled,
                         onRemove = { onRemovePhoto(photo) },
-                        onOpenPreview = { previewFileName = photo.fileName }
+                        onOpenPreview = { previewFileName = photo.fileName },
+                        onPreviewError = { onPhotoPreviewError(photo) }
                     )
                 }
             }
@@ -178,7 +180,8 @@ internal fun EvidencePhotoSection(
     if (previewPhoto != null) {
         EvidencePhotoPreviewDialog(
             photo = previewPhoto,
-            onDismiss = { previewFileName = null }
+            onDismiss = { previewFileName = null },
+            onPreviewError = { onPhotoPreviewError(previewPhoto) }
         )
     }
 }
