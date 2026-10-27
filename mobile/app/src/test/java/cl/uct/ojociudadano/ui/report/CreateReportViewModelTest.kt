@@ -698,6 +698,8 @@ private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {
         pendingImports.getValue(contentUri).completeExceptionally(failure)
     }
 
+    override fun exists(fileName: String): Boolean = true
+
     override fun delete(fileName: String) {
         deletedFileNames += fileName
     }
@@ -721,6 +723,8 @@ private class FakeEvidencePhotoFileStore(
         importFailure?.let { throw it }
         return importedPhoto
     }
+
+    override fun exists(fileName: String): Boolean = true
 
     override fun delete(fileName: String) {
         deletedFileNames += fileName
