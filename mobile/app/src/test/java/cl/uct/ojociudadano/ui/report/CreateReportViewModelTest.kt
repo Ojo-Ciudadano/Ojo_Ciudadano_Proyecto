@@ -219,7 +219,7 @@ class CreateReportViewModelTest {
 
         viewModel.onPhotoCaptured(token, samplePhoto)
 
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
         assertEquals("Poste dañado", viewModel.formState.title)
@@ -236,7 +236,7 @@ class CreateReportViewModelTest {
 
         viewModel.onPhotoCaptureCancelled(token)
 
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
         assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
@@ -258,13 +258,15 @@ class CreateReportViewModelTest {
             viewModel.formState.photoError
         )
         assertNull(viewModel.formState.activePhotoOperation)
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
     }
 
     @Test
-    fun `replaces the previous photo when a new capture succeeds`() = runTest {
+    fun `appends a new capture without replacing the previous photo`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
         val viewModel = createViewModel(
-            categoryRepository = FakeCategoryRepository()
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
         )
 
         viewModel.seedPhoto(samplePhoto)
@@ -272,7 +274,11 @@ class CreateReportViewModelTest {
 
         viewModel.onPhotoCaptured(token, secondSamplePhoto)
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
     }
@@ -292,7 +298,7 @@ class CreateReportViewModelTest {
 
         viewModel.onGalleryPhotoSelected(token, "content://media/picker/photo")
 
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
         assertEquals("Poste dañado", viewModel.formState.title)
@@ -310,7 +316,7 @@ class CreateReportViewModelTest {
 
         viewModel.onGallerySelectionCancelled(token)
 
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
     }
@@ -329,7 +335,7 @@ class CreateReportViewModelTest {
 
         assertEquals(PhotoSelectionErrors.PICKER_UNAVAILABLE, viewModel.formState.photoError)
         assertNull(viewModel.formState.activePhotoOperation)
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
     }
 
     @Test
@@ -357,7 +363,7 @@ class CreateReportViewModelTest {
 
             assertEquals(expectedMessage, viewModel.formState.photoError)
             assertNull(viewModel.formState.activePhotoOperation)
-            assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+            assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         }
     }
 
@@ -377,7 +383,7 @@ class CreateReportViewModelTest {
 
         assertEquals(PhotoSelectionErrors.ACCESS_DENIED, viewModel.formState.photoError)
         assertNull(viewModel.formState.activePhotoOperation)
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
     }
 
     @Test
@@ -396,11 +402,11 @@ class CreateReportViewModelTest {
 
         assertEquals(PhotoSelectionErrors.RECOVER_PHOTO_FAILED, viewModel.formState.photoError)
         assertNull(viewModel.formState.activePhotoOperation)
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
     }
 
     @Test
-    fun `replaces the previous photo with the gallery selection and deletes its file`() = runTest {
+    fun `appends the gallery selection and keeps the previous photo`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore(importedPhoto = secondSamplePhoto)
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -413,14 +419,17 @@ class CreateReportViewModelTest {
 
         viewModel.onGalleryPhotoSelected(token, "content://media/picker/photo")
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
-        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
     }
 
     @Test
-    fun `keeps the current file when the gallery selection resolves to the same photo`() = runTest {
+    fun `keeps a single photo when the gallery selection resolves to the same file`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore(importedPhoto = samplePhoto)
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -433,7 +442,7 @@ class CreateReportViewModelTest {
 
         viewModel.onGalleryPhotoSelected(token, "content://media/picker/photo")
 
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         assertTrue(photoFileStore.deletedFileNames.isEmpty())
     }
 
@@ -457,12 +466,12 @@ class CreateReportViewModelTest {
         photoFileStore.completeImport(SECOND_CONTENT_URI, secondSamplePhoto)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(secondSamplePhoto), viewModel.formState.evidencePhotos)
 
         photoFileStore.completeImport(FIRST_CONTENT_URI, samplePhoto)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(secondSamplePhoto), viewModel.formState.evidencePhotos)
         assertTrue(photoFileStore.deletedFileNames.contains(samplePhoto.fileName))
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
@@ -497,7 +506,7 @@ class CreateReportViewModelTest {
         photoFileStore.completeImport(SECOND_CONTENT_URI, secondSamplePhoto)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(secondSamplePhoto), viewModel.formState.evidencePhotos)
         assertNull(viewModel.formState.photoError)
     }
 
@@ -539,7 +548,7 @@ class CreateReportViewModelTest {
 
         viewModel.onPhotoCaptured(cameraToken, samplePhoto)
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(secondSamplePhoto), viewModel.formState.evidencePhotos)
         assertTrue(photoFileStore.deletedFileNames.contains(samplePhoto.fileName))
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
@@ -564,7 +573,7 @@ class CreateReportViewModelTest {
         photoFileStore.completeImport(FIRST_CONTENT_URI, secondSamplePhoto)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(samplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
         assertTrue(photoFileStore.deletedFileNames.contains(secondSamplePhoto.fileName))
         assertNull(viewModel.formState.activePhotoOperation)
         assertNull(viewModel.formState.photoError)
@@ -581,12 +590,71 @@ class CreateReportViewModelTest {
 
         viewModel.onPhotoCaptured(firstToken, samplePhoto)
 
-        assertNull(viewModel.formState.evidencePhoto)
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
         assertEquals(PhotoOperation.CAMERA, viewModel.formState.activePhotoOperation)
 
         viewModel.onPhotoCaptured(secondToken, secondSamplePhoto)
 
-        assertEquals(secondSamplePhoto, viewModel.formState.evidencePhoto)
+        assertEquals(listOf(secondSamplePhoto), viewModel.formState.evidencePhotos)
+        assertNull(viewModel.formState.activePhotoOperation)
+    }
+
+    @Test
+    fun `accumulates photos captured with the camera and selected from the gallery`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore(importedPhoto = secondSamplePhoto)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore,
+            ioDispatcher = testDispatcher
+        )
+
+        viewModel.seedPhoto(samplePhoto)
+
+        val token = viewModel.onGallerySelectionStarted()
+        viewModel.onGalleryPhotoSelected(token, "content://media/picker/photo")
+
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+        assertNull(viewModel.formState.activePhotoOperation)
+        assertNull(viewModel.formState.photoError)
+    }
+
+    @Test
+    fun `rejects a photo beyond the maximum and deletes its file`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+
+        repeat(MAX_EVIDENCE_PHOTOS) { index ->
+            viewModel.seedPhoto(
+                samplePhoto.copy(
+                    fileName = "evidence_$index.jpg",
+                    localUri = "content://evidences/evidence_$index.jpg"
+                )
+            )
+        }
+
+        val extraPhoto = samplePhoto.copy(
+            fileName = "evidence_extra.jpg",
+            localUri = "content://evidences/evidence_extra.jpg"
+        )
+        val token = viewModel.onPhotoCaptureStarted()
+
+        viewModel.onPhotoCaptured(token, extraPhoto)
+
+        assertEquals(MAX_EVIDENCE_PHOTOS, viewModel.formState.evidencePhotos.size)
+        assertTrue(
+            viewModel.formState.evidencePhotos.none {
+                it.fileName == extraPhoto.fileName
+            }
+        )
+        assertEquals(MAX_EVIDENCE_PHOTOS_ERROR, viewModel.formState.photoError)
+        assertEquals(listOf(extraPhoto.fileName), photoFileStore.deletedFileNames)
         assertNull(viewModel.formState.activePhotoOperation)
     }
 
@@ -607,7 +675,7 @@ class CreateReportViewModelTest {
     }
 
     @Test
-    fun `deletes the current evidence when the view model is cleared`() = runTest {
+    fun `deletes all accumulated evidence when the view model is cleared`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore()
         val viewModelStore = ViewModelStore()
         val factory = CreateReportViewModelFactory(
@@ -619,14 +687,17 @@ class CreateReportViewModelTest {
         val viewModel = ViewModelProvider(viewModelStore, factory)
             .get(CreateReportViewModel::class.java)
 
-        viewModel.seedPhoto(samplePhoto)
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
         viewModelStore.clear()
 
-        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertEquals(
+            listOf(samplePhoto.fileName, secondSamplePhoto.fileName),
+            photoFileStore.deletedFileNames
+        )
     }
 
     @Test
-    fun `creates the report without sending the evidence photo`() = runTest {
+    fun `creates the report without sending the evidence photos`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -637,7 +708,7 @@ class CreateReportViewModelTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
-        viewModel.seedPhoto(samplePhoto)
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
 
         viewModel.createReport()
 
@@ -672,6 +743,10 @@ private fun createViewModel(
 private fun CreateReportViewModel.seedPhoto(photo: IncidentPhotoEvidence) {
     val token = onPhotoCaptureStarted()
     onPhotoCaptured(token, photo)
+}
+
+private fun CreateReportViewModel.seedPhotos(vararg photos: IncidentPhotoEvidence) {
+    photos.forEach { seedPhoto(it) }
 }
 
 private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {

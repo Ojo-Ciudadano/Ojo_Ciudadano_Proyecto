@@ -272,19 +272,6 @@ class CreateReportFormStateTest {
         assertEquals("Se necesita permiso de cámara", updatedState.photoError)
         assertEquals(listOf(samplePhoto), updatedState.evidencePhotos)
     }
-
-    @Test
-    fun `transitional update replaces the collection with one photo`() {
-        val state = CreateReportFormState(
-            evidencePhotos = listOf(samplePhoto, secondSamplePhoto)
-        )
-
-        val updatedState = state.updateEvidencePhoto(thirdSamplePhoto)
-
-        assertEquals(listOf(thirdSamplePhoto), updatedState.evidencePhotos)
-        assertNull(updatedState.activePhotoOperation)
-        assertNull(updatedState.photoError)
-    }
 }
 
 private val sampleCategory = Category(

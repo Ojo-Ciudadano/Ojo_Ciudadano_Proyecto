@@ -37,8 +37,8 @@ data class CreateReportFormState(
     /**
      * Primera evidencia de la colección.
      *
-     * Se conserva mientras la pantalla y el ViewModel migran a [evidencePhotos].
-     * La interfaz definitiva consume la colección completa.
+     * Se conserva como compatibilidad mientras la interfaz migra a
+     * [evidencePhotos]. La vista previa definitiva consume la colección completa.
      */
     val evidencePhoto: IncidentPhotoEvidence?
         get() = evidencePhotos.firstOrNull()
@@ -127,20 +127,6 @@ data class CreateReportFormState(
      */
     fun reportPhotoPreviewError(message: String): CreateReportFormState =
         copy(photoError = message)
-
-    /**
-     * Reemplaza la colección con una única evidencia.
-     *
-     * Metodo transitorio para el ViewModel actual, que todavía publica una sola
-     * fotografía. La integración de la colección completa usará
-     * [addEvidencePhoto].
-     */
-    fun updateEvidencePhoto(photo: IncidentPhotoEvidence): CreateReportFormState =
-        copy(
-            evidencePhotos = listOf(photo),
-            activePhotoOperation = null,
-            photoError = null
-        )
 
     /**
      * El usuario canceló la operación: no es un error y las fotografías
