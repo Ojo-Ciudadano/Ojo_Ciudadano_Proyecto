@@ -13,7 +13,16 @@ const config: Config = {
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
   transform: {
-    '^.+\\.(t|j)s$': ['ts-jest', { useESM: true }],
+    '^.+\\.(t|j)s$': [
+      'ts-jest',
+      {
+        useESM: true,
+        tsconfig: {
+          module: 'ESNext',
+          moduleResolution: 'NodeNext'
+        }
+      }
+    ],
   },
   extensionsToTreatAsEsm: ['.ts'],
   setupFiles: ['reflect-metadata'],
