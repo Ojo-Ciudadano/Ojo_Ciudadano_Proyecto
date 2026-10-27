@@ -44,9 +44,9 @@ Es fundamental explicitar que **no todas las modificaciones del Sprint 2 son pur
 | :--- | :--- | :--- | :---: |
 | Nuevos endpoints (`POST /incidentes/:id/evidencias`, `GET /usuarios/me`, `PATCH /incidentes/:id/estado`, etc.) | **Aditivo** | Ningún impacto en flujos existentes; habilita nuevas pantallas y casos de uso. | **No** |
 | Nuevos campos en respuestas JSON (`evidencias`, `prioridad`, `historial`, `asignacionActiva`) | **Aditivo** | Retrocompatible siempre que se mantengan los campos previos y se representen colecciones vacías como `[]`. | **No** |
-| Nuevos query params opcionales (`estado`, `comuna`, `categoria`, paginación) | **Aditivo** | Sin impacto cuando se omiten los parámetros en la petición. | **No** |
+| Nuevos query params opcionales (`estadoId`, `comuna`, `categoriaId`, paginación) | **Aditivo** | Sin impacto cuando se omiten los parámetros en la petición. | **No** |
 | Exigencia de token JWT (`Authorization: Bearer <token>`) en rutas protegidas | **Restricción de Seguridad (No aditivo)** | Los clientes **deben** autenticarse previamente en `/api/v1/auth/login` y adjuntar el header `Bearer` (no se aceptan peticiones anónimas ni credenciales hardcoded de desarrollo). | **No** (es el cumplimiento del contrato de seguridad original de `v1`) |
-| Restricción por rol (`ADMIN`, `OPERADOR`, `CIUDADANO`) en operaciones administrativas | **Restricción de Autorización (No aditivo)** | Un cliente autenticado sin el rol requerido recibirá `403 Forbidden` (ej. un `CIUDADANO` intentando ejecutar `PATCH /usuarios/:id/rol` en **#122**). | **No** (aplica reglas de negocio del dominio sobre `v1`) |
+| Restricción por rol (`ADMIN`, `CIUDADANO`) en operaciones administrativas | **Restricción de Autorización (No aditivo)** | Un cliente autenticado sin el rol requerido recibirá `403 Forbidden` (ej. un `CIUDADANO` intentando ejecutar `PATCH /usuarios/:id/rol` en **#122**). | **No** (aplica reglas de negocio del dominio sobre `v1`) |
 
 Exigir autenticación JWT y autorización por roles corresponde a la consolidación de seguridad prevista desde el diseño de `/api/v1`, por lo que versionar hacia `/api/v2` dejando `/api/v1` desprotegida constituiría una vulnerabilidad de seguridad inaceptable.
 
