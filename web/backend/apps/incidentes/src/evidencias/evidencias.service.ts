@@ -11,7 +11,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageObjectNotFoundError, StorageService } from '../storage/storage.service';
 
-export const MAX_EVIDENCIA_BYTES = 10 * 1024 * 1024; // 10 MB (límite definido en issue 127)
+export const MAX_EVIDENCIA_BYTES = 10 * 1024 * 1024; // 10 MB (límite funcional por fotografía)
+export const MAX_UPLOAD_PAYLOAD_BYTES = 12 * 1024 * 1024; // 12 MB (límite técnico de payload HTTP/Multer)
 
 const EXTENSIONES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -25,6 +26,32 @@ export interface GuardarEvidenciaInput {
   tipoMime: string;
 }
 
+export interface EvidenciaPublicaDto {
+  id: string;
+  incidenteId: string;
+  tipoMime: string;
+  tamanoArchivo: number;
+  fechaCreacion: Date;
+  url: string;
+}
+
+export function toEvidenciaPublica(evidencia: {
+  id: string;
+  incidenteId: string;
+  tipoMime: string;
+  tamanoArchivo: number;
+  fechaCreacion: Date;
+}): EvidenciaPublicaDto {
+  return {
+    id: evidencia.id,
+    incidenteId: evidencia.incidenteId,
+    tipoMime: evidencia.tipoMime,
+    tamanoArchivo: evidencia.tamanoArchivo,
+    fechaCreacion: evidencia.fechaCreacion,
+    url: `/evidencias/${evidencia.id}/archivo`,
+  };
+}
+
 @Injectable()
 export class EvidenciasService {
   private readonly logger = new Logger(EvidenciasService.name);
@@ -35,6 +62,9 @@ export class EvidenciasService {
   ) {}
 
   async guardar({ incidenteId, archivo, tipoMime }: GuardarEvidenciaInput) {
+    if (!incidenteId?.trim()) {
+      throw new BadRequestException('El identificador del incidente es obligatorio');
+    }
     const extension = EXTENSIONES[tipoMime];
     if (!extension) {
       throw new BadRequestException('Tipo de archivo no permitido. Use JPEG, PNG o WebP');
@@ -74,7 +104,50 @@ export class EvidenciasService {
     }
   }
 
+  async subirEvidencia(input: GuardarEvidenciaInput): Promise<EvidenciaPublicaDto> {
+    const creada = await this.guardar(input);
+    return toEvidenciaPublica(creada);
+  }
+
+  async listarPorIncidente(incidenteId: string): Promise<EvidenciaPublicaDto[]> {
+    if (!incidenteId?.trim()) {
+      throw new BadRequestException('El identificador del incidente es obligatorio');
+    }
+
+    const incidente = await this.prisma.incidente.findUnique({
+      where: { id: incidenteId },
+      select: { id: true },
+    });
+    if (!incidente) {
+      throw new NotFoundException(`Incidente ${incidenteId} no encontrado`);
+    }
+
+    const evidencias = await this.prisma.evidencia.findMany({
+      where: { incidenteId },
+      orderBy: { fechaCreacion: 'asc' },
+    });
+
+    return evidencias.map(toEvidenciaPublica);
+  }
+
+  async obtenerMetadata(id: string): Promise<EvidenciaPublicaDto> {
+    if (!id?.trim()) {
+      throw new BadRequestException('El identificador de la evidencia es obligatorio');
+    }
+
+    const evidencia = await this.prisma.evidencia.findUnique({ where: { id } });
+    if (!evidencia) {
+      throw new NotFoundException(`Evidencia ${id} no encontrada`);
+    }
+
+    return toEvidenciaPublica(evidencia);
+  }
+
   async obtenerArchivo(id: string) {
+    if (!id?.trim()) {
+      throw new BadRequestException('El identificador de la evidencia es obligatorio');
+    }
+
     const evidencia = await this.prisma.evidencia.findUnique({ where: { id } });
     if (!evidencia) throw new NotFoundException(`Evidencia ${id} no encontrada`);
 
