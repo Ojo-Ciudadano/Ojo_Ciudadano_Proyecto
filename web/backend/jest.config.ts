@@ -26,6 +26,7 @@ const config: Config = {
   },
   extensionsToTreatAsEsm: ['.ts'],
   setupFiles: ['reflect-metadata'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
   collectCoverageFrom: [
     'src/**/*.(t|j)s',
