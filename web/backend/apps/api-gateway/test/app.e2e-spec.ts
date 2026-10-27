@@ -46,6 +46,7 @@ describe('ApiGatewayController (e2e)', () => {
     token = await new JwtService({ secret: JWT_SECRET }).signAsync({
       sub: '550e8400-e29b-41d4-a716-446655440001',
       email: CREDENCIALES_VALIDAS.email,
+      roles: ['CIUDADANO'],
     });
 
     const authService = {

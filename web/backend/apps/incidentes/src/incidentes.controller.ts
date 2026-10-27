@@ -1,9 +1,12 @@
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -11,7 +14,10 @@ import {
 
 import { IncidentesService } from './incidentes.service';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { UpdatePrioridadDto } from './dto/update-prioridad.dto';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './auth/roles.guard';
+import { Role, Roles } from './auth/roles.decorator';
 
 @Controller('incidentes')
 @UseGuards(JwtAuthGuard)
@@ -33,5 +39,22 @@ export class IncidentesController {
   @Post()
   create(@Body() dto: CreateIncidenteDto) {
     return this.incidentesService.create(dto);
+  }
+
+  @Patch(':id/prioridad')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  updatePrioridad(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          new BadRequestException('El id del incidente debe ser un UUID valido'),
+      }),
+    )
+    id: string,
+    @Body() dto: UpdatePrioridadDto,
+  ) {
+    return this.incidentesService.updatePrioridad(id, dto);
   }
 }

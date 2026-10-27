@@ -4,20 +4,27 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+
+import { Role } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 
 describe('Gateway RolesGuard', () => {
   let guard: RolesGuard;
+  let reflector: { getAllAndOverride: jest.Mock };
 
   const crearContexto = (user?: object) =>
     ({
+      getHandler: () => () => undefined,
+      getClass: () => class {},
       switchToHttp: () => ({
         getRequest: () => ({ user }),
       }),
     }) as ExecutionContext;
 
   beforeEach(() => {
-    guard = new RolesGuard();
+    reflector = { getAllAndOverride: jest.fn().mockReturnValue(undefined) };
+    guard = new RolesGuard(reflector as unknown as Reflector);
   });
 
   it('devuelve 401 si no existe usuario autenticado', () => {
@@ -43,6 +50,26 @@ describe('Gateway RolesGuard', () => {
   });
 
   it('permite acceso al rol ADMIN', () => {
+    expect(
+      guard.canActivate(
+        crearContexto({ sub: 'admin-1', roles: ['ADMIN'] }),
+      ),
+    ).toBe(true);
+  });
+
+  it('devuelve 403 a un Ciudadano cuando la ruta exige ADMIN', () => {
+    reflector.getAllAndOverride.mockReturnValue([Role.ADMIN]);
+
+    expect(() =>
+      guard.canActivate(
+        crearContexto({ sub: 'usuario-1', roles: ['CIUDADANO'] }),
+      ),
+    ).toThrow(ForbiddenException);
+  });
+
+  it('permite al Administrador cuando la ruta exige ADMIN', () => {
+    reflector.getAllAndOverride.mockReturnValue([Role.ADMIN]);
+
     expect(
       guard.canActivate(
         crearContexto({ sub: 'admin-1', roles: ['ADMIN'] }),
