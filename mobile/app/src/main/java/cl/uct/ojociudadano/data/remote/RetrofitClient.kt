@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.data.remote
 
 import cl.uct.ojociudadano.data.remote.auth.BearerTokenInterceptor
 import cl.uct.ojociudadano.data.session.TokenProvider
+import cl.uct.ojociudadano.data.session.TokenSnapshot
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -29,7 +30,7 @@ object RetrofitClient {
     fun create(
         baseUrl: String = DEFAULT_BASE_URL,
         tokenProvider: TokenProvider? = null,
-        onUnauthorizedRefreshToken: (() -> String?)? = null
+        onUnauthorized: ((rejectedToken: TokenSnapshot) -> Unit)? = null
     ): Retrofit {
         val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
 
@@ -39,7 +40,7 @@ object RetrofitClient {
                     addInterceptor(
                         BearerTokenInterceptor(
                             tokenProvider = it,
-                            onUnauthorizedRefreshToken = onUnauthorizedRefreshToken
+                            onUnauthorized = onUnauthorized
                         )
                     )
                 }
@@ -56,9 +57,9 @@ object RetrofitClient {
     fun createApiService(
         baseUrl: String = DEFAULT_BASE_URL,
         tokenProvider: TokenProvider? = null,
-        onUnauthorizedRefreshToken: (() -> String?)? = null
+        onUnauthorized: ((rejectedToken: TokenSnapshot) -> Unit)? = null
     ): ApiService {
-        return create(baseUrl, tokenProvider, onUnauthorizedRefreshToken)
+        return create(baseUrl, tokenProvider, onUnauthorized)
             .create(ApiService::class.java)
     }
 }

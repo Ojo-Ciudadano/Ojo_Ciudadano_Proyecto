@@ -56,6 +56,26 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `JWT that expires while app is running is not exposed`() = runTest {
+        var nowEpochSeconds = 1_000L
+        val storage = InMemorySessionStorage()
+        val manager = DefaultSessionManager(
+            sessionStorage = storage,
+            nowEpochSeconds = { nowEpochSeconds }
+        )
+        val shortSession = validSession.copy(
+            accessToken = jwtWithPayload("""{"sub":"u1","exp":1001}""")
+        )
+        manager.establish(shortSession)
+
+        nowEpochSeconds = 1_001L
+
+        assertNull(manager.currentToken())
+        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertNull(storage.currentSession())
+    }
+
+    @Test
     fun `corrupt storage has a controlled unauthenticated result`() = runTest {
         val storage = InMemorySessionStorage(readFailure = IllegalStateException("corrupt payload"))
         val manager = DefaultSessionManager(storage)
@@ -104,6 +124,42 @@ class SessionManagerTest {
         assertTrue(result.isFailure)
         assertEquals(SessionState.Unauthenticated, manager.state.value)
         assertNull(manager.currentToken())
+    }
+
+    @Test
+    fun `401 for current token clears persisted and observable session`() = runTest {
+        val storage = InMemorySessionStorage()
+        val manager = DefaultSessionManager(storage)
+        manager.establish(validSession)
+        val rejectedToken = requireNotNull(manager.currentTokenSnapshot())
+
+        manager.invalidateIfCurrent(rejectedToken)
+
+        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertNull(manager.currentToken())
+        assertNull(storage.currentSession())
+        assertEquals(1, storage.clearCalls)
+    }
+
+    @Test
+    fun `delayed 401 for old token preserves newer session`() = runTest {
+        val storage = InMemorySessionStorage()
+        val manager = DefaultSessionManager(storage)
+        val oldSession = validSession.copy(
+            accessToken = jwtWithPayload("""{"sub":"old","exp":4102444800}"""),
+            userId = "old"
+        )
+        val newSession = oldSession.copy(name = "New login, same JWT")
+        manager.establish(oldSession)
+        val rejectedToken = requireNotNull(manager.currentTokenSnapshot())
+        manager.establish(newSession)
+
+        manager.invalidateIfCurrent(rejectedToken)
+
+        assertEquals(SessionState.Authenticated(newSession), manager.state.value)
+        assertEquals(newSession.accessToken, manager.currentToken())
+        assertEquals(newSession, storage.currentSession())
+        assertEquals(0, storage.clearCalls)
     }
 
     private class InMemorySessionStorage(

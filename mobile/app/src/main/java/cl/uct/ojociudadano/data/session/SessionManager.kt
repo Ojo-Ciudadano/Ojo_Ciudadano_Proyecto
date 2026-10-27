@@ -21,22 +21,43 @@ interface SessionManager : TokenProvider {
     /** Clears persistent data and immediately exposes an unauthenticated state. */
     suspend fun logout()
 
-    /** Synchronizes state after an external component has invalidated persistent storage. */
-    fun onStoredSessionInvalidated()
+    /** Invalidates only the session that issued a request rejected with HTTP 401. */
+    fun invalidateIfCurrent(rejectedToken: TokenSnapshot)
 }
 
 class DefaultSessionManager(
     private val sessionStorage: SessionStorage,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val nowEpochSeconds: () -> Long = { System.currentTimeMillis() / 1000 }
 ) : SessionManager {
 
     private val stateLock = Any()
     private val _state = MutableStateFlow<SessionState>(SessionState.Restoring)
+    private var sessionGeneration = 0L
 
     override val state: StateFlow<SessionState> = _state.asStateFlow()
 
     override fun currentToken(): String? {
-        return (state.value as? SessionState.Authenticated)?.session?.accessToken
+        return currentTokenSnapshot()?.value
+    }
+
+    override fun currentTokenSnapshot(): TokenSnapshot? {
+        return synchronized(stateLock) {
+            val session = (_state.value as? SessionState.Authenticated)?.session
+                ?: return@synchronized null
+
+            if (session.isLocallyValid(nowEpochSeconds())) {
+                TokenSnapshot(
+                    value = session.accessToken,
+                    sessionGeneration = sessionGeneration
+                )
+            } else {
+                runCatching { sessionStorage.clear() }
+                sessionGeneration += 1
+                _state.value = SessionState.Unauthenticated
+                null
+            }
+        }
     }
 
     override suspend fun restore(): SessionState {
@@ -46,7 +67,7 @@ class DefaultSessionManager(
             synchronized(stateLock) {
                 val storedSession = runCatching { sessionStorage.currentSession() }.getOrNull()
                 val nextState = storedSession
-                    ?.takeIf(AuthenticatedSession::isLocallyValid)
+                    ?.takeIf { it.isLocallyValid(nowEpochSeconds()) }
                     ?.let(SessionState::Authenticated)
                     ?: SessionState.Unauthenticated
 
@@ -56,6 +77,7 @@ class DefaultSessionManager(
                     runCatching { sessionStorage.clear() }
                 }
 
+                sessionGeneration += 1
                 _state.value = nextState
                 nextState
             }
@@ -65,13 +87,14 @@ class DefaultSessionManager(
     override suspend fun establish(
         session: AuthenticatedSession
     ): SessionState.Authenticated {
-        require(session.isLocallyValid()) {
+        require(session.isLocallyValid(nowEpochSeconds())) {
             "La autenticación no devolvió una sesión válida"
         }
 
         return withContext(ioDispatcher) {
             synchronized(stateLock) {
                 sessionStorage.save(session)
+                sessionGeneration += 1
                 SessionState.Authenticated(session).also { _state.value = it }
             }
         }
@@ -83,19 +106,31 @@ class DefaultSessionManager(
                 try {
                     sessionStorage.clear()
                 } finally {
+                    sessionGeneration += 1
                     _state.value = SessionState.Unauthenticated
                 }
             }
         }
     }
 
-    override fun onStoredSessionInvalidated() {
+    override fun invalidateIfCurrent(rejectedToken: TokenSnapshot) {
+        if (rejectedToken.value.isBlank()) return
+
         synchronized(stateLock) {
-            // The interceptor clears the physical store first. Re-read it so a newer login that
-            // won a race is never replaced by an obsolete 401 notification.
-            if (runCatching { sessionStorage.currentSession() }.getOrNull() == null) {
-                _state.value = SessionState.Unauthenticated
+            val activeSession = (_state.value as? SessionState.Authenticated)?.session
+                ?: return@synchronized
+
+            // A delayed 401 from an older request must not clear a session established later.
+            if (
+                activeSession.accessToken != rejectedToken.value ||
+                rejectedToken.sessionGeneration != sessionGeneration
+            ) {
+                return@synchronized
             }
+
+            runCatching { sessionStorage.clear() }
+            sessionGeneration += 1
+            _state.value = SessionState.Unauthenticated
         }
     }
 }

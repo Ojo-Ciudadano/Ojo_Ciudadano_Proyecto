@@ -5,6 +5,7 @@ import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionState
+import cl.uct.ojociudadano.data.session.TokenSnapshot
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -257,9 +258,11 @@ private class FakeSessionManager(
         _state.value = SessionState.Unauthenticated
     }
 
-    override fun onStoredSessionInvalidated() {
-        establishedSession = null
-        _state.value = SessionState.Unauthenticated
+    override fun invalidateIfCurrent(rejectedToken: TokenSnapshot) {
+        if (currentToken() == rejectedToken.value) {
+            establishedSession = null
+            _state.value = SessionState.Unauthenticated
+        }
     }
 }
 
