@@ -762,6 +762,22 @@ private class FakeIncidentRepository(
         onCreate()
         return sampleIncident(input)
     }
+
+    override suspend fun uploadEvidence(
+        incidenteId: String,
+        file: java.io.File,
+        mimeType: String
+    ): cl.uct.ojociudadano.domain.model.Evidence {
+        throw NotImplementedError("No implementado para esta prueba")
+    }
+
+    override suspend fun getEvidencesByIncident(incidenteId: String): List<cl.uct.ojociudadano.domain.model.Evidence> {
+        return emptyList()
+    }
+
+    override suspend fun getEvidenceById(id: String): cl.uct.ojociudadano.domain.model.Evidence {
+        throw NotImplementedError("No implementado para esta prueba")
+    }
 }
 
 private class FakeSessionStorage(
