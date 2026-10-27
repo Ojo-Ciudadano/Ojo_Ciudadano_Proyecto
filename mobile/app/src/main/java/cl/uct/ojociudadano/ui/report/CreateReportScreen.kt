@@ -78,6 +78,7 @@ fun CreateReportScreen(
     onCategorySelected: (Category) -> Unit,
     onTakePhotoClick: () -> Unit,
     onPickPhotoClick: () -> Unit,
+    onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
     onCreateReportClick: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {}
@@ -155,12 +156,13 @@ fun CreateReportScreen(
         )
 
         EvidencePhotoSection(
-            evidencePhoto = state.evidencePhoto,
+            evidencePhotos = state.evidencePhotos,
             activePhotoOperation = state.activePhotoOperation,
             errorMessage = state.photoError,
             enabled = submissionState !is CreateReportSubmissionState.Loading,
             onTakePhotoClick = onTakePhotoClick,
-            onPickPhotoClick = onPickPhotoClick
+            onPickPhotoClick = onPickPhotoClick,
+            onRemovePhoto = onRemovePhoto
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -375,6 +377,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onCategorySelected = viewModel::onCategorySelected,
         onTakePhotoClick = photoCaptureLauncher::launch,
         onPickPhotoClick = galleryPhotoPickerLauncher::launch,
+        onRemovePhoto = viewModel::onRemovePhoto,
         onCreateReportClick = viewModel::createReport,
         modifier = modifier,
         onBack = onBack
@@ -401,6 +404,7 @@ private fun CreateReportScreenPreview() {
             onCategorySelected = {},
             onTakePhotoClick = {},
             onPickPhotoClick = {},
+            onRemovePhoto = {},
             onCreateReportClick = {}
         )
     }
