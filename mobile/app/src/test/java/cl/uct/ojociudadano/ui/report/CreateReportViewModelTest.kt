@@ -623,6 +623,70 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `removes only the selected photo and keeps the rest of the collection`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto, thirdSamplePhoto)
+
+        viewModel.onRemovePhoto(secondSamplePhoto)
+
+        assertEquals(
+            listOf(samplePhoto, thirdSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertEquals(listOf(secondSamplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertEquals("Poste dañado", viewModel.formState.title)
+        assertNull(viewModel.formState.photoError)
+    }
+
+    @Test
+    fun `removing an unknown photo does not change the collection or delete files`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+
+        viewModel.onRemovePhoto(thirdSamplePhoto)
+
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+    }
+
+    @Test
+    fun `removing a photo does not cancel an active photo operation`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            photoFileStore = photoFileStore
+        )
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        val token = viewModel.onPhotoCaptureStarted()
+
+        viewModel.onRemovePhoto(samplePhoto)
+
+        assertEquals(listOf(secondSamplePhoto), viewModel.formState.evidencePhotos)
+        assertEquals(PhotoOperation.CAMERA, viewModel.formState.activePhotoOperation)
+        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+
+        viewModel.onPhotoCaptured(token, thirdSamplePhoto)
+
+        assertEquals(
+            listOf(secondSamplePhoto, thirdSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertNull(viewModel.formState.activePhotoOperation)
+    }
+
+    @Test
     fun `rejects a photo beyond the maximum and deletes its file`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore()
         val viewModel = createViewModel(
@@ -907,6 +971,13 @@ private val secondSamplePhoto = samplePhoto.copy(
     fileName = "evidence_2.jpg",
     sizeBytes = 2048L,
     capturedAt = 1_700_000_001_000L
+)
+
+private val thirdSamplePhoto = samplePhoto.copy(
+    localUri = "content://cl.uct.ojociudadano.fileprovider/evidences/evidence_3.jpg",
+    fileName = "evidence_3.jpg",
+    sizeBytes = 3072L,
+    capturedAt = 1_700_000_002_000L
 )
 
 private const val FIRST_CONTENT_URI = "content://media/picker/photo/first"

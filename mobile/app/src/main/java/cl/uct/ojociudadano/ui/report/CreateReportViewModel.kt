@@ -187,6 +187,25 @@ class CreateReportViewModel(
         }
     }
 
+    /**
+     * Elimina una evidencia de la colección y su archivo temporal.
+     *
+     * Solo se borra la fotografía indicada: las demás permanecen disponibles y
+     * una operación de cámara o galería en curso no se cancela. El borrado es de
+     * mejor esfuerzo para que un fallo del sistema de archivos no cierre la app.
+     *
+     * Si la fotografía ya no pertenece al formulario, la llamada no tiene
+     * efecto para evitar eliminar archivos ajenos a la colección.
+     */
+    fun onRemovePhoto(photo: IncidentPhotoEvidence) {
+        val current = formState.evidencePhotos.firstOrNull {
+            it.fileName == photo.fileName
+        } ?: return
+
+        formState = formState.removeEvidencePhoto(current.fileName)
+        deleteEvidenceFile(current.fileName)
+    }
+
     fun createReport() {
         if (submissionState is CreateReportSubmissionState.Loading) return
 
