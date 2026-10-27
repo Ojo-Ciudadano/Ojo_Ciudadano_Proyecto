@@ -9,6 +9,7 @@ Sistema colaborativo para el reporte, seguimiento y gestión de incidentes urban
 ```text
 Ojo_Ciudadano_Proyecto/
 ├── docs/                      # Documentación transversal de arquitectura y contratos
+│   ├── ADR_VERSIONADO_API_V1.md
 │   ├── CONVENCIONES_ARQUITECTURA.md
 │   ├── CONFIGURACION_ENTORNOS_CORS.md
 │   ├── ESTRATEGIA_DESPLIEGUE_WEB_K8S.md
@@ -125,6 +126,7 @@ npm run lint
 ## Documentación de Arquitectura
 
 * **Convenciones y Arquitectura de Backend:** [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md)
+* **ADR-001 — Continuidad del Versionado `/api/v1` (#126):** [docs/ADR_VERSIONADO_API_V1.md](docs/ADR_VERSIONADO_API_V1.md)
 * **Estrategia de Despliegue Web en Kubernetes UCT (#128):** [docs/ESTRATEGIA_DESPLIEGUE_WEB_K8S.md](docs/ESTRATEGIA_DESPLIEGUE_WEB_K8S.md)
 * **Configuración de Orígenes CORS y URLs por Entorno (#127):** [docs/CONFIGURACION_ENTORNOS_CORS.md](docs/CONFIGURACION_ENTORNOS_CORS.md)
 * **Migraciones de Base de Datos con Prisma:** [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md)
