@@ -216,7 +216,11 @@ describe('IncidentesController - prioridad (integracion)', () => {
       expect(prisma.incidente.update).toHaveBeenCalledWith({
         where: { id: INCIDENTE_ID },
         data: { nivelPrioridad: 4 },
-        include: { categoria: true, estado: true, ubicacion: true },
+        include: expect.objectContaining({
+          categoria: true,
+          estado: true,
+          ubicacion: true,
+        }),
       });
     });
 

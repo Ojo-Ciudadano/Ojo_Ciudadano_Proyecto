@@ -13,25 +13,32 @@ import {
   PRIORIDAD_MAXIMA,
   PRIORIDAD_MINIMA,
 } from './prioridad/prioridad.constants';
+import { evidenciaSelect } from './mappers/evidencia.mapper';
+import { toIncidenteResponse } from './mappers/incidente.mapper';
 
-const include = { categoria: true, estado: true, ubicacion: true };
-
+const include = {
+  categoria: true,
+  estado: true,
+  ubicacion: true,
+  evidencias: { select: evidenciaSelect, orderBy: { fechaCreacion: 'asc' as const } },
+};
 @Injectable()
 export class IncidentesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(usuarioReportaId?: string) {
-    return this.prisma.incidente.findMany({
+  async findAll(usuarioReportaId?: string) {
+    const incidentes = await this.prisma.incidente.findMany({
       where: usuarioReportaId ? { usuarioReportaId } : undefined,
       include,
       orderBy: { fechaCreacion: 'desc' },
     });
+    return incidentes.map(toIncidenteResponse);
   }
 
   async findOne(id: string) {
     const incidente = await this.prisma.incidente.findUnique({ where: { id }, include });
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
-    return incidente;
+    return toIncidenteResponse(incidente);
   }
 
   async create(dto: CreateIncidenteDto) {
@@ -72,7 +79,7 @@ export class IncidentesService {
           observacion: 'Reporte creado',
         },
       });
-      return incidente;
+      return toIncidenteResponse(incidente);
     });
   }
 
@@ -92,10 +99,12 @@ export class IncidentesService {
     if (!existente) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
     // Solo se actualiza nivelPrioridad: categoria, estado y asignaciones quedan intactas.
-    return this.prisma.incidente.update({
+    const incidente = await this.prisma.incidente.update({
       where: { id },
       data: { nivelPrioridad: dto.nivelPrioridad },
       include,
     });
+
+    return toIncidenteResponse(incidente);
   }
 }

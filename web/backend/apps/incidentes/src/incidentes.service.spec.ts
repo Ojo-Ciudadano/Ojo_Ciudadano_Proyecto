@@ -29,6 +29,14 @@ const crearDto = (
   ...extra,
 });
 
+const evidencia = {
+  id: 'evi-1',
+  incidenteId: 'inc-1',
+  tipoMime: 'image/png',
+  tamanoArchivo: 100,
+  fechaCreacion: new Date('2026-10-22T12:00:00.000Z'),
+};
+
 describe('IncidentesService', () => {
   const tx = {
     ubicacion: { create: jest.fn() },
@@ -39,7 +47,11 @@ describe('IncidentesService', () => {
   const prisma = {
     categoria: { findUnique: jest.fn() },
     estado: { findFirst: jest.fn() },
-    incidente: { findUnique: jest.fn(), update: jest.fn() },
+    incidente: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -59,14 +71,16 @@ describe('IncidentesService', () => {
       id: ESTADO_ID,
       nombre: 'Nuevo',
     });
-    prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
-      callback(tx),
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(tx),
     );
     tx.ubicacion.create.mockResolvedValue({ id: 'ubicacion-1' });
-    tx.incidente.create.mockImplementation(async ({ data }: { data: object }) => ({
-      id: INCIDENTE_ID,
-      ...data,
-    }));
+    tx.incidente.create.mockImplementation(
+      async ({ data }: { data: object }) => ({
+        id: INCIDENTE_ID,
+        ...data,
+      }),
+    );
     tx.historialEstado.create.mockResolvedValue({ id: 'historial-1' });
 
     service = new IncidentesService(prisma as unknown as PrismaService);
@@ -156,11 +170,15 @@ describe('IncidentesService', () => {
       expect(prisma.incidente.update).toHaveBeenCalledWith({
         where: { id: INCIDENTE_ID },
         data: { nivelPrioridad: 4 },
-        include: { categoria: true, estado: true, ubicacion: true },
+        include: expect.objectContaining({
+          categoria: true,
+          estado: true,
+          ubicacion: true,
+        }),
       });
-      expect(Object.keys(prisma.incidente.update.mock.calls[0][0].data)).toEqual([
-        'nivelPrioridad',
-      ]);
+      expect(
+        Object.keys(prisma.incidente.update.mock.calls[0][0].data),
+      ).toEqual(['nivelPrioridad']);
       expect(resultado.nivelPrioridad).toBe(4);
     });
 
@@ -203,5 +221,50 @@ describe('IncidentesService', () => {
         expect(prisma.incidente.update).not.toHaveBeenCalled();
       },
     );
+  });
+
+  describe('evidencias en respuestas', () => {
+    it('findAll incluye evidencias sin claveArchivo en la consulta', async () => {
+      prisma.incidente.findMany.mockResolvedValue([
+        { id: 'inc-1', evidencias: [evidencia] },
+      ]);
+
+      const res = await service.findAll('user-1');
+
+      const args = prisma.incidente.findMany.mock.calls[0][0];
+      expect(args.include.evidencias.select).not.toHaveProperty(
+        'claveArchivo',
+      );
+      expect(args.include.evidencias.select).toMatchObject({
+        id: true,
+        tipoMime: true,
+      });
+      expect(res[0].evidencias).toEqual([
+        { ...evidencia, url: '/evidencias/evi-1/archivo' },
+      ]);
+    });
+
+    it('findAll responde evidencias vacio para incidentes sin evidencias', async () => {
+      prisma.incidente.findMany.mockResolvedValue([
+        { id: 'inc-2', evidencias: [] },
+      ]);
+      const res = await service.findAll();
+      expect(res[0].evidencias).toEqual([]);
+    });
+
+    it('findOne incluye evidencias asociadas', async () => {
+      prisma.incidente.findUnique.mockResolvedValue({
+        id: 'inc-1',
+        evidencias: [evidencia],
+      });
+      const res = await service.findOne('inc-1');
+      expect(res.evidencias).toHaveLength(1);
+      expect(res.evidencias[0].incidenteId).toBe('inc-1');
+    });
+
+    it('findOne mantiene el 404 cuando no existe', async () => {
+      prisma.incidente.findUnique.mockResolvedValue(null);
+      await expect(service.findOne('x')).rejects.toThrow(NotFoundException);
+    });
   });
 });
