@@ -390,7 +390,7 @@ private fun CreateReportScreenPreview() {
                 title = "Poste de alumbrado dañado",
                 description = "La luminaria lleva varios días sin funcionar",
                 selectedCategory = previewCategory,
-                evidencePhoto = previewEvidencePhoto
+                evidencePhotos = listOf(previewEvidencePhoto)
             ),
             categories = listOf(previewCategory),
             isLoadingCategories = false,

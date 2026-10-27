@@ -4,6 +4,17 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 
 /**
+ * Cantidad máxima de fotografías que el formulario acepta como evidencia.
+ */
+const val MAX_EVIDENCE_PHOTOS = 10
+
+/**
+ * Mensaje que se muestra cuando el formulario ya alcanzó el máximo de fotos.
+ */
+const val MAX_EVIDENCE_PHOTOS_ERROR =
+    "Puedes adjuntar hasta $MAX_EVIDENCE_PHOTOS fotografías por reporte"
+
+/**
  * Origen de la fotografía que se está incorporando al formulario.
  */
 enum class PhotoOperation {
@@ -15,13 +26,22 @@ data class CreateReportFormState(
     val title: String = "",
     val description: String = "",
     val selectedCategory: Category? = null,
-    val evidencePhoto: IncidentPhotoEvidence? = null,
+    val evidencePhotos: List<IncidentPhotoEvidence> = emptyList(),
     val activePhotoOperation: PhotoOperation? = null,
     val titleError: String? = null,
     val descriptionError: String? = null,
     val categoryError: String? = null,
     val photoError: String? = null
 ) {
+
+    /**
+     * Primera evidencia de la colección.
+     *
+     * Se conserva mientras la pantalla y el ViewModel migran a [evidencePhotos].
+     * La interfaz definitiva consume la colección completa.
+     */
+    val evidencePhoto: IncidentPhotoEvidence?
+        get() = evidencePhotos.firstOrNull()
 
     fun updateTitle(title: String): CreateReportFormState =
         copy(title = title, titleError = null)
@@ -43,18 +63,88 @@ data class CreateReportFormState(
         copy(activePhotoOperation = operation, photoError = null)
 
     /**
-     * Conserva la fotografía recuperada y da por finalizada la operación.
+     * Agrega una evidencia a la colección sin reemplazar las anteriores.
+     *
+     * Si ya se alcanzó [MAX_EVIDENCE_PHOTOS], la operación finaliza y se expone
+     * un error controlado. Una evidencia con el mismo
+     * [IncidentPhotoEvidence.fileName] reemplaza a la existente para evitar
+     * duplicados.
+     */
+    fun addEvidencePhoto(photo: IncidentPhotoEvidence): CreateReportFormState {
+        val withoutDuplicate = evidencePhotos.filterNot { it.fileName == photo.fileName }
+
+        if (withoutDuplicate.size >= MAX_EVIDENCE_PHOTOS) {
+            return copy(
+                activePhotoOperation = null,
+                photoError = MAX_EVIDENCE_PHOTOS_ERROR
+            )
+        }
+
+        return copy(
+            evidencePhotos = withoutDuplicate + photo,
+            activePhotoOperation = null,
+            photoError = null
+        )
+    }
+
+    /**
+     * Elimina una evidencia de la colección y conserva las demás.
+     *
+     * Si [fileName] no pertenece a la colección, el estado no cambia.
+     */
+    fun removeEvidencePhoto(fileName: String): CreateReportFormState {
+        if (evidencePhotos.none { it.fileName == fileName }) {
+            return this
+        }
+
+        return copy(
+            evidencePhotos = evidencePhotos.filterNot { it.fileName == fileName },
+            photoError = null
+        )
+    }
+
+    /**
+     * Elimina una referencia que ya no está disponible y expone el motivo.
+     *
+     * Las demás evidencias de la colección se conservan.
+     */
+    fun removeUnavailablePhoto(
+        fileName: String,
+        message: String
+    ): CreateReportFormState {
+        if (evidencePhotos.none { it.fileName == fileName }) {
+            return this
+        }
+
+        return copy(
+            evidencePhotos = evidencePhotos.filterNot { it.fileName == fileName },
+            photoError = message
+        )
+    }
+
+    /**
+     * Informa un fallo de previsualización sin alterar la colección.
+     */
+    fun reportPhotoPreviewError(message: String): CreateReportFormState =
+        copy(photoError = message)
+
+    /**
+     * Reemplaza la colección con una única evidencia.
+     *
+     * Metodo transitorio para el ViewModel actual, que todavía publica una sola
+     * fotografía. La integración de la colección completa usará
+     * [addEvidencePhoto].
      */
     fun updateEvidencePhoto(photo: IncidentPhotoEvidence): CreateReportFormState =
         copy(
-            evidencePhoto = photo,
+            evidencePhotos = listOf(photo),
             activePhotoOperation = null,
             photoError = null
         )
 
     /**
-     * El usuario canceló la operación: no es un error y la fotografía anterior,
-     * si existía, se mantiene disponible.
+     * El usuario canceló la operación: no es un error y las fotografías
+     * anteriores, si existían, se mantienen disponibles.
      */
     fun cancelPhotoOperation(): CreateReportFormState =
         copy(activePhotoOperation = null)
