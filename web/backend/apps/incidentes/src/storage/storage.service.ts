@@ -16,6 +16,13 @@ export class StorageOperationError extends Error {
   }
 }
 
+export function normalizeSupabaseUrl(rawUrl: string): string {
+  return rawUrl
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/+$/, '');
+}
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
@@ -24,7 +31,8 @@ export class StorageService {
 
   constructor(config: ConfigService) {
     // getOrThrow: el servicio falla al arrancar si falta configuración
-    const url = config.getOrThrow<string>('SUPABASE_URL');
+    const rawUrl = config.getOrThrow<string>('SUPABASE_URL');
+    const url = normalizeSupabaseUrl(rawUrl);
     const key = config.getOrThrow<string>('SUPABASE_SERVICE_ROLE_KEY');
     this.bucket = config.getOrThrow<string>('SUPABASE_BUCKET_EVIDENCES');
     this.client = createClient(url, key, {
