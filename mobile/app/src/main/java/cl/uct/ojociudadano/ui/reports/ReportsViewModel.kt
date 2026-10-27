@@ -53,7 +53,7 @@ class ReportsViewModel(
             _uiState.value = IncidentsUiState.Loading
 
             try {
-                val resultI = incidentRepository.getIncidents()
+                val resultI = incidentRepository.getCurrentUserIncidents()
 
                 _allIncidents.value = resultI
                 _incidents.value = resultI
@@ -70,14 +70,19 @@ class ReportsViewModel(
 
             } catch (exception: Exception) {
 
-                Log.e(
-                    "ReportsViewModel",
-                    "Error al cargar incidentes: " +
+                runCatching {
+                    Log.e(
+                        "ReportsViewModel",
+                        "Error al cargar incidentes: " +
                             "type=${exception::class.java.name}, " +
                             "message=${exception.message}, " +
                             "cause=${exception.cause}",
-                    exception
-                )
+                        exception
+                    )
+                }
+
+                _allIncidents.value = emptyList()
+                _incidents.value = emptyList()
 
                 // Estado de error
                 _uiState.value = IncidentsUiState.Error(
@@ -98,11 +103,9 @@ class ReportsViewModel(
                 throw exception
 
             } catch (exception: Exception) {
-                Log.e(
-                    "ReportsViewModel",
-                    "Error al cargar categorías",
-                    exception
-                )
+                runCatching {
+                    Log.e("ReportsViewModel", "Error al cargar categorías", exception)
+                }
             }
         }
     }

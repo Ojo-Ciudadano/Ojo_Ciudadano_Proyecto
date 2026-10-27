@@ -11,6 +11,9 @@ import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
 import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.session.TokenSnapshot
+import cl.uct.ojociudadano.data.session.testSession
+import cl.uct.ojociudadano.data.session.testSessionManager
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -40,7 +43,7 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incidents = listOf(sampleIncidentDto())
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val incidents = repository.getIncidents()
 
@@ -53,12 +56,12 @@ class RemoteRepositoryTest {
     }
 
     @Test
-    fun `getIncidentsByReporter forwards reporter user id`() = runTest {
+    fun `getCurrentUserIncidents uses session identity`() = runTest {
         val apiService = FakeApiService()
-        val repository = RemoteIncidentRepository(apiService)
-        val userId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+        val userId = testSession().userId
 
-        repository.getIncidentsByReporter(userId)
+        repository.getCurrentUserIncidents()
 
         assertEquals(userId, apiService.lastReporterUserId)
     }
@@ -68,7 +71,7 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val incident = repository.getIncidentById(
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -87,13 +90,12 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val input = CreateIncidentInput(
             title = "Poste caído",
             description = "Poste bloqueando parcialmente la calle",
             categoryId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            reporterUserId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
             location = CreateIncidentLocationInput(
                 latitude = -38.7359,
                 longitude = -72.5904,
@@ -118,7 +120,7 @@ class RemoteRepositoryTest {
             request.categoriaId
         )
         assertEquals(
-            "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+            testSession().userId,
             request.usuarioReportaId
         )
 
@@ -183,14 +185,16 @@ class RemoteRepositoryTest {
             private set
 
         override suspend fun getIncidents(
-            usuarioReportaId: String?
+            usuarioReportaId: String?,
+            expectedSession: TokenSnapshot?
         ): List<IncidentDto> {
             lastReporterUserId = usuarioReportaId
             return incidents
         }
 
         override suspend fun getIncidentById(
-            id: String
+            id: String,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             lastIncidentId = id
             return incident
@@ -201,7 +205,8 @@ class RemoteRepositoryTest {
         }
 
         override suspend fun createIncident(
-            request: CreateIncidentRequestDto
+            request: CreateIncidentRequestDto,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             lastCreateRequest = request
             return incident

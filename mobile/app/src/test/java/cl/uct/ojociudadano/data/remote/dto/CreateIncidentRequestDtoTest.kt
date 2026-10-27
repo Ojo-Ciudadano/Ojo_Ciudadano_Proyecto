@@ -1,11 +1,8 @@
 package cl.uct.ojociudadano.data.remote.dto
 
-import cl.uct.ojociudadano.data.remote.Sprint1ApiDefaults
 import com.google.gson.Gson
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.UUID
 
 class CreateIncidentRequestDtoTest {
 
@@ -17,7 +14,7 @@ class CreateIncidentRequestDtoTest {
             titulo = "Poste caído",
             descripcion = "Poste caído bloqueando parcialmente la calle",
             categoriaId = "11111111-1111-1111-1111-111111111111",
-            usuarioReportaId = Sprint1ApiDefaults.USER_ID,
+            usuarioReportaId = "a0000000-0000-4000-8000-000000000001",
             ubicacion = LocationRequestDto(
                 latitud = -38.7359,
                 longitud = -72.5904,
@@ -51,7 +48,7 @@ class CreateIncidentRequestDtoTest {
             json["categoriaId"].asString
         )
         assertEquals(
-            Sprint1ApiDefaults.USER_ID,
+            "a0000000-0000-4000-8000-000000000001",
             json["usuarioReportaId"].asString
         )
     }
@@ -62,7 +59,7 @@ class CreateIncidentRequestDtoTest {
             titulo = "Poste caído",
             descripcion = "Descripción",
             categoriaId = "11111111-1111-1111-1111-111111111111",
-            usuarioReportaId = Sprint1ApiDefaults.USER_ID,
+            usuarioReportaId = "a0000000-0000-4000-8000-000000000001",
             ubicacion = LocationRequestDto(
                 latitud = -38.7359,
                 longitud = -72.5904,
@@ -101,10 +98,4 @@ class CreateIncidentRequestDtoTest {
         assertEquals("Centro", ubicacion["sector"].asString)
     }
 
-    @Test
-    fun `sprint 1 user id is a valid UUID`() {
-        UUID.fromString(Sprint1ApiDefaults.USER_ID)
-
-        assertTrue(Sprint1ApiDefaults.USER_ID.isNotBlank())
-    }
 }

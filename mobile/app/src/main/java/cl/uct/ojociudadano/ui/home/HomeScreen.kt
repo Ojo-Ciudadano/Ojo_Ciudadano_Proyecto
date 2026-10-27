@@ -215,6 +215,7 @@ fun HomeScreen(
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun HomeScreenPreview() {
+    val previewReporterId = remember { java.util.UUID.randomUUID().toString() }
     OjoCiudadanoTheme {
         HomeScreen(
             recentIncidents = listOf(
@@ -223,7 +224,7 @@ private fun HomeScreenPreview() {
                     category = Category("category", "Alumbrado público", "", 2, false, null),
                     status = IncidentStatus("status", "Nuevo", 1),
                     location = IncidentLocation("location", -33.4372, -70.6506, "Av. O'Higgins", "Santiago", "Metropolitana", "Centro"),
-                    reporterUserId = "user", priorityLevel = null, createdAt = "2026-09-28", updatedAt = "2026-09-28"
+                    reporterUserId = previewReporterId, priorityLevel = null, createdAt = "2026-09-28", updatedAt = "2026-09-28"
                 )
             ), incidentsUnderReview = 5, incidentsInViewOf = 6, solvedIncidents = 7
         )

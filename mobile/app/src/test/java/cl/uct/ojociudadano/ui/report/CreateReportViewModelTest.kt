@@ -14,8 +14,7 @@ import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
-import cl.uct.ojociudadano.data.session.AuthenticatedSession
-import cl.uct.ojociudadano.data.session.SessionStorage
+import cl.uct.ojociudadano.data.session.SessionRequiredException
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import androidx.lifecycle.ViewModelProvider
@@ -121,12 +120,11 @@ class CreateReportViewModelTest {
     }
 
     @Test
-    fun `submits valid form through repository with current session user`() = runTest {
+    fun `submits valid form without accepting a reporter identity from UI`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
-            incidentRepository = incidentRepository,
-            sessionStorage = FakeSessionStorage(sampleSession)
+            incidentRepository = incidentRepository
         )
 
         viewModel.onTitleChange("Poste dañado")
@@ -142,7 +140,6 @@ class CreateReportViewModelTest {
         assertEquals("Poste dañado", input.title)
         assertEquals("El poste bloquea la vereda", input.description)
         assertEquals(sampleCategory.id, input.categoryId)
-        assertEquals(sampleSession.userId, input.reporterUserId)
         assertEquals(-38.7359, input.location.latitude, 0.0)
         assertEquals(-72.5904, input.location.longitude, 0.0)
         assertEquals("Ubicación de prueba Sprint 1", input.location.referenceAddress)
@@ -157,8 +154,7 @@ class CreateReportViewModelTest {
             categoryRepository = FakeCategoryRepository(),
             incidentRepository = FakeIncidentRepository(
                 failure = IllegalStateException("Error de red")
-            ),
-            sessionStorage = FakeSessionStorage(sampleSession)
+            )
         )
 
         viewModel.onTitleChange("Poste dañado")
@@ -174,6 +170,22 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `shows session failure returned by repository without crashing`() = runTest {
+        val failure = SessionRequiredException()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = FakeIncidentRepository(failure = failure)
+        )
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.onDescriptionChange("El poste bloquea la vereda")
+        viewModel.onCategorySelected(sampleCategory)
+
+        viewModel.createReport()
+
+        assertEquals(CreateReportSubmissionState.Error(failure.message!!), viewModel.submissionState)
+    }
+
+    @Test
     fun `prevents duplicate submissions while creation is loading`() = runTest {
         val creationStarted = CompletableDeferred<Unit>()
         val releaseCreation = CompletableDeferred<Unit>()
@@ -185,8 +197,7 @@ class CreateReportViewModelTest {
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
-            incidentRepository = incidentRepository,
-            sessionStorage = FakeSessionStorage(sampleSession)
+            incidentRepository = incidentRepository
         )
 
         viewModel.onTitleChange("Poste dañado")
@@ -613,7 +624,6 @@ class CreateReportViewModelTest {
         val factory = CreateReportViewModelFactory(
             categoryRepository = FakeCategoryRepository(),
             incidentRepository = FakeIncidentRepository(),
-            sessionStorage = FakeSessionStorage(),
             photoFileStore = photoFileStore
         )
         val viewModel = ViewModelProvider(viewModelStore, factory)
@@ -630,8 +640,7 @@ class CreateReportViewModelTest {
         val incidentRepository = FakeIncidentRepository()
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
-            incidentRepository = incidentRepository,
-            sessionStorage = FakeSessionStorage(sampleSession)
+            incidentRepository = incidentRepository
         )
 
         viewModel.onTitleChange("Poste dañado")
@@ -647,7 +656,6 @@ class CreateReportViewModelTest {
                 title = "Poste dañado",
                 description = "El poste bloquea la vereda",
                 categoryId = sampleCategory.id,
-                reporterUserId = sampleSession.userId,
                 location = Sprint1TemporaryLocation.incidentLocation
             ),
             incidentRepository.createInputs.single()
@@ -658,13 +666,11 @@ class CreateReportViewModelTest {
 private fun createViewModel(
     categoryRepository: CategoryRepository,
     incidentRepository: IncidentRepository = FakeIncidentRepository(),
-    sessionStorage: SessionStorage = FakeSessionStorage(),
     photoFileStore: EvidencePhotoFileStore = FakeEvidencePhotoFileStore(),
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ): CreateReportViewModel = CreateReportViewModel(
     categoryRepository = categoryRepository,
     incidentRepository = incidentRepository,
-    sessionStorage = sessionStorage,
     photoFileStore = photoFileStore,
     ioDispatcher = ioDispatcher
 )
@@ -752,7 +758,7 @@ private class FakeIncidentRepository(
 
     override suspend fun getIncidents(): List<Incident> = emptyList()
 
-    override suspend fun getIncidentsByReporter(reporterUserId: String): List<Incident> = emptyList()
+    override suspend fun getCurrentUserIncidents(): List<Incident> = emptyList()
 
     override suspend fun getIncidentById(id: String): Incident = error("Not used by this test")
 
@@ -762,19 +768,6 @@ private class FakeIncidentRepository(
         onCreate()
         return sampleIncident(input)
     }
-}
-
-private class FakeSessionStorage(
-    private val session: AuthenticatedSession? = null
-) : SessionStorage {
-
-    override fun currentToken(): String? = null
-
-    override fun currentSession(): AuthenticatedSession? = session
-
-    override fun save(session: AuthenticatedSession) = Unit
-
-    override fun clear() = Unit
 }
 
 private fun sampleIncident(input: CreateIncidentInput) = Incident(
@@ -792,19 +785,10 @@ private fun sampleIncident(input: CreateIncidentInput) = Incident(
         region = input.location.region,
         sector = input.location.sector
     ),
-    reporterUserId = input.reporterUserId,
+    reporterUserId = "a0000000-0000-4000-8000-000000000001",
     priorityLevel = null,
     createdAt = "2026-09-30T00:00:00.000Z",
     updatedAt = "2026-09-30T00:00:00.000Z"
-)
-
-private val sampleSession = AuthenticatedSession(
-    accessToken = "test-token",
-    tokenType = "Bearer",
-    userId = "test-user-id",
-    email = "usuario@example.invalid",
-    name = "Usuario de prueba",
-    roles = listOf("CIUDADANO")
 )
 
 private val sampleCategory = Category(

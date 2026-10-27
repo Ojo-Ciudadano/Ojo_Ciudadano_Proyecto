@@ -4,7 +4,6 @@ data class CreateIncidentInput(
     val title: String,
     val description: String,
     val categoryId: String,
-    val reporterUserId: String,
     val location: CreateIncidentLocationInput
 )
 
