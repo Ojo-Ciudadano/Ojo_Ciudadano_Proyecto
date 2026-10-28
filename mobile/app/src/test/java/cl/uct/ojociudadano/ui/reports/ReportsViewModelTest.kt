@@ -65,6 +65,10 @@ class ReportsViewModelTest {
     )
 
     private class FakeIncidents(val incidents: List<Incident> = listOf(incident)) : IncidentRepository {
+        override suspend fun uploadEvidence(incidenteId: String, file: java.io.File, mimeType: String): cl.uct.ojociudadano.domain.model.Evidence = error("Unused")
+        override suspend fun getEvidencesByIncident(incidenteId: String): List<cl.uct.ojociudadano.domain.model.Evidence> = error("Unused")
+        override suspend fun getEvidenceById(id: String): cl.uct.ojociudadano.domain.model.Evidence = error("Unused")
+        override suspend fun downloadEvidenceFile(id: String): okhttp3.ResponseBody = error("Unused")
         var userQueryCount = 0
         var failure: Exception? = null
         override suspend fun getCurrentUserIncidents(): List<Incident> {

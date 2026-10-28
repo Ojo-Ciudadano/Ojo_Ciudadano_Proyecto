@@ -15,6 +15,7 @@ import cl.uct.ojociudadano.data.session.TokenSnapshot
 import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.data.session.testSessionManager
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -173,6 +174,26 @@ class RemoteRepositoryTest {
         override suspend fun login(request: LoginRequestDto): LoginResponseDto {
             lastLoginRequest = request
             return loginResponse
+        }
+
+        override suspend fun uploadEvidence(
+            incidenteId: String,
+            file: okhttp3.MultipartBody.Part,
+            expectedSession: TokenSnapshot?
+        ): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
+        override suspend fun getEvidencesByIncident(incidenteId: String, expectedSession: TokenSnapshot?): List<cl.uct.ojociudadano.data.remote.dto.EvidenceDto> {
+            return emptyList()
+        }
+
+        override suspend fun getEvidenceById(id: String, expectedSession: TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
+        override suspend fun downloadEvidenceFile(id: String, expectedSession: TokenSnapshot?): ResponseBody {
+            throw NotImplementedError("No implementado para esta prueba")
         }
 
         var lastReporterUserId: String? = null

@@ -28,6 +28,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import okhttp3.ResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1008,6 +1009,26 @@ private class FakeIncidentRepository(
         failure?.let { throw it }
         onCreate()
         return sampleIncident(input)
+    }
+
+    override suspend fun uploadEvidence(
+        incidenteId: String,
+        file: java.io.File,
+        mimeType: String
+    ): cl.uct.ojociudadano.domain.model.Evidence {
+        throw NotImplementedError("No implementado para esta prueba")
+    }
+
+    override suspend fun getEvidencesByIncident(incidenteId: String): List<cl.uct.ojociudadano.domain.model.Evidence> {
+        return emptyList()
+    }
+
+    override suspend fun getEvidenceById(id: String): cl.uct.ojociudadano.domain.model.Evidence {
+        throw NotImplementedError("No implementado para esta prueba")
+    }
+
+    override suspend fun downloadEvidenceFile(id: String): ResponseBody {
+        throw NotImplementedError("No implementado para esta prueba")
     }
 }
 

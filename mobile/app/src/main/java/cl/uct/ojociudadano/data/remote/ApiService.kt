@@ -6,12 +6,18 @@ import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Tag
+import retrofit2.http.Streaming
 
 interface ApiService {
 
@@ -40,4 +46,31 @@ interface ApiService {
         @Body request: CreateIncidentRequestDto,
         @Tag expectedSession: TokenSnapshot? = null
     ): IncidentDto
+
+    @Multipart
+    @POST("api/v1/incidentes/{incidenteId}/evidencias")
+    suspend fun uploadEvidence(
+        @Path("incidenteId") incidenteId: String,
+        @Part file: MultipartBody.Part,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): EvidenceDto
+
+    @GET("api/v1/incidentes/{incidenteId}/evidencias")
+    suspend fun getEvidencesByIncident(
+        @Path("incidenteId") incidenteId: String,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): List<EvidenceDto>
+
+    @GET("api/v1/evidencias/{id}")
+    suspend fun getEvidenceById(
+        @Path("id") id: String,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): EvidenceDto
+
+    @Streaming
+    @GET("api/v1/evidencias/{id}/archivo")
+    suspend fun downloadEvidenceFile(
+        @Path("id") id: String,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): ResponseBody
 }
