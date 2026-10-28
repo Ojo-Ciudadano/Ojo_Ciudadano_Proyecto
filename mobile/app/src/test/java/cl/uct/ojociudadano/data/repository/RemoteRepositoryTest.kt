@@ -12,6 +12,7 @@ import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -171,6 +172,25 @@ class RemoteRepositoryTest {
         override suspend fun login(request: LoginRequestDto): LoginResponseDto {
             lastLoginRequest = request
             return loginResponse
+        }
+
+        override suspend fun uploadEvidence(
+            incidenteId: String,
+            file: okhttp3.MultipartBody.Part
+        ): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
+        override suspend fun getEvidencesByIncident(incidenteId: String): List<cl.uct.ojociudadano.data.remote.dto.EvidenceDto> {
+            return emptyList()
+        }
+
+        override suspend fun getEvidenceById(id: String): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
+        override suspend fun downloadEvidenceFile(id: String): ResponseBody {
+            throw NotImplementedError("No implementado para esta prueba")
         }
 
         var lastReporterUserId: String? = null
