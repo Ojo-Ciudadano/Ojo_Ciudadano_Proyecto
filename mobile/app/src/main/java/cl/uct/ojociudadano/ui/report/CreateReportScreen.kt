@@ -347,7 +347,6 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
             CreateReportViewModelFactory(
                 categoryRepository = application.container.categoryRepository,
                 incidentRepository = application.container.incidentRepository,
-                sessionStorage = application.container.sessionStorage,
                 photoFileStore = fileStore
             )
         }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,13 +41,15 @@ fun SessionStartupGate(
 
     when (state) {
         SessionState.Restoring -> StartupLoading()
-        is SessionState.Authenticated -> AppNavigation(
-            onLogout = {
-                coroutineScope.launch {
-                    runCatching { sessionManager.logout() }
+        is SessionState.Authenticated -> key((state as SessionState.Authenticated).session.userId) {
+            AppNavigation(
+                onLogout = {
+                    coroutineScope.launch {
+                        runCatching { sessionManager.logout() }
+                    }
                 }
-            }
-        )
+            )
+        }
         SessionState.Unauthenticated -> LoginNavigation(
             sessionManager = sessionManager,
             authRepository = authRepository

@@ -57,6 +57,6 @@ class AppContainer(
     }
 
     val incidentRepository: IncidentRepository by lazy {
-        RemoteIncidentRepository(apiService)
+        RemoteIncidentRepository(apiService, sessionManager)
     }
 }

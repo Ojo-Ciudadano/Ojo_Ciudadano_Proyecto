@@ -15,7 +15,6 @@ import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
-import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import kotlinx.coroutines.CancellationException
@@ -28,7 +27,6 @@ import java.util.UUID
 class CreateReportViewModel(
     private val categoryRepository: CategoryRepository,
     private val incidentRepository: IncidentRepository,
-    private val sessionStorage: SessionStorage,
     private val photoFileStore: EvidencePhotoFileStore,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val formValidator: CreateReportFormValidator = CreateReportFormValidator()
@@ -243,21 +241,11 @@ class CreateReportViewModel(
             return
         }
 
-        val reporterUserId = sessionStorage.currentSession()?.userId
-
-        if (reporterUserId == null) {
-            submissionState = CreateReportSubmissionState.Error(
-                "No hay una sesión activa para crear el reporte"
-            )
-            return
-        }
-
         val selectedCategory = requireNotNull(formState.selectedCategory)
         val input = CreateIncidentInput(
             title = formState.title,
             description = formState.description,
             categoryId = selectedCategory.id,
-            reporterUserId = reporterUserId,
             location = Sprint1TemporaryLocation.incidentLocation
         )
 

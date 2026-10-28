@@ -6,6 +6,10 @@ import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.error.executeApiCall
+import cl.uct.ojociudadano.data.session.SessionIdentity
+import cl.uct.ojociudadano.data.session.SessionManager
+import cl.uct.ojociudadano.data.session.SessionRequiredException
+import cl.uct.ojociudadano.data.session.requireIdentity
 import cl.uct.ojociudadano.domain.model.Evidence
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -14,7 +18,8 @@ import okhttp3.ResponseBody
 import java.io.File
 
 class RemoteIncidentRepository(
-    private val apiService: ApiService
+    private val apiService: ApiService,
+    private val sessionManager: SessionManager
 ) : IncidentRepository {
 
     companion object {
@@ -23,24 +28,22 @@ class RemoteIncidentRepository(
     }
 
     override suspend fun getIncidents(): List<Incident> {
-        val response = executeApiCall {
-            apiService.getIncidents()
+        val response = withCurrentIdentity { identity ->
+            apiService.getIncidents(expectedSession = identity.token)
         }
         return response.map { it.toDomain() }
     }
 
-    override suspend fun getIncidentsByReporter(
-        reporterUserId: String
-    ): List<Incident> {
-        val response = executeApiCall {
-            apiService.getIncidents(reporterUserId)
+    override suspend fun getCurrentUserIncidents(): List<Incident> {
+        val response = withCurrentIdentity { identity ->
+            apiService.getIncidents(identity.userId, identity.token)
         }
         return response.map { it.toDomain() }
     }
 
     override suspend fun getIncidentById(id: String): Incident {
-        val response = executeApiCall {
-            apiService.getIncidentById(id)
+        val response = withCurrentIdentity { identity ->
+            apiService.getIncidentById(id, identity.token)
         }
         return response.toDomain()
     }
@@ -48,10 +51,22 @@ class RemoteIncidentRepository(
     override suspend fun createIncident(
         input: CreateIncidentInput
     ): Incident {
-        val response = executeApiCall {
-            apiService.createIncident(input.toRequestDto())
+        val response = withCurrentIdentity { identity ->
+            apiService.createIncident(input.toRequestDto(identity.userId), identity.token)
         }
         return response.toDomain()
+    }
+
+    private suspend fun <T> withCurrentIdentity(block: suspend (SessionIdentity) -> T): T {
+        val identity = sessionManager.requireIdentity()
+        val result = executeApiCall { block(identity) }
+        // A late response must not be published into another user's session.
+        if (runCatching { sessionManager.requireIdentity() }.getOrNull() != identity) {
+            // Streaming downloads own a connection that must be released on a stale response.
+            if (result is ResponseBody) result.close()
+            throw SessionRequiredException()
+        }
+        return result
     }
 
     override suspend fun uploadEvidence(incidenteId: String, file: File, mimeType: String): Evidence {
@@ -68,29 +83,29 @@ class RemoteIncidentRepository(
         val requestFile = file.asRequestBody(mimeType.toMediaTypeOrNull())
         val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
 
-        val response = executeApiCall {
-            apiService.uploadEvidence(incidenteId, body)
+        val response = withCurrentIdentity { identity ->
+            apiService.uploadEvidence(incidenteId, body, identity.token)
         }
         return response.toDomain()
     }
 
     override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> {
-        val response = executeApiCall {
-            apiService.getEvidencesByIncident(incidenteId)
+        val response = withCurrentIdentity { identity ->
+            apiService.getEvidencesByIncident(incidenteId, identity.token)
         }
         return response.map { it.toDomain() }
     }
 
     override suspend fun getEvidenceById(id: String): Evidence {
-        val response = executeApiCall {
-            apiService.getEvidenceById(id)
+        val response = withCurrentIdentity { identity ->
+            apiService.getEvidenceById(id, identity.token)
         }
         return response.toDomain()
     }
 
     override suspend fun downloadEvidenceFile(id: String): ResponseBody {
-        return executeApiCall {
-            apiService.downloadEvidenceFile(id)
+        return withCurrentIdentity { identity ->
+            apiService.downloadEvidenceFile(id, identity.token)
         }
     }
 }

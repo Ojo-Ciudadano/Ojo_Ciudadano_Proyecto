@@ -903,6 +903,7 @@ fun ReportsScreen(
 )
 @Composable
 private fun ReportsScreenPreview() {
+    val previewReporterId = remember { java.util.UUID.randomUUID().toString() }
     OjoCiudadanoTheme {
         ReportsScreen(
             incidents = listOf(
@@ -932,7 +933,7 @@ private fun ReportsScreenPreview() {
                         region = "Región Metropolitana",
                         sector = "Centro"
                     ),
-                    reporterUserId = "a0000000-0000-0000-0000-000000000001",
+                    reporterUserId = previewReporterId,
                     priorityLevel = null,
                     createdAt = "2026-09-28T10:15:00Z",
                     updatedAt = "2026-09-28T10:15:00Z"
@@ -963,7 +964,7 @@ private fun ReportsScreenPreview() {
                         region = "Región Metropolitana",
                         sector = "Pedro de Valdivia Norte"
                     ),
-                    reporterUserId = "a0000000-0000-0000-0000-000000000002",
+                    reporterUserId = previewReporterId,
                     priorityLevel = 5,
                     createdAt = "2026-09-29T08:00:00Z",
                     updatedAt = "2026-09-29T08:05:00Z"

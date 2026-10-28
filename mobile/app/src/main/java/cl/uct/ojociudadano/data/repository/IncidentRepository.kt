@@ -10,9 +10,7 @@ interface IncidentRepository {
 
     suspend fun getIncidents(): List<Incident>
 
-    suspend fun getIncidentsByReporter(
-        reporterUserId: String
-    ): List<Incident>
+    suspend fun getCurrentUserIncidents(): List<Incident>
 
     suspend fun getIncidentById(id: String): Incident
 
