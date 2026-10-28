@@ -105,8 +105,9 @@ jobs:
           kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
           kubectl config use-context ci
 
-      - name: Crear secreto de Supabase en el clúster
+      - name: Aplicar recursos y secretos de Supabase
         run: |
+          kubectl apply -f infrastructure/k8s/config/supabase-config.yaml -n student-daalvarez
           kubectl create secret generic supabase-credentials \
             --namespace=student-daalvarez \
             --from-literal=SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
