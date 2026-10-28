@@ -1,8 +1,10 @@
-import { Controller, Post, Get, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, UseGuards, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { ListarUsuariosDto } from './dto/listar-usuarios.dto';
+import { PerfilUsuarioDto } from './dto/perfil-usuario.dto';
 import { UsuariosService } from './usuarios.service';
 import { RolesGuard } from '../auth/guards/roles.guards';
 import { Roles, Role } from '../auth/decorators/roles.decorator';
@@ -11,6 +13,22 @@ import { Roles, Role } from '../auth/decorators/roles.decorator';
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
+
+  // Obtener el perfil del usuario autenticado (Issue #118)
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Obtener el perfil del usuario autenticado' })
+  @ApiResponse({
+  status: 200,
+  description: 'Perfil obtenido correctamente.',
+  type: PerfilUsuarioDto,
+  })
+  @ApiResponse({ status: 401, description: 'Token inválido, expirado o ausente.' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+  async obtenerMiPerfil(@Req() request: Request & { user: { userId: string } }) {
+    return this.usuariosService.obtenerMiPerfil(request.user.userId);
+  }
 
   @Post('registro')
   @ApiOperation({ summary: 'Registrar un nuevo ciudadano' })
