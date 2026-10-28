@@ -15,6 +15,7 @@ import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -80,19 +81,19 @@ class CreateReportViewModel(
         beginPhotoOperation(PhotoOperation.CAMERA)
 
     /**
-     * Conserva la evidencia solo en el estado del formulario: no se persiste ni
-     * se envía al backend en esta tarea.
+     * Agrega la evidencia capturada a la colección del formulario: no se
+     * persiste ni se envía al backend en esta tarea.
      *
      * Si la captura ya fue reemplazada por otra operación, se descarta el
-     * archivo para no dejar evidencias huérfanas ni sobrescribir la selección
-     * más reciente.
+     * archivo para no dejar evidencias huérfanas ni incorporar un resultado
+     * obsoleto a la colección.
      */
     fun onPhotoCaptured(
         token: PhotoOperationToken,
         evidence: IncidentPhotoEvidence
     ) {
         if (claimPhotoOperation(token)) {
-            replaceEvidencePhoto(evidence)
+            addEvidencePhoto(evidence)
         } else {
             discardEvidencePhoto(evidence)
         }
@@ -147,7 +148,7 @@ class CreateReportViewModel(
                 importedEvidence = evidence
 
                 if (claimPhotoOperation(token)) {
-                    replaceEvidencePhoto(evidence)
+                    addEvidencePhoto(evidence)
                 } else {
                     discardEvidencePhoto(evidence)
                 }
@@ -182,6 +183,51 @@ class CreateReportViewModel(
     fun onGallerySelectionError(token: PhotoOperationToken, message: String) {
         if (claimPhotoOperation(token)) {
             formState = formState.failPhotoOperation(message)
+        }
+    }
+
+    /**
+     * Elimina una evidencia de la colección y su archivo temporal.
+     *
+     * Solo se borra la fotografía indicada: las demás permanecen disponibles y
+     * una operación de cámara o galería en curso no se cancela. El borrado es de
+     * mejor esfuerzo para que un fallo del sistema de archivos no cierre la app.
+     *
+     * Si la fotografía ya no pertenece al formulario, la llamada no tiene
+     * efecto para evitar eliminar archivos ajenos a la colección.
+     */
+    fun onRemovePhoto(photo: IncidentPhotoEvidence) {
+        val current = formState.evidencePhotos.firstOrNull {
+            it.fileName == photo.fileName
+        } ?: return
+
+        formState = formState.removeEvidencePhoto(current.fileName)
+        deleteEvidenceFile(current.fileName)
+    }
+
+    /**
+     * Gestiona un fallo al previsualizar una evidencia local.
+     *
+     * Si el archivo temporal ya no existe, la referencia se elimina para no
+     * conservar una evidencia inválida. Si el archivo sigue disponible pero no
+     * puede decodificarse, se conserva y solo se informa el fallo para que el
+     * usuario decida eliminarla.
+     */
+    fun onPhotoPreviewError(photo: IncidentPhotoEvidence) {
+        val current = formState.evidencePhotos.firstOrNull {
+            it.fileName == photo.fileName
+        } ?: return
+
+        if (isEvidenceFileAvailable(current.fileName)) {
+            formState = formState.reportPhotoPreviewError(
+                PhotoPreviewErrors.RENDER_FAILED
+            )
+        } else {
+            formState = formState.removeUnavailablePhoto(
+                current.fileName,
+                PhotoPreviewErrors.UNAVAILABLE
+            )
+            deleteEvidenceFile(current.fileName)
         }
     }
 
@@ -291,7 +337,9 @@ class CreateReportViewModel(
         synchronized(photoOperationLock) {
             activePhotoToken = null
         }
-        formState.evidencePhoto?.let { photoFileStore.delete(it.fileName) }
+        formState.evidencePhotos.forEach { evidence ->
+            deleteEvidenceFile(evidence.fileName)
+        }
     }
 
     private fun beginPhotoOperation(operation: PhotoOperation): PhotoOperationToken =
@@ -332,22 +380,43 @@ class CreateReportViewModel(
         }
     }
 
-    private fun replaceEvidencePhoto(evidence: IncidentPhotoEvidence) {
-        formState.evidencePhoto
-            ?.takeIf { previous -> previous.fileName != evidence.fileName }
-            ?.let { previous -> photoFileStore.delete(previous.fileName) }
+    /**
+     * Incorpora una evidencia a la colección del formulario.
+     *
+     * Si el archivo temporal ya no está disponible, la evidencia se descarta y
+     * se informa un error controlado. El estado también puede rechazarla, por
+     * ejemplo cuando se alcanza [MAX_EVIDENCE_PHOTOS]. En ambos casos el archivo
+     * recién creado se elimina para no dejar una evidencia huérfana.
+     */
+    private fun addEvidencePhoto(evidence: IncidentPhotoEvidence) {
+        if (!isEvidenceFileAvailable(evidence.fileName)) {
+            discardEvidencePhoto(evidence)
+            formState = formState.failPhotoOperation(PhotoPreviewErrors.UNAVAILABLE)
+            return
+        }
 
-        formState = formState.updateEvidencePhoto(evidence)
+        formState = formState.addEvidencePhoto(evidence)
+
+        if (formState.evidencePhotos.none { it.fileName == evidence.fileName }) {
+            discardEvidencePhoto(evidence)
+        }
     }
+
+    private fun isEvidenceFileAvailable(fileName: String): Boolean =
+        runCatching { photoFileStore.exists(fileName) }.getOrDefault(false)
 
     /**
      * Elimina el archivo de un resultado que ya no corresponde a la operación
-     * activa, salvo que coincida con la evidencia vigente.
+     * activa, salvo que coincida con alguna evidencia vigente.
      */
     private fun discardEvidencePhoto(evidence: IncidentPhotoEvidence) {
-        if (formState.evidencePhoto?.fileName != evidence.fileName) {
-            photoFileStore.delete(evidence.fileName)
+        if (formState.evidencePhotos.none { it.fileName == evidence.fileName }) {
+            deleteEvidenceFile(evidence.fileName)
         }
+    }
+
+    private fun deleteEvidenceFile(fileName: String) {
+        runCatching { photoFileStore.delete(fileName) }
     }
 
     private fun PhotoImportException.toUserMessage(): String = when (failure) {

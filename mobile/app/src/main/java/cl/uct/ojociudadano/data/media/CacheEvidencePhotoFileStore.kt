@@ -158,6 +158,12 @@ class CacheEvidencePhotoFileStore(
         }
     }
 
+    override fun exists(fileName: String): Boolean =
+        runCatching {
+            val file = fileFor(fileName)
+            file.isFile && file.length() > 0L
+        }.getOrDefault(false)
+
     override fun delete(fileName: String) {
         runCatching { fileFor(fileName).delete() }
     }

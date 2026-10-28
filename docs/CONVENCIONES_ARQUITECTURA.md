@@ -3,7 +3,7 @@
 **Responsable:** Martín Maier  
 **Tarea:** MM-02 — Definir la estructura modular y las convenciones de carpetas  
 **Proyecto:** Ojo Ciudadano  
-**Versión:** 1.3.0 — Sprint 1  
+**Versión:** 1.4.0 — Sprint 2  
 
 ---
 
@@ -249,3 +249,10 @@ export default defineConfig({
   * `DATABASE_URL_AUTH="postgresql://auth_user:auth_password@localhost:5432/auth_usuarios"`
   * `DATABASE_URL_INCIDENTES="postgresql://incidentes_user:incidentes_password@localhost:5433/incidentes"`
   * `DATABASE_URL_NOTIFICACIONES="postgresql://notificaciones_user:notificaciones_password@localhost:5434/notificaciones"`
+
+---
+
+## 8. Flujo Git y Revisión Cruzada de Pull Requests
+
+* Toda funcionalidad, corrección o tarea documental del Sprint 2 se desarrolla en una rama `feature/<numero-issue>-<slug>` creada desde `integration` y se integra mediante Pull Request hacia `integration` vinculado con `Closes #<numero>`.
+* Antes de aprobar y fusionar cualquier entrega, el revisor debe aplicar el [Checklist de Revisión Cruzada de Pull Requests (CHECKLIST_REVISION_CRUZADA_PR.md)](CHECKLIST_REVISION_CRUZADA_PR.md).

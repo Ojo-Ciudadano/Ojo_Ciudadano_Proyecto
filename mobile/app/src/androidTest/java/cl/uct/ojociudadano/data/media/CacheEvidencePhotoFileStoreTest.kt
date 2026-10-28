@@ -69,6 +69,34 @@ class CacheEvidencePhotoFileStoreTest {
     }
 
     @Test
+    fun reportsReservedEvidenceAsUnavailableUntilContentIsWritten() {
+        val pending = store.create()
+        createdFileNames += pending.fileName
+
+        assertFalse(store.exists(pending.fileName))
+
+        context.contentResolver.openOutputStream(Uri.parse(pending.localUri))!!.use { output ->
+            output.write(byteArrayOf(1, 2, 3, 4))
+        }
+
+        assertTrue(store.exists(pending.fileName))
+    }
+
+    @Test
+    fun reportsDeletedOrMissingEvidenceAsUnavailable() {
+        val pending = store.create()
+        createdFileNames += pending.fileName
+
+        context.contentResolver.openOutputStream(Uri.parse(pending.localUri))!!.use { output ->
+            output.write(byteArrayOf(1, 2, 3, 4))
+        }
+        store.delete(pending.fileName)
+
+        assertFalse(store.exists(pending.fileName))
+        assertFalse(store.exists("missing_${System.nanoTime()}.jpg"))
+    }
+
+    @Test
     fun deletesTemporaryFileByName() {
         val pending = store.create()
 
