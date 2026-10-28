@@ -201,6 +201,46 @@ class AuthenticatedIncidentsFlowTest {
         assertEquals("Bearer ${userA.accessToken}", request.getHeader("Authorization"))
     }
 
+    @Test
+    fun `evidence queries and streaming download use active session JWT`() = runTest {
+        manager.establish(userA)
+        server.enqueue(MockResponse().setBody("[]"))
+        server.enqueue(MockResponse().setBody("photo"))
+
+        assertTrue(repository().getEvidencesByIncident("incident-id").isEmpty())
+        repository().downloadEvidenceFile("evidence-id").use {
+            assertEquals("photo", it.string())
+        }
+
+        for (path in listOf("/api/v1/incidentes/incident-id/evidencias", "/api/v1/evidencias/evidence-id/archivo")) {
+            val request = takeRequest()
+            assertEquals(path, request.path)
+            assertEquals("Bearer ${userA.accessToken}", request.getHeader("Authorization"))
+        }
+    }
+
+    @Test
+    fun `queued evidence requests reject a replaced session before network`() = runTest {
+        manager.establish(userA)
+        val token = manager.currentTokenSnapshot()!!
+        manager.establish(userB)
+        val api = api()
+
+        assertSessionFailure { api.getEvidencesByIncident("incident-id", token) }
+        assertSessionFailure { api.getEvidenceById("evidence-id", token) }
+        assertSessionFailure { api.downloadEvidenceFile("evidence-id", token) }
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `evidence operations require identity before network`() = runTest {
+        manager.restore()
+        assertSessionFailure { repository().getEvidencesByIncident("incident-id") }
+        assertSessionFailure { repository().getEvidenceById("evidence-id") }
+        assertSessionFailure { repository().downloadEvidenceFile("evidence-id") }
+        assertEquals(0, server.requestCount)
+    }
+
     private suspend fun assertUserOperations(repository: RemoteIncidentRepository, user: AuthenticatedSession) {
         server.enqueue(MockResponse().setBody("[${incidentJson(user)}]"))
         server.enqueue(MockResponse().setResponseCode(201).setBody(incidentJson(user)))
