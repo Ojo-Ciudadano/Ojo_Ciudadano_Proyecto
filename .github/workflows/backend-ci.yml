@@ -107,7 +107,12 @@ jobs:
 
       - name: Aplicar recursos y secretos de Supabase
         run: |
-          kubectl apply -f infrastructure/k8s/config/supabase-config.yaml -n student-daalvarez
+          kubectl create configmap supabase-config \
+            --namespace=student-daalvarez \
+            --from-literal=SUPABASE_URL="https://mnqirqjxmamzhoenntnj.supabase.co/rest/v1/" \
+            --from-literal=SUPABASE_BUCKET_EVIDENCES="incident-evidences" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
           kubectl create secret generic supabase-credentials \
             --namespace=student-daalvarez \
             --from-literal=SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
