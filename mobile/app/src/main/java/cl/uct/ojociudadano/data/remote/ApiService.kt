@@ -7,6 +7,7 @@ import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
 import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
@@ -14,6 +15,7 @@ import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 interface ApiService {
 
@@ -56,4 +58,10 @@ interface ApiService {
     suspend fun getEvidenceById(
         @Path("id") id: String
     ): EvidenceDto
+
+    @Streaming
+    @GET("api/v1/evidencias/{id}/archivo")
+    suspend fun downloadEvidenceFile(
+        @Path("id") id: String
+    ): ResponseBody
 }

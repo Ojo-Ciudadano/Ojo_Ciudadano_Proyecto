@@ -8,12 +8,3 @@ data class Evidence(
     val createdAt: String,
     val fileUrl: String
 )
-
-fun cl.uct.ojociudadano.data.remote.dto.EvidenceDto.toDomain() = Evidence(
-    id = id,
-    incidentId = incidenteId,
-    mimeType = tipoMime,
-    size = tamanoArchivo,
-    createdAt = fechaCreacion,
-    fileUrl = url
-)

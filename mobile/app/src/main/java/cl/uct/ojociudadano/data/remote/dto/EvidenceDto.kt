@@ -1,8 +1,5 @@
 package cl.uct.ojociudadano.data.remote.dto
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class EvidenceDto(
     val id: String,
     val incidenteId: String,
