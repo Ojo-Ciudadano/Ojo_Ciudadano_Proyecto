@@ -44,6 +44,15 @@ interface EvidencePhotoFileStore {
     suspend fun import(contentUri: String): IncidentPhotoEvidence
 
     /**
+     * Indica si el archivo temporal identificado por [fileName] sigue disponible
+     * y contiene datos.
+     *
+     * Se usa para detectar referencias fotográficas que dejaron de ser válidas
+     * mientras el formulario permanece abierto.
+     */
+    fun exists(fileName: String): Boolean
+
+    /**
      * Elimina el archivo temporal identificado por [fileName].
      */
     fun delete(fileName: String)

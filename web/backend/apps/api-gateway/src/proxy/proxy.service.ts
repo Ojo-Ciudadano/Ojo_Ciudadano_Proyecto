@@ -2,6 +2,15 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 
+export const MAX_PROXY_PAYLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
+
+class PayloadLimitExceededError extends Error {
+  constructor() {
+    super('El tamaño de la carga útil supera el límite permitido de 12 MB');
+    this.name = 'PayloadLimitExceededError';
+  }
+}
+
 @Injectable()
 export class ProxyService {
   private readonly logger = new Logger(ProxyService.name);
@@ -54,13 +63,13 @@ export class ProxyService {
       return;
     }
 
-    const queryString = Object.keys(req.query).length > 0
+    const queryString = Object.keys(req.query ?? {}).length > 0
       ? '?' + new URLSearchParams(req.query as Record<string, string>).toString()
       : '';
     const targetUrl = `${targetBaseUrl.replace(/\/+$/, '')}/${normalizedPath}${queryString}`;
 
     const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(req.headers)) {
+    for (const [key, value] of Object.entries(req.headers ?? {})) {
       if (key.toLowerCase() === 'host' || key.toLowerCase() === 'content-length') {
         continue;
       }
@@ -71,16 +80,47 @@ export class ProxyService {
       }
     }
 
-    if (!headers['content-type'] && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
-      headers['content-type'] = 'application/json';
-    }
+    const method = (req.method ?? 'GET').toUpperCase();
+    const isMutation = ['POST', 'PUT', 'PATCH'].includes(method);
+    const requestContentType = (headers['content-type'] ?? '').toLowerCase();
+    const isBinaryOrMultipart =
+      requestContentType.includes('multipart/form-data') ||
+      requestContentType.includes('application/octet-stream') ||
+      requestContentType.startsWith('image/');
 
-    const hasBody = ['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase()) && req.body && Object.keys(req.body).length > 0;
-    const bodyContent = hasBody ? JSON.stringify(req.body) : undefined;
+    let bodyContent: BodyInit | undefined;
+
+    if (isMutation) {
+      if (Buffer.isBuffer(req.body)) {
+        if (req.body.length > MAX_PROXY_PAYLOAD_BYTES) {
+          this.sendPayloadTooLarge(res, rawPath);
+          return;
+        }
+        bodyContent = new Uint8Array(req.body);
+      } else if (isBinaryOrMultipart) {
+        try {
+          const rawBuffer = await this.readRawRequestStream(req);
+          bodyContent = new Uint8Array(rawBuffer);
+        } catch (err) {
+          if (err instanceof PayloadLimitExceededError) {
+            this.sendPayloadTooLarge(res, rawPath);
+            return;
+          }
+          throw err;
+        }
+      } else {
+        if (!headers['content-type']) {
+          headers['content-type'] = 'application/json';
+        }
+        if (req.body && Object.keys(req.body).length > 0) {
+          bodyContent = JSON.stringify(req.body);
+        }
+      }
+    }
 
     try {
       const response = await fetch(targetUrl, {
-        method: req.method,
+        method,
         headers,
         body: bodyContent,
       });
@@ -91,6 +131,23 @@ export class ProxyService {
       if (responseContentType.includes('application/json')) {
         const data = await response.json();
         res.json(data);
+      } else if (
+        responseContentType.startsWith('image/') ||
+        responseContentType.includes('application/octet-stream')
+      ) {
+        if (typeof res.setHeader === 'function') {
+          res.setHeader('Content-Type', responseContentType);
+          const contentLength = response.headers.get('content-length');
+          if (contentLength) {
+            res.setHeader('Content-Length', contentLength);
+          }
+          const cacheControl = response.headers.get('cache-control');
+          if (cacheControl) {
+            res.setHeader('Cache-Control', cacheControl);
+          }
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        res.send(buffer);
       } else {
         const text = await response.text();
         res.send(text);
@@ -105,5 +162,35 @@ export class ProxyService {
         message: `Microservicio ${prefix} no disponible en ${targetBaseUrl}`,
       });
     }
+  }
+
+  private async readRawRequestStream(req: Request): Promise<Buffer> {
+    if (typeof (req as any)?.[Symbol.asyncIterator] !== 'function') {
+      return Buffer.alloc(0);
+    }
+
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+
+    for await (const chunk of req as unknown as AsyncIterable<Buffer | string>) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buf.length;
+      if (totalBytes > MAX_PROXY_PAYLOAD_BYTES) {
+        throw new PayloadLimitExceededError();
+      }
+      chunks.push(buf);
+    }
+
+    return Buffer.concat(chunks, totalBytes);
+  }
+
+  private sendPayloadTooLarge(res: Response, path: string): void {
+    res.status(413).json({
+      statusCode: 413,
+      timestamp: new Date().toISOString(),
+      path,
+      error: 'Payload Too Large',
+      message: 'El archivo o carga útil supera el tamaño máximo permitido de 12 MB',
+    });
   }
 }

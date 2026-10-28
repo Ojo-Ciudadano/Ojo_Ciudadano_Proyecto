@@ -155,6 +155,107 @@ describe('ApiGatewayController (e2e)', () => {
     fetchMock.mockRestore();
   });
 
+  describe('Evidencias a través del API Gateway (#86)', () => {
+    it('reenvía subida multipart/form-data de evidencia en POST /api/v1/incidentes/:id/evidencias', async () => {
+      const evidenciaCreada = {
+        id: 'ev-1',
+        incidenteId: 'inc-1',
+        tipoMime: 'image/jpeg',
+        tamanoArchivo: 8,
+        fechaCreacion: '2026-10-23T15:00:00.000Z',
+        url: '/evidencias/ev-1/archivo',
+      };
+      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => evidenciaCreada,
+      } as Response);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/incidentes/inc-1/evidencias')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('archivo', Buffer.from('foto-jpg'), {
+          filename: 'foto.jpg',
+          contentType: 'image/jpeg',
+        })
+        .expect(201);
+
+      expect(response.body).toEqual(evidenciaCreada);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:3002/incidentes/inc-1/evidencias',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'content-type': expect.stringContaining('multipart/form-data'),
+          }),
+          body: expect.any(Uint8Array),
+        }),
+      );
+      fetchMock.mockRestore();
+    });
+
+    it('consulta las evidencias de un incidente en GET /api/v1/incidentes/:id/evidencias', async () => {
+      const lista = [
+        {
+          id: 'ev-1',
+          incidenteId: 'inc-1',
+          tipoMime: 'image/jpeg',
+          tamanoArchivo: 8,
+          fechaCreacion: '2026-10-23T15:00:00.000Z',
+          url: '/evidencias/ev-1/archivo',
+        },
+      ];
+      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => lista,
+      } as Response);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/incidentes/inc-1/evidencias')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toEqual(lista);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:3002/incidentes/inc-1/evidencias',
+        expect.objectContaining({ method: 'GET' }),
+      );
+      fetchMock.mockRestore();
+    });
+
+    it('descarga el archivo binario de una evidencia en GET /api/v1/evidencias/:id/archivo', async () => {
+      const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+        status: 200,
+        headers: new Headers({
+          'content-type': 'image/jpeg',
+          'content-length': imageBytes.length.toString(),
+        }),
+        arrayBuffer: async () =>
+          imageBytes.buffer.slice(
+            imageBytes.byteOffset,
+            imageBytes.byteOffset + imageBytes.byteLength,
+          ),
+      } as Response);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/evidencias/ev-1/archivo')
+        .set('Authorization', `Bearer ${token}`)
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+
+      expect(response.headers['content-type']).toContain('image/jpeg');
+      expect(Buffer.compare(response.body as Buffer, imageBytes)).toBe(0);
+      fetchMock.mockRestore();
+    });
+  });
+
   describe('CORS y Orígenes por Entorno (#127)', () => {
     it('autoriza solicitud preflight OPTIONS con Authorization desde un origen permitido', async () => {
       const response = await request(app.getHttpServer())

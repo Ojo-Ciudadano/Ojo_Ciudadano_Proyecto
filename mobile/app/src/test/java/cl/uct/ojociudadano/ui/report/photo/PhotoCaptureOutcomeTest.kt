@@ -66,6 +66,8 @@ private class FakeEvidencePhotoFileStore(
     override suspend fun import(contentUri: String): IncidentPhotoEvidence =
         requireNotNull(completed) { "No hay una evidencia importada configurada" }
 
+    override fun exists(fileName: String): Boolean = true
+
     override fun delete(fileName: String) {
         deletedFileNames += fileName
     }
