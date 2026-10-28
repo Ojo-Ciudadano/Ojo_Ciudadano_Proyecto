@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListarUsuariosDto } from './dto/listar-usuarios.dto';
 
@@ -49,7 +49,7 @@ export class UsuariosService {
     return usuario;
   }
 
-  // Listar usuarios con paginación y filtro opcional por rol
+  // Listar usuarios con paginación y filtro opcional por rol (Issue #121)
   async listarUsuarios(filtros: ListarUsuariosDto) {
     const page = filtros.page ?? 1;
     const limit = filtros.limit ?? 10;
@@ -122,6 +122,47 @@ export class UsuariosService {
         total,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  // Obtener el perfil del usuario autenticado (Issue #118)
+  async obtenerMiPerfil(usuarioId: string) {
+    // Buscar el usuario utilizando el ID obtenido del JWT
+    const usuario = await this.prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        telefono: true,
+        fechaRegistro: true,
+        roles: {
+          select: {
+            rol: {
+              select: {
+                nombre: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Si el usuario ya no existe, devolver un error controlado
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    // Devolver el perfil con los roles vigentes en la base de datos
+    return {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      fechaRegistro: usuario.fechaRegistro,
+      roles: usuario.roles.map((relacion) => relacion.rol.nombre),
     };
   }
 }
