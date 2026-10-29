@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -32,10 +33,10 @@ fun AppBottomNavigation(
     currentRoute: String?,
     onDestinationClick: (String) -> Unit
 ) {
-    NavigationBar(containerColor = Color.White) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
         navigationDestinations.forEach { destination ->
             val selected = currentRoute == destination.route ||
-                (destination.route == AppRoutes.CREATE_REPORT && currentRoute == AppRoutes.REPORTS)
+                (destination.route == AppRoutes.HOME && currentRoute in setOf(AppRoutes.REPORTS, AppRoutes.INCIDENT_DETAIL))
 
             NavigationBarItem(
                 selected = selected,
@@ -49,11 +50,11 @@ fun AppBottomNavigation(
                 label = { Text(destination.label) },
                 alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF023889),
-                    selectedTextColor = Color(0xFF023889),
-                    indicatorColor = Color(0xFFDCE8FA),
-                    unselectedIconColor = Color(0xFF5D5D5D),
-                    unselectedTextColor = Color(0xFF5D5D5D)
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
         }
