@@ -1,5 +1,10 @@
 package cl.uct.ojociudadano.ui.login
 
+import cl.uct.ojociudadano.ui.components.CitizenAuthLayout
+import cl.uct.ojociudadano.ui.components.CitizenMessage
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -125,15 +130,7 @@ private fun LoginScreenContent(
         onLoginClick()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    CitizenAuthLayout(modifier) {
         Spacer(modifier = Modifier.size(12.dp))
 
         Text(
@@ -148,11 +145,12 @@ private fun LoginScreenContent(
             modifier = Modifier.fillMaxWidth()
         )
 
-        if (registrationSucceeded) {
-            Text("Cuenta creada. Inicia sesión con tus credenciales.")
+        AnimatedVisibility(registrationSucceeded) {
+            CitizenMessage("Cuenta creada. Inicia sesión con tus credenciales.")
         }
 
-        when (authState) {
+        AnimatedContent(targetState = authState, label = "login_status") { currentState ->
+        when (val authState = currentState) {
             AuthUiState.Idle -> Unit
             AuthUiState.Loading -> {
                 CircularProgressIndicator(
@@ -169,12 +167,11 @@ private fun LoginScreenContent(
             }
 
             is AuthUiState.Error -> {
-                Text(
-                    text = authState.error.message,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag(LoginTestTags.AUTH_ERROR_MESSAGE)
-                )
+                CitizenMessage(authState.error.message, isError = true,
+                    modifier = Modifier.testTag(LoginTestTags.AUTH_ERROR_MESSAGE))
             }
+        }
+
         }
 
         OutlinedTextField(
@@ -182,6 +179,7 @@ private fun LoginScreenContent(
             onValueChange = onEmailChange,
             modifier = Modifier
                 .fillMaxWidth()
+                .animateContentSize()
                 .testTag(LoginTestTags.EMAIL_FIELD),
             label = { Text("Correo electrónico") },
             singleLine = true,
@@ -204,6 +202,7 @@ private fun LoginScreenContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(passwordFocusRequester)
+                .animateContentSize()
                 .testTag(LoginTestTags.PASSWORD_FIELD),
             label = { Text("Contraseña") },
             singleLine = true,

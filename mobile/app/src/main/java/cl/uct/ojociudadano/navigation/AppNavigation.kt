@@ -1,5 +1,8 @@
 package cl.uct.ojociudadano.navigation
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import android.net.Uri
 import cl.uct.ojociudadano.ui.reports.IncidentDetailScreen
@@ -76,6 +79,10 @@ fun AppNavigation(
         NavHost(
             navController = navController,
             startDestination = startDestination,
+            enterTransition = { fadeIn(tween(180)) },
+            exitTransition = { fadeOut(tween(120)) },
+            popEnterTransition = { fadeIn(tween(180)) },
+            popExitTransition = { fadeOut(tween(120)) },
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(AppRoutes.ADMIN) {

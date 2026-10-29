@@ -1,5 +1,9 @@
 package cl.uct.ojociudadano.ui.registration
 
+import cl.uct.ojociudadano.ui.components.CitizenAuthLayout
+import cl.uct.ojociudadano.ui.components.CitizenMessage
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -75,30 +79,26 @@ fun RegistrationScreen(
         focus.clearFocus()
         onRegister(RegistrationInput(name, email, password, phone))
     }
-    Column(
-        modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    CitizenAuthLayout(modifier) {
         Text("Crear cuenta", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Regístrate para participar como ciudadano.", style = MaterialTheme.typography.bodyMedium)
-        if (state is RegistrationUiState.Error) {
-            Text(state.message, color = MaterialTheme.colorScheme.error)
+        AnimatedVisibility(state is RegistrationUiState.Error) {
+            if (state is RegistrationUiState.Error) CitizenMessage(state.message, isError = true)
         }
         OutlinedTextField(
-            name, { name = it }, Modifier.fillMaxWidth().testTag("register_name"),
+            name, { name = it }, Modifier.fillMaxWidth().animateContentSize().testTag("register_name"),
             label = { Text("Nombre completo") }, enabled = !loading, singleLine = true,
             isError = fields.name != null, supportingText = fields.name?.let { { Text(it) } },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next)
         )
         OutlinedTextField(
-            email, { email = it }, Modifier.fillMaxWidth().testTag("register_email"),
+            email, { email = it }, Modifier.fillMaxWidth().animateContentSize().testTag("register_email"),
             label = { Text("Correo electrónico") }, enabled = !loading, singleLine = true,
             isError = fields.email != null, supportingText = fields.email?.let { { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
         )
         OutlinedTextField(
-            password, { password = it }, Modifier.fillMaxWidth().testTag("register_password"),
+            password, { password = it }, Modifier.fillMaxWidth().animateContentSize().testTag("register_password"),
             label = { Text("Contraseña") }, enabled = !loading, singleLine = true,
             isError = fields.password != null, supportingText = fields.password?.let { { Text(it) } },
             visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -111,7 +111,7 @@ fun RegistrationScreen(
             }
         )
         OutlinedTextField(
-            phone, { phone = it }, Modifier.fillMaxWidth().testTag("register_phone"),
+            phone, { phone = it }, Modifier.fillMaxWidth().animateContentSize().testTag("register_phone"),
             label = { Text("Teléfono (opcional)") }, enabled = !loading, singleLine = true,
             isError = fields.phone != null, supportingText = fields.phone?.let { { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
@@ -121,7 +121,7 @@ fun RegistrationScreen(
             CircularProgressIndicator(Modifier.testTag("register_loading"))
             Text("Creando cuenta…")
         }
-        Button(onClick = ::submit, enabled = !loading, modifier = Modifier.fillMaxWidth().testTag("register_submit")) {
+        Button(onClick = ::submit, enabled = !loading, modifier = Modifier.fillMaxWidth().animateContentSize().testTag("register_submit")) {
             Text("Registrarse")
         }
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Volver al inicio de sesión") }
