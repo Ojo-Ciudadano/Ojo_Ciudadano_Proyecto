@@ -12,6 +12,9 @@ data class AuthenticatedSession(
     val name: String,
     val roles: List<String>
 ) {
+    /** Derived from this user's persisted login response, never from UI labels or JWT decoding. */
+    val roleState: SessionRoles
+        get() = SessionRoles.fromBackend(roles)
 
     fun isLocallyValid(nowEpochSeconds: Long = System.currentTimeMillis() / 1000): Boolean {
         return accessToken.isNotBlank() &&

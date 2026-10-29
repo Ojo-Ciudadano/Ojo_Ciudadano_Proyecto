@@ -12,6 +12,6 @@ fun LoginResponseDto.toAuthenticatedSession(): AuthenticatedSession {
         userId = user.id,
         email = user.email,
         name = user.nombre,
-        roles = user.roles
+        roles = user.roles.orEmpty().toList()
     )
 }
