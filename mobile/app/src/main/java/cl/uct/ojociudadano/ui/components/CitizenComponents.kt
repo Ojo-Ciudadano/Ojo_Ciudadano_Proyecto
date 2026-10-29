@@ -33,7 +33,7 @@ fun CitizenHeader(title: String, subtitle: String = "Ojo Ciudadano", onBack: (()
 }
 
 @Composable
-fun CitizenMessage(message: String, isError: Boolean = false, modifier: Modifier = Modifier) {
+fun CitizenMessage(message: String, modifier: Modifier = Modifier, isError: Boolean = false) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
         color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer) {
         Text(message, Modifier.padding(16.dp),
