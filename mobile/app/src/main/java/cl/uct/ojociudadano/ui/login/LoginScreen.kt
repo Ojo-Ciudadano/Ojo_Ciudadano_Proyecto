@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.TextButton
 
 object LoginTestTags {
     const val EMAIL_FIELD = "login_email_field"
@@ -64,7 +65,9 @@ fun LoginScreen(
     onLogin: (LoginCredentials) -> Unit,
     authState: AuthUiState = AuthUiState.Idle,
     modifier: Modifier = Modifier,
-    formValidator: LoginFormValidator = remember { LoginFormValidator() }
+    formValidator: LoginFormValidator = remember { LoginFormValidator() },
+    onRegister: (() -> Unit)? = null,
+    registrationSucceeded: Boolean = false
 ) {
     var formState by rememberSaveable(stateSaver = LoginFormState.Saver) {
         mutableStateOf(LoginFormState())
@@ -93,7 +96,9 @@ fun LoginScreen(
         },
         onLoginClick = ::submitLogin,
         authState = authState,
-        modifier = modifier
+        modifier = modifier,
+        onRegister = onRegister,
+        registrationSucceeded = registrationSucceeded
     )
 }
 
@@ -105,7 +110,9 @@ private fun LoginScreenContent(
     onPasswordVisibilityToggle: () -> Unit,
     onLoginClick: () -> Unit,
     authState: AuthUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRegister: (() -> Unit)? = null,
+    registrationSucceeded: Boolean = false
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -140,6 +147,10 @@ private fun LoginScreenContent(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.fillMaxWidth()
         )
+
+        if (registrationSucceeded) {
+            Text("Cuenta creada. Inicia sesión con tus credenciales.")
+        }
 
         when (authState) {
             AuthUiState.Idle -> Unit
@@ -237,6 +248,11 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.SUBMIT_BUTTON)
         ) {
             Text("Iniciar sesión")
+        }
+        onRegister?.let { register ->
+            TextButton(onClick = register, enabled = !isLoading) {
+                Text("Crear cuenta")
+            }
         }
     }
 }

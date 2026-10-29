@@ -30,6 +30,7 @@ object AppRoutes {
     const val NOTIFICATIONS = "notifications"
     const val MAP = "map"
     const val PROFILE = "profile"
+    const val REGISTER = "register"
     const val LOGIN = "login"
 }
 
@@ -39,7 +40,8 @@ fun AppNavigation(
     startDestination: String = AppRoutes.HOME,
     onLogin: (LoginCredentials) -> Unit = {},
     onLogout: () -> Unit = {},
-    loginContent: (@Composable () -> Unit)? = null
+    loginContent: (@Composable () -> Unit)? = null,
+    registrationContent: (@Composable (onBack: () -> Unit) -> Unit)? = null
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -88,7 +90,13 @@ fun AppNavigation(
                 )
             }
             composable(AppRoutes.LOGIN) {
-                loginContent?.invoke() ?: LoginScreen(onLogin = onLogin)
+                loginContent?.invoke() ?: LoginScreen(
+                    onLogin = onLogin,
+                    onRegister = registrationContent?.let { { navController.navigate(AppRoutes.REGISTER) } }
+                )
+            }
+            composable(AppRoutes.REGISTER) {
+                registrationContent?.invoke { navController.popBackStack(AppRoutes.LOGIN, false) }
             }
             composable(AppRoutes.HOME) {
                 HomeScreen(
