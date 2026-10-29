@@ -81,3 +81,41 @@ Pruebas de roles sin servicios remotos:
 ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.data.session.EncryptedSharedPreferencesSessionStorageTest
 ```
 
+## Navegación inicial por rol (#98)
+
+`resolveInitialDestination` traduce el estado real de `SessionManager` a un
+destino inicial. `SessionStartupGate` aplica la misma decisión al completar el
+login y al restaurar la sesión cifrada:
+
+- `Restoring`: indicador de carga, sin montar destinos funcionales.
+- Sin sesión: `login`.
+- Únicamente `CIUDADANO`: `home`, reutilizando el flujo existente.
+- Únicamente `ADMIN`: `admin`, pantalla provisional con cierre de sesión.
+- Roles ausentes, desconocidos, mezclados, ambiguos o sesión inconsistente:
+  `role_unavailable`, con explicación y cierre de sesión.
+
+El modelo de #97 admite conjuntos de roles, pero el proyecto no define una
+prioridad cuando aparecen Ciudadano y Administrador juntos. Por ello no se
+elige ninguno automáticamente. Los duplicados del mismo rol se interpretan
+como un único rol, conforme al conjunto que expone #97.
+
+La decisión no depende del correo ni de identificadores específicos. Los
+composables no leen ni escriben almacenamiento: el logout sigue delegándose al
+`SessionManager` existente. Cambiar la sesión o el destino inicial elimina el
+controlador y el back stack anteriores; recomponer la misma sesión conserva
+la navegación actual. Login, carga, Administrador y el estado no disponible
+no muestran la barra de navegación del flujo Ciudadano.
+
+No se modifican autenticación, JWT ni persistencia. Las restricciones
+detalladas de pantallas y acciones corresponden a #99; completar los flujos
+Ciudadano y Administrador corresponde a #101 y #102. La pantalla provisional
+no ofrece gestión de incidentes ni representa un panel administrativo completo.
+
+Validación local:
+
+```sh
+./gradlew :app:testDebugUnitTest
+./gradlew :app:assembleDebug
+./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.startup.RoleNavigationTest,cl.uct.ojociudadano.ui.startup.SessionStartupGateTest
+```
+
