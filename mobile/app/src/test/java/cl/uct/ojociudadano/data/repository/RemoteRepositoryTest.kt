@@ -19,6 +19,8 @@ import okhttp3.ResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
+import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
 
 class RemoteRepositoryTest {
 
@@ -167,6 +169,8 @@ class RemoteRepositoryTest {
         private val categories: List<CategoryDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+        override suspend fun register(request: RegisterRequestDto): RegisterResponseDto =
+            error("Registration is not used by this test")
 
         var lastLoginRequest: LoginRequestDto? = null
             private set

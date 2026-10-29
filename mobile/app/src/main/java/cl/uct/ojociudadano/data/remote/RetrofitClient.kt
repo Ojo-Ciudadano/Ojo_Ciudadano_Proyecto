@@ -6,6 +6,7 @@ import cl.uct.ojociudadano.data.session.TokenSnapshot
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import cl.uct.ojociudadano.data.remote.auth.RegistrationRequestInterceptor
 
 object RetrofitClient {
 
@@ -35,6 +36,7 @@ object RetrofitClient {
         val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
 
         val httpClient = OkHttpClient.Builder()
+            .addInterceptor(RegistrationRequestInterceptor())
             .apply {
                 tokenProvider?.let {
                     addInterceptor(

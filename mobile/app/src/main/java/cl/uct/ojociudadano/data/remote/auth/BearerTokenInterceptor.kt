@@ -13,6 +13,8 @@ class BearerTokenInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        // Registro público: no adjuntar JWT ni invalidar una sesión por su respuesta.
+        if (request.isRegistrationRequest()) return chain.proceed(request)
         val currentToken = tokenProvider.currentTokenSnapshot()
         // Retrofit tags stay local: prevent an old reporter ID from using a new session's JWT.
         val expectedSession = request.tag(TokenSnapshot::class.java)

@@ -18,8 +18,15 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Tag
 import retrofit2.http.Streaming
+import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
+import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
 
 interface ApiService {
+
+    @POST("api/v1/auth/register")
+    suspend fun register(
+        @Body request: RegisterRequestDto
+    ): RegisterResponseDto
 
     @POST("api/v1/auth/login")
     suspend fun login(

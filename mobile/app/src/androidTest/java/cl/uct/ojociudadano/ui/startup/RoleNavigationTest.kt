@@ -28,6 +28,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import cl.uct.ojociudadano.data.model.RegisteredUser
+import cl.uct.ojociudadano.data.model.RegistrationInput
 
 class RoleNavigationTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -55,6 +57,9 @@ class RoleNavigationTest {
         compose.setContent {
             OjoCiudadanoTheme {
                 SessionStartupGate(manager, object : AuthRepository {
+                    override suspend fun register(input: RegistrationInput): RegisteredUser =
+                        error("Registration is not used by this test")
+
                     override suspend fun login(email: String, password: String) = session("ADMIN")
                 })
             }
@@ -129,6 +134,9 @@ class RoleNavigationTest {
         compose.setContent {
             OjoCiudadanoTheme {
                 SessionStartupGate(manager, object : AuthRepository {
+                    override suspend fun register(input: RegistrationInput): RegisteredUser =
+                        error("Registration is not used by this test")
+
                     override suspend fun login(email: String, password: String): AuthenticatedSession =
                         error("Restoration must not call login")
                 })
