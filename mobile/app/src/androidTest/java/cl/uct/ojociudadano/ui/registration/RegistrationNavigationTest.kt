@@ -58,7 +58,7 @@ class RegistrationNavigationTest {
         compose.onNodeWithTag(LoginTestTags.PASSWORD_FIELD).performTextInput("123456")
         compose.onNodeWithTag(LoginTestTags.SUBMIT_BUTTON).performScrollTo().performClick()
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
-        compose.onNodeWithText("¡Bienvenido!").assertIsDisplayed()
+        compose.onNodeWithTag("citizen_home").assertIsDisplayed()
         compose.runOnIdle { assertEquals(1, repository.logins); assertEquals(1, storage.saves) }
     }
     @Test fun explicitAndSystemBackReturnToLoginWithoutRequests() {

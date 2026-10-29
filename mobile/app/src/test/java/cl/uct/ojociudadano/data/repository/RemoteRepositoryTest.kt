@@ -70,6 +70,16 @@ class RemoteRepositoryTest {
     }
 
     @Test
+    fun `own incident results exclude other users even when server ignores filter`() = runTest {
+        val mine = sampleIncidentDto().copy(usuarioReportaId = testSession().userId)
+        val other = mine.copy(id = "other", usuarioReportaId = "another-user")
+        val api = FakeApiService(incidents = listOf(mine, other))
+        val repository = RemoteIncidentRepository(api, testSessionManager())
+        assertEquals(listOf(mine.id), repository.getCurrentUserIncidents().map { it.id })
+        assertEquals(2, repository.getIncidents().size)
+    }
+
+    @Test
     fun `getIncidentById forwards id and maps response`() = runTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()

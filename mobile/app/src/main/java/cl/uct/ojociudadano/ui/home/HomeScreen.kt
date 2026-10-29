@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,7 +36,7 @@ fun HomeScreen(
     onMapClick: () -> Unit = {},
     onIncidentClick: (String) -> Unit = {}
 ) {
-    Column(modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize().testTag("citizen_home")) {
         CitizenHeader("Ojo Ciudadano", "Ciudadano") {
             IconButton(onClick = onNotificationsClick) { Icon(Icons.Default.Notifications, "Notificaciones", tint = androidx.compose.ui.graphics.Color.White) }
         }

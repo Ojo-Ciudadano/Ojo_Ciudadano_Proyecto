@@ -17,9 +17,9 @@ import cl.uct.ojociudadano.ui.components.CitizenMessage
 
 @Composable
 fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
-                  onIncidentClick: (String) -> Unit = {}) {
+                  onIncidentClick: (String) -> Unit = {}, reportsViewModel: ReportsViewModel? = null) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
-    val model: ReportsViewModel = viewModel(factory = remember(application) {
+    val model: ReportsViewModel = reportsViewModel ?: viewModel(factory = remember(application) {
         ReportsViewModelFactory(application.container.incidentRepository, application.container.categoryRepository)
     })
     val incidents by model.incidents.collectAsState()
