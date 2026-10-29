@@ -22,6 +22,8 @@ import cl.uct.ojociudadano.ui.report.CreateReportScreen
 import cl.uct.ojociudadano.ui.reports.ReportsScreen
 
 object AppRoutes {
+    const val ADMIN = "admin"
+    const val ROLE_UNAVAILABLE = "role_unavailable"
     const val HOME = "home"
     const val REPORTS = "reports"
     const val CREATE_REPORT = "create_report"
@@ -49,7 +51,7 @@ fun AppNavigation(
 
     Scaffold(
         bottomBar = {
-            if (currentRoute != AppRoutes.LOGIN) {
+            if (currentRoute in citizenRoutes) {
                 AppBottomNavigation(currentRoute = currentRoute) { route ->
                     if (route == AppRoutes.HOME) {
                         navigateToHome()
@@ -71,6 +73,20 @@ fun AppNavigation(
             startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(AppRoutes.ADMIN) {
+                SessionDestinationScreen(
+                    title = "Administrador",
+                    message = "Pantalla provisional. Las funcionalidades administrativas aún no están disponibles.",
+                    onLogout = onLogout
+                )
+            }
+            composable(AppRoutes.ROLE_UNAVAILABLE) {
+                SessionDestinationScreen(
+                    title = "No se puede determinar tu acceso",
+                    message = "La sesión no tiene un único rol válido. Cierra sesión e inicia nuevamente. Si el problema continúa, contacta al administrador.",
+                    onLogout = onLogout
+                )
+            }
             composable(AppRoutes.LOGIN) {
                 loginContent?.invoke() ?: LoginScreen(onLogin = onLogin)
             }
@@ -98,3 +114,8 @@ fun AppNavigation(
         }
     }
 }
+
+private val citizenRoutes = setOf(
+    AppRoutes.HOME, AppRoutes.REPORTS, AppRoutes.CREATE_REPORT,
+    AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE
+)
