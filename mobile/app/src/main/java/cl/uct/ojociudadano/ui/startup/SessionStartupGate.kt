@@ -22,6 +22,8 @@ import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.navigation.AppNavigation
 import cl.uct.ojociudadano.navigation.AppRoutes
+import cl.uct.ojociudadano.navigation.InitialDestination
+import cl.uct.ojociudadano.navigation.resolveInitialDestination
 import cl.uct.ojociudadano.ui.login.AuthViewModel
 import cl.uct.ojociudadano.ui.login.AuthViewModelFactory
 import cl.uct.ojociudadano.ui.login.LoginRoute
@@ -39,10 +41,16 @@ fun SessionStartupGate(
         sessionManager.restore()
     }
 
-    when (state) {
-        SessionState.Restoring -> StartupLoading()
-        is SessionState.Authenticated -> key((state as SessionState.Authenticated).session.userId) {
+    val destination = resolveInitialDestination(state)
+    when (destination) {
+        InitialDestination.LOADING -> StartupLoading()
+        InitialDestination.CITIZEN,
+        InitialDestination.ADMINISTRATOR,
+        InitialDestination.UNAVAILABLE -> key((state as SessionState.Authenticated).session, destination) {
+            // Dispose the old controller/back stack when the account, session or role changes.
+            // Recomposition with the same session keeps the current destination unchanged.
             AppNavigation(
+                startDestination = requireNotNull(destination.route),
                 onLogout = {
                     coroutineScope.launch {
                         runCatching { sessionManager.logout() }
@@ -50,7 +58,7 @@ fun SessionStartupGate(
                 }
             )
         }
-        SessionState.Unauthenticated -> LoginNavigation(
+        InitialDestination.AUTHENTICATION -> LoginNavigation(
             sessionManager = sessionManager,
             authRepository = authRepository
         )
