@@ -1,8 +1,7 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../components/notifications/NotificationProvider'
-import { getInitialRouteForRoles } from '../../config/navigation'
 import type { ApiError } from '../../types'
 import './LoginPage.css'
 
@@ -10,30 +9,25 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const { user, login, isLoading, isAuthenticated } = useAuth()
+  const { login, isLoading, isAuthenticated } = useAuth()
   const { showNotification } = useNotification()
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Si ya está autenticado, redirige al destino previo o al inicio correspondiente por rol
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const from = (location.state as { from?: { pathname: string } })?.from?.pathname
-      const defaultTarget = getInitialRouteForRoles(user.roles)
-      navigate(from || defaultTarget, { replace: true })
-    }
-  }, [isAuthenticated, user, navigate, location.state])
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/'
+
+  if (isAuthenticated) {
+    navigate(from, { replace: true })
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
 
     try {
-      const loggedUser = await login(email, password)
+      await login(email, password)
       showNotification('¡Inicio de sesión exitoso!', 'success')
-      const from = (location.state as { from?: { pathname: string } })?.from?.pathname
-      const target = from || getInitialRouteForRoles(loggedUser.roles)
-      navigate(target, { replace: true })
+      navigate(from, { replace: true })
     } catch (err) {
       const apiError = err as ApiError
       const errorMessage = Array.isArray(apiError.message)
@@ -51,6 +45,11 @@ export function LoginPage() {
         <div className="web-auth-header">
           <img src="/logo-2.jpeg" alt="Ojo Ciudadano" className="login-logo" />
           <h2>Acceso plataforma</h2>
+          </div>
+
+        <div className="role-toggle web-role-toggle">
+          <button className="role-btn active">Ciudadano</button>
+          <button className="role-btn">Administrador</button>
         </div>
 
         <form onSubmit={handleSubmit}>

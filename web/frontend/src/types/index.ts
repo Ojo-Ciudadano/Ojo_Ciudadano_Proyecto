@@ -1,12 +1,8 @@
-export type RoleName = 'ADMIN' | 'CIUDADANO'
-
 export interface User {
   id: string
   email: string
   nombre: string
-  apellido?: string
-  telefono?: string | null
-  fechaRegistro?: string | Date
+  apellido: string
   roles: string[]
 }
 
