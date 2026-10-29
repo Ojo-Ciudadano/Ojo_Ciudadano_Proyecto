@@ -32,5 +32,7 @@ object RoleAccessPolicy {
 
     fun safeRoute(state: SessionState): String? = resolveInitialDestination(state).route
 
+    internal val registeredRoutes: Set<String> get() = audiences.keys
+
     private val incidentRoute = Regex("incident/[^/?#]+")
 }

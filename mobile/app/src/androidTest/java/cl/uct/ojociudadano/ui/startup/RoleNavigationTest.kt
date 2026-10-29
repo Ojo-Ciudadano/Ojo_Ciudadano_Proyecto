@@ -17,6 +17,7 @@ import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.navigation.AppNavigation
+import cl.uct.ojociudadano.navigation.navigateIfAllowed
 import cl.uct.ojociudadano.navigation.AppRoutes
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import cl.uct.ojociudadano.ui.login.LoginTestTags
@@ -24,6 +25,7 @@ import java.util.Base64
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -109,24 +111,59 @@ class RoleNavigationTest {
     }
 
     @Test fun recompositionPreservesCurrentDestinationWithoutAddingEntries() {
+        val manager = DefaultSessionManager(Storage(null))
+        runBlocking { manager.restore() }
         val revision = mutableStateOf(0)
         lateinit var controller: NavHostController
         var changes = 0
         compose.setContent {
             revision.value
             controller = rememberNavController()
-            OjoCiudadanoTheme { AppNavigation(controller, startDestination = AppRoutes.ADMIN) }
+            OjoCiudadanoTheme {
+                AppNavigation(manager, controller, startDestination = AppRoutes.LOGIN,
+                    loginContent = {}, registrationContent = {})
+            }
         }
         compose.runOnIdle {
             controller.addOnDestinationChangedListener { _, _, _ -> changes++ }
-            controller.navigate(AppRoutes.ROLE_UNAVAILABLE)
+            controller.navigate(AppRoutes.REGISTER)
         }
         compose.runOnIdle { revision.value++ }
         compose.runOnIdle {
             assertEquals(2, changes)
-            assertEquals(AppRoutes.ROLE_UNAVAILABLE, controller.currentDestination?.route)
+            assertEquals(AppRoutes.REGISTER, controller.currentDestination?.route)
             assertTrue(controller.popBackStack())
             assertFalse(controller.popBackStack())
+        }
+    }
+
+    @Test fun administratorCannotNavigateToCitizenDestinationsEvenBypassingActionGuard() {
+        val manager = DefaultSessionManager(Storage(session("ADMIN")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme {
+                AppNavigation(manager, controller, startDestination = AppRoutes.ADMIN)
+            }
+        }
+        compose.onNodeWithText("Administrador").assertIsDisplayed()
+        for (route in listOf(AppRoutes.HOME, AppRoutes.CREATE_REPORT, AppRoutes.REPORTS,
+            AppRoutes.PROFILE, AppRoutes.MAP, AppRoutes.NOTIFICATIONS, "incident/test-id")) {
+            compose.runOnIdle {
+                assertFalse(controller.navigateIfAllowed(manager, route))
+                assertEquals(AppRoutes.ADMIN, controller.currentDestination?.route)
+                // Simulate a future caller that bypasses the action guard.
+                controller.navigate(route)
+            }
+            compose.waitForIdle()
+            compose.onNodeWithText("Administrador").assertIsDisplayed()
+            compose.onNodeWithTag("citizen_home").assertDoesNotExist()
+            compose.onNodeWithText("Reportar").assertDoesNotExist()
+            compose.runOnIdle {
+                assertEquals(AppRoutes.ADMIN, controller.currentDestination?.route)
+                assertNull(controller.previousBackStackEntry)
+            }
         }
     }
 

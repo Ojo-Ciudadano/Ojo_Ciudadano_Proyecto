@@ -21,6 +21,7 @@ import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.navigation.AppNavigation
+import cl.uct.ojociudadano.navigation.navigateIfAllowed
 import cl.uct.ojociudadano.navigation.AppRoutes
 import cl.uct.ojociudadano.navigation.InitialDestination
 import cl.uct.ojociudadano.navigation.resolveInitialDestination
@@ -57,6 +58,7 @@ fun SessionStartupGate(
             // Dispose the old controller/back stack when the account, session or role changes.
             // Recomposition with the same session keeps the current destination unchanged.
             AppNavigation(
+                sessionManager = sessionManager,
                 startDestination = requireNotNull(destination.route),
                 onLogout = {
                     coroutineScope.launch {
@@ -88,6 +90,7 @@ private fun LoginNavigation(
         mutableStateOf(false)
     }
     AppNavigation(
+        sessionManager = sessionManager,
         navController = navController,
         startDestination = AppRoutes.LOGIN,
         loginContent = {
@@ -95,7 +98,7 @@ private fun LoginNavigation(
                 viewModel = authViewModel,
                 onRegister = {
                     registrationSucceeded = false
-                    navController.navigate(AppRoutes.REGISTER) { launchSingleTop = true }
+                    navController.navigateIfAllowed(sessionManager, AppRoutes.REGISTER)
                 },
                 registrationSucceeded = registrationSucceeded
             )

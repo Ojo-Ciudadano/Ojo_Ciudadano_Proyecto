@@ -7,13 +7,15 @@ import androidx.compose.runtime.Composable
 import android.net.Uri
 import cl.uct.ojociudadano.ui.reports.IncidentDetailScreen
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.navigation.navOptions
+import cl.uct.ojociudadano.data.session.SessionManager
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
@@ -42,6 +44,7 @@ object AppRoutes {
 
 @Composable
 fun AppNavigation(
+    sessionManager: SessionManager,
     navController: NavHostController = rememberNavController(),
     startDestination: String = AppRoutes.HOME,
     onLogin: (LoginCredentials) -> Unit = {},
@@ -49,28 +52,36 @@ fun AppNavigation(
     loginContent: (@Composable () -> Unit)? = null,
     registrationContent: (@Composable (onBack: () -> Unit) -> Unit)? = null
 ) {
+    val sessionState by sessionManager.state.collectAsState()
+    fun navigate(route: String) {
+        navController.navigateIfAllowed(sessionManager, route)
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     fun navigateToHome() {
+        if (!RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.HOME)) return
         if (!navController.popBackStack(AppRoutes.HOME, inclusive = false)) {
-            navController.navigate(AppRoutes.HOME)
+            navigate(AppRoutes.HOME)
         }
     }
 
     Scaffold(
         bottomBar = {
-            if (currentRoute in citizenRoutes) {
-                AppBottomNavigation(currentRoute = currentRoute) { route ->
+            if (currentRoute in citizenRoutes && RoleAccessPolicy.allows(sessionState, currentRoute)) {
+                AppBottomNavigation(
+                    currentRoute = currentRoute,
+                    isDestinationAllowed = { RoleAccessPolicy.allows(sessionState, it) }
+                ) { route ->
                     if (route == AppRoutes.HOME) {
                         navigateToHome()
                     } else {
-                        navController.navigate(route) {
+                        navController.navigateIfAllowed(sessionManager, route, navOptions {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
                             launchSingleTop = true
                             restoreState = true
-                        }
+                        })
                     }
                 }
             }
@@ -85,56 +96,56 @@ fun AppNavigation(
             popExitTransition = { fadeOut(tween(120)) },
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(AppRoutes.ADMIN) {
+            protectedComposable(sessionManager, navController, AppRoutes.ADMIN) {
                 SessionDestinationScreen(
                     title = "Administrador",
                     message = "Pantalla provisional. Las funcionalidades administrativas aún no están disponibles.",
                     onLogout = onLogout
                 )
             }
-            composable(AppRoutes.ROLE_UNAVAILABLE) {
+            protectedComposable(sessionManager, navController, AppRoutes.ROLE_UNAVAILABLE) {
                 SessionDestinationScreen(
                     title = "No se puede determinar tu acceso",
                     message = "La sesión no tiene un único rol válido. Cierra sesión e inicia nuevamente. Si el problema continúa, contacta al administrador.",
                     onLogout = onLogout
                 )
             }
-            composable(AppRoutes.LOGIN) {
+            protectedComposable(sessionManager, navController, AppRoutes.LOGIN) {
                 loginContent?.invoke() ?: LoginScreen(
                     onLogin = onLogin,
-                    onRegister = registrationContent?.let { { navController.navigate(AppRoutes.REGISTER) } }
+                    onRegister = registrationContent?.let { { navigate(AppRoutes.REGISTER) } }
                 )
             }
-            composable(AppRoutes.REGISTER) {
+            protectedComposable(sessionManager, navController, AppRoutes.REGISTER) {
                 registrationContent?.invoke { navController.popBackStack(AppRoutes.LOGIN, false) }
             }
-            composable(AppRoutes.HOME) {
+            protectedComposable(sessionManager, navController, AppRoutes.HOME) {
                 HomeScreen(
-                    onReportsClick = { navController.navigate(AppRoutes.REPORTS) },
-                    onCreateReportClick = { navController.navigate(AppRoutes.CREATE_REPORT) },
-                    onNotificationsClick = { navController.navigate(AppRoutes.NOTIFICATIONS) },
-                    onMapClick = { navController.navigate(AppRoutes.MAP) },
-                    onIncidentClick = { navController.navigate("incident/${Uri.encode(it)}") }
+                    onReportsClick = { navigate(AppRoutes.REPORTS) },
+                    onCreateReportClick = { navigate(AppRoutes.CREATE_REPORT) },
+                    onNotificationsClick = { navigate(AppRoutes.NOTIFICATIONS) },
+                    onMapClick = { navigate(AppRoutes.MAP) },
+                    onIncidentClick = { navigate("incident/${Uri.encode(it)}") }
                 )
             }
-            composable(AppRoutes.REPORTS) {
+            protectedComposable(sessionManager, navController, AppRoutes.REPORTS) {
                 ReportsScreen(
                     onBack = ::navigateToHome,
-                    onCreateReportClick = { navController.navigate(AppRoutes.CREATE_REPORT) },
-                    onIncidentClick = { navController.navigate("incident/${Uri.encode(it)}") }
+                    onCreateReportClick = { navigate(AppRoutes.CREATE_REPORT) },
+                    onIncidentClick = { navigate("incident/${Uri.encode(it)}") }
                 )
             }
-            composable(AppRoutes.INCIDENT_DETAIL) { entry ->
+            protectedComposable(sessionManager, navController, AppRoutes.INCIDENT_DETAIL) { entry ->
                 IncidentDetailScreen(entry.arguments?.getString("id").orEmpty(), onBack = { navController.navigateUp() })
             }
-            composable(AppRoutes.CREATE_REPORT) {
+            protectedComposable(sessionManager, navController, AppRoutes.CREATE_REPORT) {
                 CreateReportScreen(onBack = ::navigateToHome)
             }
-            composable(AppRoutes.NOTIFICATIONS) {
+            protectedComposable(sessionManager, navController, AppRoutes.NOTIFICATIONS) {
                 NotificationsScreen(onBack = navController::navigateUp)
             }
-            composable(AppRoutes.MAP) { MapScreen() }
-            composable(AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
+            protectedComposable(sessionManager, navController, AppRoutes.MAP) { MapScreen() }
+            protectedComposable(sessionManager, navController, AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
         }
     }
 }
