@@ -28,6 +28,13 @@ import cl.uct.ojociudadano.ui.login.AuthViewModel
 import cl.uct.ojociudadano.ui.login.AuthViewModelFactory
 import cl.uct.ojociudadano.ui.login.LoginRoute
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.navigation.compose.rememberNavController
+import cl.uct.ojociudadano.ui.registration.RegistrationRoute
+import cl.uct.ojociudadano.ui.registration.RegistrationViewModel
+import cl.uct.ojociudadano.ui.registration.RegistrationViewModelFactory
 
 @Composable
 fun SessionStartupGate(
@@ -76,10 +83,37 @@ private fun LoginNavigation(
         }
     )
 
+    val navController = rememberNavController()
+    var registrationSucceeded by rememberSaveable {
+        mutableStateOf(false)
+    }
     AppNavigation(
+        navController = navController,
         startDestination = AppRoutes.LOGIN,
         loginContent = {
-            LoginRoute(viewModel = authViewModel)
+            LoginRoute(
+                viewModel = authViewModel,
+                onRegister = {
+                    registrationSucceeded = false
+                    navController.navigate(AppRoutes.REGISTER) { launchSingleTop = true }
+                },
+                registrationSucceeded = registrationSucceeded
+            )
+        },
+        registrationContent = { onBack ->
+            val registrationViewModel: RegistrationViewModel = viewModel(
+                factory = remember(authRepository) {
+                    RegistrationViewModelFactory(authRepository)
+                }
+            )
+            RegistrationRoute(
+                viewModel = registrationViewModel,
+                onBack = onBack,
+                onSuccess = {
+                    registrationSucceeded = true
+                    onBack()
+                }
+            )
         }
     )
 }

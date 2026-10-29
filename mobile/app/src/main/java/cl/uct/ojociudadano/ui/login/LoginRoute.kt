@@ -10,7 +10,9 @@ import androidx.compose.ui.Modifier
 @Composable
 fun LoginRoute(
     viewModel: AuthViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRegister: (() -> Unit)? = null,
+    registrationSucceeded: Boolean = false
 ) {
     val authState by viewModel.uiState.collectAsState()
 
@@ -21,6 +23,8 @@ fun LoginRoute(
     LoginScreen(
         onLogin = viewModel::login,
         authState = authState,
-        modifier = modifier
+        modifier = modifier,
+        onRegister = onRegister,
+        registrationSucceeded = registrationSucceeded
     )
 }

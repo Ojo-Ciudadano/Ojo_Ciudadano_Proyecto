@@ -1,5 +1,10 @@
 package cl.uct.ojociudadano.ui.login
 
+import cl.uct.ojociudadano.ui.components.CitizenAuthLayout
+import cl.uct.ojociudadano.ui.components.CitizenMessage
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.TextButton
 
 object LoginTestTags {
     const val EMAIL_FIELD = "login_email_field"
@@ -64,7 +70,9 @@ fun LoginScreen(
     onLogin: (LoginCredentials) -> Unit,
     authState: AuthUiState = AuthUiState.Idle,
     modifier: Modifier = Modifier,
-    formValidator: LoginFormValidator = remember { LoginFormValidator() }
+    formValidator: LoginFormValidator = remember { LoginFormValidator() },
+    onRegister: (() -> Unit)? = null,
+    registrationSucceeded: Boolean = false
 ) {
     var formState by rememberSaveable(stateSaver = LoginFormState.Saver) {
         mutableStateOf(LoginFormState())
@@ -93,7 +101,9 @@ fun LoginScreen(
         },
         onLoginClick = ::submitLogin,
         authState = authState,
-        modifier = modifier
+        modifier = modifier,
+        onRegister = onRegister,
+        registrationSucceeded = registrationSucceeded
     )
 }
 
@@ -105,7 +115,9 @@ private fun LoginScreenContent(
     onPasswordVisibilityToggle: () -> Unit,
     onLoginClick: () -> Unit,
     authState: AuthUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRegister: (() -> Unit)? = null,
+    registrationSucceeded: Boolean = false
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -118,15 +130,7 @@ private fun LoginScreenContent(
         onLoginClick()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    CitizenAuthLayout(modifier) {
         Spacer(modifier = Modifier.size(12.dp))
 
         Text(
@@ -141,7 +145,12 @@ private fun LoginScreenContent(
             modifier = Modifier.fillMaxWidth()
         )
 
-        when (authState) {
+        AnimatedVisibility(registrationSucceeded) {
+            CitizenMessage("Cuenta creada. Inicia sesión con tus credenciales.")
+        }
+
+        AnimatedContent(targetState = authState, label = "login_status") { currentState ->
+        when (val authState = currentState) {
             AuthUiState.Idle -> Unit
             AuthUiState.Loading -> {
                 CircularProgressIndicator(
@@ -158,12 +167,11 @@ private fun LoginScreenContent(
             }
 
             is AuthUiState.Error -> {
-                Text(
-                    text = authState.error.message,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag(LoginTestTags.AUTH_ERROR_MESSAGE)
-                )
+                CitizenMessage(authState.error.message, isError = true,
+                    modifier = Modifier.testTag(LoginTestTags.AUTH_ERROR_MESSAGE))
             }
+        }
+
         }
 
         OutlinedTextField(
@@ -171,6 +179,7 @@ private fun LoginScreenContent(
             onValueChange = onEmailChange,
             modifier = Modifier
                 .fillMaxWidth()
+                .animateContentSize()
                 .testTag(LoginTestTags.EMAIL_FIELD),
             label = { Text("Correo electrónico") },
             singleLine = true,
@@ -193,6 +202,7 @@ private fun LoginScreenContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(passwordFocusRequester)
+                .animateContentSize()
                 .testTag(LoginTestTags.PASSWORD_FIELD),
             label = { Text("Contraseña") },
             singleLine = true,
@@ -237,6 +247,11 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.SUBMIT_BUTTON)
         ) {
             Text("Iniciar sesión")
+        }
+        onRegister?.let { register ->
+            TextButton(onClick = register, enabled = !isLoading) {
+                Text("Crear cuenta")
+            }
         }
     }
 }

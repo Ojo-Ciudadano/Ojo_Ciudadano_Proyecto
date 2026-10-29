@@ -22,6 +22,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import cl.uct.ojociudadano.data.model.RegisteredUser
+import cl.uct.ojociudadano.data.model.RegistrationInput
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
@@ -272,6 +274,8 @@ private class FakeAuthRepository(
         outcomes.removeFirst().getOrElse { throw it }
     }
 ) : AuthRepository {
+    override suspend fun register(input: RegistrationInput): RegisteredUser =
+        error("Registration is not used by this test")
 
     val loginCredentials = mutableListOf<LoginCredentials>()
 

@@ -19,6 +19,8 @@ import okhttp3.ResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
+import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
 
 class RemoteRepositoryTest {
 
@@ -65,6 +67,16 @@ class RemoteRepositoryTest {
         repository.getCurrentUserIncidents()
 
         assertEquals(userId, apiService.lastReporterUserId)
+    }
+
+    @Test
+    fun `own incident results exclude other users even when server ignores filter`() = runTest {
+        val mine = sampleIncidentDto().copy(usuarioReportaId = testSession().userId)
+        val other = mine.copy(id = "other", usuarioReportaId = "another-user")
+        val api = FakeApiService(incidents = listOf(mine, other))
+        val repository = RemoteIncidentRepository(api, testSessionManager())
+        assertEquals(listOf(mine.id), repository.getCurrentUserIncidents().map { it.id })
+        assertEquals(2, repository.getIncidents().size)
     }
 
     @Test
@@ -167,6 +179,8 @@ class RemoteRepositoryTest {
         private val categories: List<CategoryDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+        override suspend fun register(request: RegisterRequestDto): RegisterResponseDto =
+            error("Registration is not used by this test")
 
         var lastLoginRequest: LoginRequestDto? = null
             private set

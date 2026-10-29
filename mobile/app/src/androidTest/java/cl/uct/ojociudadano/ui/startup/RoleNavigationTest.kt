@@ -28,6 +28,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import cl.uct.ojociudadano.data.model.RegisteredUser
+import cl.uct.ojociudadano.data.model.RegistrationInput
 
 class RoleNavigationTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -36,17 +38,17 @@ class RoleNavigationTest {
         val manager = DefaultSessionManager(Storage(session("CIUDADANO")))
         showGate(manager)
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
-        compose.onNodeWithText("¡Bienvenido!").assertIsDisplayed()
+        compose.onNodeWithTag("citizen_home").assertIsDisplayed()
         compose.onNodeWithText("Administrador").assertDoesNotExist()
         compose.onNodeWithText("Perfil").performClick()
         compose.runOnIdle { assertTrue(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
         runBlocking { manager.establish(session("CIUDADANO").copy(userId = "another-citizen")) }
-        compose.onNodeWithText("¡Bienvenido!").assertIsDisplayed()
+        compose.onNodeWithTag("citizen_home").assertIsDisplayed()
         compose.onNodeWithText("Perfil").performClick()
         compose.onNodeWithText("Cerrar sesión").performClick()
         compose.waitUntil(5_000) { manager.state.value == SessionState.Unauthenticated }
         compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
-        compose.onNodeWithText("¡Bienvenido!").assertDoesNotExist()
+        compose.onNodeWithTag("citizen_home").assertDoesNotExist()
         compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
     }
 
@@ -55,6 +57,9 @@ class RoleNavigationTest {
         compose.setContent {
             OjoCiudadanoTheme {
                 SessionStartupGate(manager, object : AuthRepository {
+                    override suspend fun register(input: RegistrationInput): RegisteredUser =
+                        error("Registration is not used by this test")
+
                     override suspend fun login(email: String, password: String) = session("ADMIN")
                 })
             }
@@ -80,7 +85,7 @@ class RoleNavigationTest {
         showGate(delayed)
         compose.onNodeWithText("Conectando...").assertIsDisplayed()
         compose.onNodeWithText("Administrador").assertDoesNotExist()
-        compose.onNodeWithText("¡Bienvenido!").assertDoesNotExist()
+        compose.onNodeWithTag("citizen_home").assertDoesNotExist()
         ready.complete(Unit)
         compose.waitForIdle()
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
@@ -129,6 +134,9 @@ class RoleNavigationTest {
         compose.setContent {
             OjoCiudadanoTheme {
                 SessionStartupGate(manager, object : AuthRepository {
+                    override suspend fun register(input: RegistrationInput): RegisteredUser =
+                        error("Registration is not used by this test")
+
                     override suspend fun login(email: String, password: String): AuthenticatedSession =
                         error("Restoration must not call login")
                 })

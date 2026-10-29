@@ -17,3 +17,6 @@ local.properties
 .idea/
 **/.idea/
 *.iml
+
+# Kotlin compiler session cache
+.kotlin/

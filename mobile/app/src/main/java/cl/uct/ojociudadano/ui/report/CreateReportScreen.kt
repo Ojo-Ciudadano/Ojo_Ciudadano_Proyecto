@@ -1,5 +1,7 @@
 package cl.uct.ojociudadano.ui.report
 
+import cl.uct.ojociudadano.ui.components.CitizenHeader
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -91,20 +93,12 @@ fun CreateReportScreen(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
+            .animateContentSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
-            }
-            Text(
-                text = "Crear reporte",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        CitizenHeader("Crear reporte", onBack = onBack)
 
         ReportTextField(
             value = state.title,
