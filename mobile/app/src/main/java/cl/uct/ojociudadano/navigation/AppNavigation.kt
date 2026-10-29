@@ -1,6 +1,8 @@
 package cl.uct.ojociudadano.navigation
 
 import androidx.compose.runtime.Composable
+import android.net.Uri
+import cl.uct.ojociudadano.ui.reports.IncidentDetailScreen
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -26,6 +28,7 @@ object AppRoutes {
     const val ROLE_UNAVAILABLE = "role_unavailable"
     const val HOME = "home"
     const val REPORTS = "reports"
+    const val INCIDENT_DETAIL = "incident/{id}"
     const val CREATE_REPORT = "create_report"
     const val NOTIFICATIONS = "notifications"
     const val MAP = "map"
@@ -102,14 +105,20 @@ fun AppNavigation(
                 HomeScreen(
                     onReportsClick = { navController.navigate(AppRoutes.REPORTS) },
                     onCreateReportClick = { navController.navigate(AppRoutes.CREATE_REPORT) },
-                    onNotificationsClick = { navController.navigate(AppRoutes.NOTIFICATIONS) }
+                    onNotificationsClick = { navController.navigate(AppRoutes.NOTIFICATIONS) },
+                    onMapClick = { navController.navigate(AppRoutes.MAP) },
+                    onIncidentClick = { navController.navigate("incident/${Uri.encode(it)}") }
                 )
             }
             composable(AppRoutes.REPORTS) {
                 ReportsScreen(
                     onBack = ::navigateToHome,
-                    onCreateReportClick = { navController.navigate(AppRoutes.CREATE_REPORT) }
+                    onCreateReportClick = { navController.navigate(AppRoutes.CREATE_REPORT) },
+                    onIncidentClick = { navController.navigate("incident/${Uri.encode(it)}") }
                 )
+            }
+            composable(AppRoutes.INCIDENT_DETAIL) { entry ->
+                IncidentDetailScreen(entry.arguments?.getString("id").orEmpty(), onBack = { navController.navigateUp() })
             }
             composable(AppRoutes.CREATE_REPORT) {
                 CreateReportScreen(onBack = ::navigateToHome)
@@ -125,5 +134,5 @@ fun AppNavigation(
 
 private val citizenRoutes = setOf(
     AppRoutes.HOME, AppRoutes.REPORTS, AppRoutes.CREATE_REPORT,
-    AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE
+    AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE, AppRoutes.INCIDENT_DETAIL
 )

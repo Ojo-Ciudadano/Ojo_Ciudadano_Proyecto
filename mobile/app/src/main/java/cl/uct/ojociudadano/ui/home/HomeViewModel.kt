@@ -24,12 +24,15 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow<IncidentsUiState>(IncidentsUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private var loadJob: kotlinx.coroutines.Job? = null
+
     init {
         loadIncidents()
     }
 
     fun loadIncidents() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.value = IncidentsUiState.Loading
             try {
                 val result = incidentRepository.getCurrentUserIncidents()
