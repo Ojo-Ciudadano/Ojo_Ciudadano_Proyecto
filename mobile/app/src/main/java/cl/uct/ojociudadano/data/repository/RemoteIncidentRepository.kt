@@ -35,10 +35,12 @@ class RemoteIncidentRepository(
     }
 
     override suspend fun getCurrentUserIncidents(): List<Incident> {
-        val response = withCurrentIdentity { identity ->
+        return withCurrentIdentity { identity ->
+            // Defense in depth: never trust a server that accidentally ignores the query filter.
             apiService.getIncidents(identity.userId, identity.token)
+                .map { it.toDomain() }
+                .filter { it.reporterUserId == identity.userId }
         }
-        return response.map { it.toDomain() }
     }
 
     override suspend fun getIncidentById(id: String): Incident {

@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 
-import java.util.Collections.emptyList
+import cl.uct.ojociudadano.ui.reports.IncidentsUiState
+import cl.uct.ojociudadano.ui.reports.incidentMessage
 
 class HomeViewModel(
     private val incidentRepository: IncidentRepository
@@ -20,18 +21,25 @@ class HomeViewModel(
     private val _incidents = MutableStateFlow<List<Incident>>(emptyList())
     val incidents = _incidents.asStateFlow()
 
+    private val _uiState = MutableStateFlow<IncidentsUiState>(IncidentsUiState.Loading)
+    val uiState = _uiState.asStateFlow()
+
     init {
         loadIncidents()
     }
 
     fun loadIncidents() {
         viewModelScope.launch {
+            _uiState.value = IncidentsUiState.Loading
             try {
-                val result = incidentRepository.getIncidents()
+                val result = incidentRepository.getCurrentUserIncidents()
                 _incidents.value = result
+                _uiState.value = if (result.isEmpty()) IncidentsUiState.Empty else IncidentsUiState.Success
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
+                _incidents.value = emptyList()
+                _uiState.value = IncidentsUiState.Error(exception.incidentMessage())
                 runCatching {
                     Log.e(
                         "HomeViewModel",
