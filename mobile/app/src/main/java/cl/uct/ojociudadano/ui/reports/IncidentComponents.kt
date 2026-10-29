@@ -3,6 +3,7 @@ package cl.uct.ojociudadano.ui.reports
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,8 +42,14 @@ fun IncidentLoadState(state: IncidentsUiState, onRetry: () -> Unit, emptyMessage
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (state) {
             IncidentsUiState.Loading -> {
-                CircularProgressIndicator(Modifier.size(28.dp))
-                Text("Cargando incidentes…")
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CircularProgressIndicator(Modifier.size(28.dp))
+                    Text("Cargando incidentes…")
+                }
             }
             IncidentsUiState.Empty -> CitizenMessage(emptyMessage)
             is IncidentsUiState.Error -> {
