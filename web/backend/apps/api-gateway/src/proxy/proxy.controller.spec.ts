@@ -49,6 +49,13 @@ describe('ProxyController', () => {
     expect(service.forward).toHaveBeenCalledWith(req, res);
   });
 
+  it('handleIncidentesEstadoProxy debe delegar en proxyService.forward', async () => {
+    const req = {} as Request;
+    const res = {} as Response;
+    await controller.handleIncidentesEstadoProxy(req, res);
+    expect(service.forward).toHaveBeenCalledWith(req, res);
+  });
+
   it('handleIncidentesPrioridadProxy debe delegar en proxyService.forward', async () => {
     const req = {} as Request;
     const res = {} as Response;

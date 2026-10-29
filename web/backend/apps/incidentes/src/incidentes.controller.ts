@@ -14,10 +14,13 @@ import {
 
 import { IncidentesService } from './incidentes.service';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { UpdatePrioridadDto } from './dto/update-prioridad.dto';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { Role, Roles } from './auth/roles.decorator';
+import { CurrentUser } from './auth/current-user.decorator';
+import type { UsuarioAutenticado } from './auth/current-user.decorator';
 
 @Controller('incidentes')
 @UseGuards(JwtAuthGuard)
@@ -56,5 +59,24 @@ export class IncidentesController {
     @Body() dto: UpdatePrioridadDto,
   ) {
     return this.incidentesService.updatePrioridad(id, dto);
+  }
+
+  @Patch(':id/estado')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  updateEstado(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          new BadRequestException('El id del incidente debe ser un UUID valido'),
+      }),
+    )
+    id: string,
+    @Body() dto: UpdateEstadoDto,
+    @CurrentUser() usuario?: UsuarioAutenticado,
+  ) {
+    // La identidad proviene exclusivamente del token verificado por JwtAuthGuard.
+    return this.incidentesService.updateEstado(id, dto, usuario?.sub ?? '');
   }
 }
