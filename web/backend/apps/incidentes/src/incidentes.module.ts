@@ -1,4 +1,3 @@
-
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -10,6 +9,7 @@ import { EvidenciasModule } from './evidencias/evidencias.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { IncidentesNotificacionesClient } from './notificaciones/incidentes-notificaciones.client';
 
 @Module({
   imports: [
@@ -25,6 +25,11 @@ import { RolesGuard } from './auth/roles.guard';
     EvidenciasModule,
   ],
   controllers: [IncidentesController],
-  providers: [IncidentesService, JwtAuthGuard, RolesGuard],
+  providers: [
+    IncidentesService,
+    IncidentesNotificacionesClient,
+    JwtAuthGuard,
+    RolesGuard,
+  ],
 })
 export class IncidentesModule {}

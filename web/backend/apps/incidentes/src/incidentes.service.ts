@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
@@ -22,6 +23,7 @@ import {
 } from './prioridad/prioridad.constants';
 import { evidenciaSelect } from './mappers/evidencia.mapper';
 import { toIncidenteResponse } from './mappers/incidente.mapper';
+import { IncidentesNotificacionesClient } from './notificaciones/incidentes-notificaciones.client';
 
 const include = {
   categoria: true,
@@ -31,7 +33,11 @@ const include = {
 };
 @Injectable()
 export class IncidentesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly notificacionesClient?: IncidentesNotificacionesClient,
+  ) {}
 
   async findAll(usuarioReportaId?: string) {
     const incidentes = await this.prisma.incidente.findMany({
@@ -133,50 +139,86 @@ export class IncidentesService {
     // La lectura del estado actual, la validacion de la transicion y las dos
     // escrituras ocurren en la misma transaccion. El bloqueo FOR UPDATE evita
     // que dos solicitudes concurrentes validen contra el mismo estado de origen.
-    return this.prisma.$transaction(async (tx) => {
-      const filas = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
-      `;
+    const { actualizado, estadoAnterior, usuarioReportaId, titulo } =
+      await this.prisma.$transaction(async (tx) => {
+        const filas = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
+        `;
 
-      if (filas.length === 0)
-        throw new NotFoundException(`Incidente ${id} no encontrado`);
+        if (filas.length === 0)
+          throw new NotFoundException(`Incidente ${id} no encontrado`);
 
-      const incidente = await tx.incidente.findUnique({
-        where: { id },
-        select: { id: true, estado: { select: { nombre: true } } },
+        const incidente = await tx.incidente.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            titulo: true,
+            usuarioReportaId: true,
+            estado: { select: { nombre: true } },
+          },
+        });
+        if (!incidente)
+          throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+        const destino = await tx.estado.findUnique({
+          where: { nombre: dto.estado },
+        });
+        if (!destino)
+          throw new NotFoundException(`Estado ${dto.estado} no encontrado`);
+
+        const estadoActual = incidente.estado?.nombre;
+        if (!esTransicionPermitida(estadoActual, destino.nombre)) {
+          throw new ConflictException(
+            `Transicion no permitida de "${estadoActual ?? 'desconocido'}" a "${destino.nombre}"`,
+          );
+        }
+
+        const incidenteActualizado = await tx.incidente.update({
+          where: { id },
+          data: { estadoId: destino.id },
+          include,
+        });
+
+        await tx.historialEstado.create({
+          data: {
+            incidenteId: id,
+            estadoId: destino.id,
+            usuarioId,
+            observacion,
+          },
+        });
+
+        const propietarioReportaId =
+          incidente.usuarioReportaId ??
+          (incidenteActualizado as { usuarioReportaId?: string }).usuarioReportaId ??
+          '';
+        const tituloIncidente =
+          incidente.titulo ??
+          (incidenteActualizado as { titulo?: string }).titulo;
+
+        return {
+          actualizado: incidenteActualizado,
+          estadoAnterior: estadoActual,
+          usuarioReportaId: propietarioReportaId,
+          titulo: tituloIncidente,
+        };
       });
-      if (!incidente)
-        throw new NotFoundException(`Incidente ${id} no encontrado`);
 
-      const destino = await tx.estado.findUnique({
-        where: { nombre: dto.estado },
+    // La notificacion se emite una unica vez tras confirmar la transaccion de BD.
+    // Cualquier error de comunicacion o persistencia en el microservicio de
+    // notificaciones es gestionado de forma controlada por el cliente sin
+    // revertir el cambio de estado ya aplicado (#113).
+    if (this.notificacionesClient && usuarioReportaId) {
+      await this.notificacionesClient.notificarCambioEstado({
+        incidenteId: id,
+        titulo,
+        usuarioReportaId,
+        estadoAnterior,
+        estadoNuevo: dto.estado,
+        observacion,
       });
-      if (!destino)
-        throw new NotFoundException(`Estado ${dto.estado} no encontrado`);
+    }
 
-      const estadoActual = incidente.estado?.nombre;
-      if (!esTransicionPermitida(estadoActual, destino.nombre)) {
-        throw new ConflictException(
-          `Transicion no permitida de "${estadoActual ?? 'desconocido'}" a "${destino.nombre}"`,
-        );
-      }
-
-      const actualizado = await tx.incidente.update({
-        where: { id },
-        data: { estadoId: destino.id },
-        include,
-      });
-
-      await tx.historialEstado.create({
-        data: {
-          incidenteId: id,
-          estadoId: destino.id,
-          usuarioId,
-          observacion,
-        },
-      });
-
-      return toIncidenteResponse(actualizado);
-    });
+    return toIncidenteResponse(actualizado);
   }
 }
