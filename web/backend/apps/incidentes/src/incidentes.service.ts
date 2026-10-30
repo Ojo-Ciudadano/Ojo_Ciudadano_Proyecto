@@ -1,13 +1,20 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 
 import { PrismaService } from './prisma/prisma.service';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { UpdatePrioridadDto } from './dto/update-prioridad.dto';
+import {
+  esEstadoIncidente,
+  esTransicionPermitida,
+} from './estado/transiciones-incidente.constants';
 import {
   esPrioridadValida,
   PRIORIDAD_MAXIMA,
@@ -106,5 +113,70 @@ export class IncidentesService {
     });
 
     return toIncidenteResponse(incidente);
+  }
+
+  async updateEstado(id: string, dto: UpdateEstadoDto, usuarioId: string) {
+    if (!isUUID(id, 'all'))
+      throw new BadRequestException('El id del incidente debe ser un UUID valido');
+
+    if (!esEstadoIncidente(dto?.estado))
+      throw new BadRequestException('El estado solicitado no es valido');
+
+    if (typeof dto?.observacion !== 'string' || !dto.observacion.trim())
+      throw new BadRequestException('La observacion es obligatoria');
+
+    if (!isUUID(usuarioId, 'all'))
+      throw new UnauthorizedException('Usuario autenticado no identificado');
+
+    const observacion = dto.observacion.trim();
+
+    // La lectura del estado actual, la validacion de la transicion y las dos
+    // escrituras ocurren en la misma transaccion. El bloqueo FOR UPDATE evita
+    // que dos solicitudes concurrentes validen contra el mismo estado de origen.
+    return this.prisma.$transaction(async (tx) => {
+      const filas = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
+      `;
+
+      if (filas.length === 0)
+        throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+      const incidente = await tx.incidente.findUnique({
+        where: { id },
+        select: { id: true, estado: { select: { nombre: true } } },
+      });
+      if (!incidente)
+        throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+      const destino = await tx.estado.findUnique({
+        where: { nombre: dto.estado },
+      });
+      if (!destino)
+        throw new NotFoundException(`Estado ${dto.estado} no encontrado`);
+
+      const estadoActual = incidente.estado?.nombre;
+      if (!esTransicionPermitida(estadoActual, destino.nombre)) {
+        throw new ConflictException(
+          `Transicion no permitida de "${estadoActual ?? 'desconocido'}" a "${destino.nombre}"`,
+        );
+      }
+
+      const actualizado = await tx.incidente.update({
+        where: { id },
+        data: { estadoId: destino.id },
+        include,
+      });
+
+      await tx.historialEstado.create({
+        data: {
+          incidenteId: id,
+          estadoId: destino.id,
+          usuarioId,
+          observacion,
+        },
+      });
+
+      return toIncidenteResponse(actualizado);
+    });
   }
 }

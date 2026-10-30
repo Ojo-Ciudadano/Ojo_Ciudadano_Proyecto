@@ -14,6 +14,18 @@ export class ProxyController {
     await this.proxyService.forward(req, res);
   }
 
+  // Debe declararse antes del catch-all de incidentes para que el cambio de
+  // estado quede restringido al Administrador (Issue #117).
+  @Patch('incidentes/:id/estado')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async handleIncidentesEstadoProxy(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyService.forward(req, res);
+  }
+
   // Debe declararse antes del catch-all de incidentes para que la modificacion de
   // prioridad quede restringida al Administrador (Issue #124).
   @Patch('incidentes/:id/prioridad')
