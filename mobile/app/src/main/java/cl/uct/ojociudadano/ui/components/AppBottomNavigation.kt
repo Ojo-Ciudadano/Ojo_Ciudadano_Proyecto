@@ -31,10 +31,11 @@ private val navigationDestinations = listOf(
 @Composable
 fun AppBottomNavigation(
     currentRoute: String?,
+    isDestinationAllowed: (String) -> Boolean,
     onDestinationClick: (String) -> Unit
 ) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-        navigationDestinations.forEach { destination ->
+        navigationDestinations.filter { isDestinationAllowed(it.route) }.forEach { destination ->
             val selected = currentRoute == destination.route ||
                 (destination.route == AppRoutes.HOME && currentRoute in setOf(AppRoutes.REPORTS, AppRoutes.INCIDENT_DETAIL))
 

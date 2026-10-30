@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.login
 
+import cl.uct.ojociudadano.ui.components.CitizenAuthProgress
 import cl.uct.ojociudadano.ui.components.CitizenAuthLayout
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import androidx.compose.animation.AnimatedContent
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -152,12 +152,7 @@ private fun LoginScreenContent(
         AnimatedContent(targetState = authState, label = "login_status") { currentState ->
         when (val authState = currentState) {
             AuthUiState.Idle -> Unit
-            AuthUiState.Loading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.testTag(LoginTestTags.LOADING_INDICATOR)
-                )
-                Text("Iniciando sesión…")
-            }
+            AuthUiState.Loading -> Unit
 
             is AuthUiState.Success -> {
                 Text(
@@ -247,6 +242,12 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.SUBMIT_BUTTON)
         ) {
             Text("Iniciar sesión")
+        }
+        if (isLoading) {
+            CitizenAuthProgress(
+                message = "Iniciando sesión…",
+                indicatorModifier = Modifier.testTag(LoginTestTags.LOADING_INDICATOR)
+            )
         }
         onRegister?.let { register ->
             TextButton(onClick = register, enabled = !isLoading) {
