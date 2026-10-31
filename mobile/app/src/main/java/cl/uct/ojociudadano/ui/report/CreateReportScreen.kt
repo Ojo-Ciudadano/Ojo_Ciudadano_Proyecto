@@ -154,7 +154,7 @@ fun CreateReportScreen(
             evidencePhotos = state.evidencePhotos,
             activePhotoOperation = state.activePhotoOperation,
             errorMessage = state.photoError,
-            enabled = submissionState !is CreateReportSubmissionState.Loading,
+            enabled = !submissionState.isInProgress,
             onTakePhotoClick = onTakePhotoClick,
             onPickPhotoClick = onPickPhotoClick,
             onRemovePhoto = onRemovePhoto,
@@ -193,15 +193,15 @@ fun CreateReportScreen(
                 onCreateReportClick()
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = submissionState !is CreateReportSubmissionState.Loading
+            enabled = !submissionState.isInProgress
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))
             Text(
-                if (submissionState is CreateReportSubmissionState.Loading) {
-                    "Creando reporte..."
-                } else {
-                    "Crear reporte"
+                when (submissionState) {
+                    is CreateReportSubmissionState.CreatingIncident -> "Creando reporte..."
+                    is CreateReportSubmissionState.UploadingEvidence -> "Subiendo evidencias..."
+                    else -> "Crear reporte"
                 }
             )
         }

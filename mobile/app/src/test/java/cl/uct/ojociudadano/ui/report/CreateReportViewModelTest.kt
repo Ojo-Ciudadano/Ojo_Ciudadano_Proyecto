@@ -136,7 +136,13 @@ class CreateReportViewModelTest {
 
         viewModel.createReport()
 
-        assertEquals(CreateReportSubmissionState.Success, viewModel.submissionState)
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
         assertEquals(1, incidentRepository.createInputs.size)
 
         val input = incidentRepository.createInputs.single()
@@ -211,12 +217,18 @@ class CreateReportViewModelTest {
         creationStarted.await()
         viewModel.createReport()
 
-        assertEquals(CreateReportSubmissionState.Loading, viewModel.submissionState)
+        assertEquals(CreateReportSubmissionState.CreatingIncident, viewModel.submissionState)
         assertEquals(1, incidentRepository.createInputs.size)
 
         releaseCreation.complete(Unit)
 
-        assertEquals(CreateReportSubmissionState.Success, viewModel.submissionState)
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
     }
 
     @Test
@@ -880,7 +892,13 @@ class CreateReportViewModelTest {
 
         viewModel.createReport()
 
-        assertEquals(CreateReportSubmissionState.Success, viewModel.submissionState)
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
         assertEquals(
             CreateIncidentInput(
                 title = "Poste dañado",

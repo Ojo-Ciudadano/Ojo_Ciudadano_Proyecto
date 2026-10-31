@@ -232,7 +232,7 @@ class CreateReportViewModel(
     }
 
     fun createReport() {
-        if (submissionState is CreateReportSubmissionState.Loading) return
+        if (submissionState.isInProgress) return
 
         formState = formValidator.validate(formState)
 
@@ -249,7 +249,7 @@ class CreateReportViewModel(
             location = Sprint1TemporaryLocation.incidentLocation
         )
 
-        submissionState = CreateReportSubmissionState.Loading
+        submissionState = CreateReportSubmissionState.CreatingIncident
 
         viewModelScope.launch {
             try {
@@ -262,8 +262,11 @@ class CreateReportViewModel(
                             "categoriaId=${input.categoryId}"
                     )
                 }
-                incidentRepository.createIncident(input)
-                submissionState = CreateReportSubmissionState.Success
+                val incident = incidentRepository.createIncident(input)
+                submissionState = CreateReportSubmissionState.Success(
+                    incidentId = incident.id,
+                    uploadedEvidenceCount = 0
+                )
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
