@@ -38,15 +38,18 @@ Object.defineProperty(globalThis, 'localStorage', {
   writable: true,
 })
 
+interface MockAxiosError extends Error {
+  isAxiosError: boolean
+  config: InternalAxiosRequestConfig
+  response: AxiosResponse
+}
+
 function createHttpError(
   status: number,
   config: InternalAxiosRequestConfig,
   data: Record<string, unknown>,
-) {
-  const error: any = new Error(`Request failed with status code ${status}`)
-  error.isAxiosError = true
-  error.config = config
-  error.response = {
+): MockAxiosError {
+  const response: AxiosResponse = {
     status,
     statusText: status === 401 ? 'Unauthorized' : 'Forbidden',
     headers: {},
@@ -58,8 +61,13 @@ function createHttpError(
       error: status === 401 ? 'Unauthorized' : 'Forbidden',
       ...data,
     },
-  } as AxiosResponse
-  return error
+  }
+
+  return Object.assign(new Error(`Request failed with status code ${status}`), {
+    isAxiosError: true,
+    config,
+    response,
+  })
 }
 
 const sampleUserA: User = {
