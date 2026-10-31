@@ -1,6 +1,7 @@
 package cl.uct.ojociudadano.data.media
 
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+import java.io.File
 
 /**
  * Gestiona los archivos temporales de las fotografías de evidencia.
@@ -51,6 +52,15 @@ interface EvidencePhotoFileStore {
      * mientras el formulario permanece abierto.
      */
     fun exists(fileName: String): Boolean
+
+    /**
+     * Entrega el archivo temporal identificado por [fileName] para que la capa
+     * de datos pueda subirlo al backend.
+     *
+     * @return el archivo si sigue disponible y contiene datos, o `null` si ya
+     * no existe, está vacío o no es legible.
+     */
+    fun file(fileName: String): File?
 
     /**
      * Elimina el archivo temporal identificado por [fileName].

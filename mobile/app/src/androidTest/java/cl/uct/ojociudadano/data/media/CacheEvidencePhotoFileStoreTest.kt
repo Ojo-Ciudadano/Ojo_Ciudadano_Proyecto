@@ -97,6 +97,47 @@ class CacheEvidencePhotoFileStoreTest {
     }
 
     @Test
+    fun exposesTemporaryEvidenceFileForUpload() {
+        val pending = store.create()
+        createdFileNames += pending.fileName
+        val content = byteArrayOf(1, 2, 3, 4)
+
+        context.contentResolver.openOutputStream(Uri.parse(pending.localUri))!!.use { output ->
+            output.write(content)
+        }
+
+        val file = requireNotNull(store.file(pending.fileName))
+
+        assertEquals(pending.fileName, file.name)
+        assertTrue(file.isFile)
+        assertArrayEquals(content, file.readBytes())
+    }
+
+    @Test
+    fun doesNotExposeEmptyOrMissingEvidenceFiles() {
+        val pending = store.create()
+        createdFileNames += pending.fileName
+
+        assertNull(store.file(pending.fileName))
+        assertNull(store.file("missing_${System.nanoTime()}.jpg"))
+    }
+
+    @Test
+    fun preventsFindingFilesOutsideTheEvidenceDirectory() {
+        val outside = File(context.cacheDir, "outside_${System.nanoTime()}.jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+
+        try {
+            assertNull(store.file("../${outside.name}"))
+            assertNull(store.file(outside.absolutePath))
+            assertTrue(outside.exists())
+        } finally {
+            outside.delete()
+        }
+    }
+
+    @Test
     fun deletesTemporaryFileByName() {
         val pending = store.create()
 

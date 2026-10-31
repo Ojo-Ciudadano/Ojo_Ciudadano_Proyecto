@@ -36,6 +36,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -939,6 +940,8 @@ private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {
 
     override fun exists(fileName: String): Boolean = true
 
+    override fun file(fileName: String): File? = null
+
     override fun delete(fileName: String) {
         deletedFileNames += fileName
     }
@@ -965,6 +968,9 @@ private class FakeEvidencePhotoFileStore(
     }
 
     override fun exists(fileName: String): Boolean = fileName !in missingFileNames
+
+    override fun file(fileName: String): File? =
+        if (fileName in missingFileNames) null else File(fileName)
 
     fun markMissing(fileName: String) {
         missingFileNames += fileName

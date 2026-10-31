@@ -164,6 +164,11 @@ class CacheEvidencePhotoFileStore(
             file.isFile && file.length() > 0L
         }.getOrDefault(false)
 
+    override fun file(fileName: String): File? =
+        runCatching {
+            fileFor(fileName).takeIf { it.isFile && it.length() > 0L }
+        }.getOrNull()
+
     override fun delete(fileName: String) {
         runCatching { fileFor(fileName).delete() }
     }
