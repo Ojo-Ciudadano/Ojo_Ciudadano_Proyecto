@@ -878,7 +878,7 @@ class CreateReportViewModelTest {
     }
 
     @Test
-    fun `creates the report without sending the evidence photos`() = runTest {
+    fun `creates the report and uploads the selected evidence photos`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -895,7 +895,7 @@ class CreateReportViewModelTest {
         assertEquals(
             CreateReportSubmissionState.Success(
                 incidentId = "incident-id",
-                uploadedEvidenceCount = 0
+                uploadedEvidenceCount = 2
             ),
             viewModel.submissionState
         )
@@ -908,6 +908,14 @@ class CreateReportViewModelTest {
             ),
             incidentRepository.createInputs.single()
         )
+        assertEquals(
+            listOf(
+                "incident-id" to samplePhoto.fileName,
+                "incident-id" to secondSamplePhoto.fileName
+            ),
+            incidentRepository.uploadedEvidenceFiles
+        )
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
     }
 }
 
@@ -1021,6 +1029,7 @@ private class FakeIncidentRepository(
 ) : IncidentRepository {
 
     val createInputs = mutableListOf<CreateIncidentInput>()
+    val uploadedEvidenceFiles = mutableListOf<Pair<String, String>>()
 
     override suspend fun getIncidents(): List<Incident> = emptyList()
 
@@ -1040,7 +1049,15 @@ private class FakeIncidentRepository(
         file: java.io.File,
         mimeType: String
     ): cl.uct.ojociudadano.domain.model.Evidence {
-        throw NotImplementedError("No implementado para esta prueba")
+        uploadedEvidenceFiles += incidenteId to file.name
+        return cl.uct.ojociudadano.domain.model.Evidence(
+            id = "evidence-${uploadedEvidenceFiles.size}",
+            incidentId = incidenteId,
+            mimeType = mimeType,
+            size = file.length(),
+            createdAt = "2026-10-30T00:00:00.000Z",
+            fileUrl = "/evidencias/evidence-${uploadedEvidenceFiles.size}/archivo"
+        )
     }
 
     override suspend fun getEvidencesByIncident(incidenteId: String): List<cl.uct.ojociudadano.domain.model.Evidence> {
