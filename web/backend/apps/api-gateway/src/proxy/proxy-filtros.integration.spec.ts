@@ -1,8 +1,4 @@
 /// <reference types="jest" />
-import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
-
-import { FindIncidentesQueryDto } from './find-incidentes-query.dto';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 import { ProxyService } from './proxy.service';

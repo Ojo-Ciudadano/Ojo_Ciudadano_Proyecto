@@ -1,10 +1,6 @@
 /// <reference types="jest" />
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-
-import { FindIncidentesQueryDto } from './find-incidentes-query.dto';
-import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
 import { FindIncidentesQueryDto } from './find-incidentes-query.dto';
 
 const validar = async (valor: Record<string, unknown>) => {
