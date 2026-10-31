@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,8 +27,10 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
@@ -41,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -83,12 +87,18 @@ fun CreateReportScreen(
     onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
     onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit,
     onCreateReportClick: () -> Unit,
+    onFinishWithoutPendingEvidence: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var showFinishConfirmation by rememberSaveable { mutableStateOf(false) }
+    val canEditForm = submissionState.canEditForm
+    val isSubmitEnabled = !submissionState.isInProgress &&
+        submissionState !is CreateReportSubmissionState.Success &&
+        state.activePhotoOperation == null
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -115,7 +125,8 @@ fun CreateReportScreen(
                 onNext = { descriptionFocusRequester.requestFocus() }
             ),
             errorMessage = state.titleError,
-            leadingIcon = Icons.Filled.Edit
+            leadingIcon = Icons.Filled.Edit,
+            enabled = canEditForm
         )
 
         ReportTextField(
@@ -138,7 +149,8 @@ fun CreateReportScreen(
                 }
             ),
             errorMessage = state.descriptionError,
-            leadingIcon = Icons.Filled.Description
+            leadingIcon = Icons.Filled.Description,
+            enabled = canEditForm
         )
 
         CategorySelector(
@@ -147,14 +159,15 @@ fun CreateReportScreen(
             isLoading = isLoadingCategories,
             loadErrorMessage = categoryLoadError,
             errorMessage = state.categoryError,
-            onCategorySelected = onCategorySelected
+            onCategorySelected = onCategorySelected,
+            enabled = canEditForm
         )
 
         EvidencePhotoSection(
             evidencePhotos = state.evidencePhotos,
             activePhotoOperation = state.activePhotoOperation,
             errorMessage = state.photoError,
-            enabled = submissionState !is CreateReportSubmissionState.Loading,
+            enabled = canEditForm,
             onTakePhotoClick = onTakePhotoClick,
             onPickPhotoClick = onPickPhotoClick,
             onRemovePhoto = onRemovePhoto,
@@ -193,31 +206,146 @@ fun CreateReportScreen(
                 onCreateReportClick()
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = submissionState !is CreateReportSubmissionState.Loading
+            enabled = isSubmitEnabled
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))
-            Text(
-                if (submissionState is CreateReportSubmissionState.Loading) {
-                    "Creando reporte..."
-                } else {
-                    "Crear reporte"
-                }
+            Text(submitButtonLabel(submissionState))
+        }
+
+        when (submissionState) {
+            is CreateReportSubmissionState.Success -> Text(
+                text = successMessage(
+                    uploadedEvidenceCount = submissionState.uploadedEvidenceCount,
+                    discardedEvidenceCount = submissionState.discardedEvidenceCount
+                )
             )
-        }
 
-        if (submissionState is CreateReportSubmissionState.Success) {
-            Text("Reporte creado correctamente")
-        }
+            is CreateReportSubmissionState.EvidenceUploadFailed -> Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = submissionState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                OutlinedButton(
+                    onClick = { showFinishConfirmation = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        finishWithoutPendingEvidenceLabel(
+                            submissionState.uploadedEvidenceCount
+                        )
+                    )
+                }
+            }
 
-        if (submissionState is CreateReportSubmissionState.Error) {
-            Text(
+            is CreateReportSubmissionState.Error -> Text(
                 text = submissionState.message,
                 color = MaterialTheme.colorScheme.error
             )
+
+            else -> Unit
         }
     }
+
+    val partialState = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+
+    if (showFinishConfirmation && partialState != null) {
+        AlertDialog(
+            onDismissRequest = { showFinishConfirmation = false },
+            title = { Text("Finalizar reporte") },
+            text = {
+                Text(
+                    finishWithoutPendingEvidenceMessage(
+                        uploadedEvidenceCount = partialState.uploadedEvidenceCount,
+                        failedEvidenceCount = partialState.failedEvidenceCount
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFinishConfirmation = false
+                        onFinishWithoutPendingEvidence()
+                    }
+                ) {
+                    Text("Finalizar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishConfirmation = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
+
+private fun submitButtonLabel(
+    submissionState: CreateReportSubmissionState
+): String = when (submissionState) {
+    CreateReportSubmissionState.CreatingIncident -> "Creando reporte..."
+    is CreateReportSubmissionState.UploadingEvidence ->
+        "Subiendo evidencias (${submissionState.processed}/${submissionState.total})..."
+    is CreateReportSubmissionState.EvidenceUploadFailed ->
+        "Reintentar evidencias (${submissionState.failedEvidenceCount})"
+    is CreateReportSubmissionState.Success -> "Reporte creado"
+    else -> "Crear reporte"
+}
+
+private fun successMessage(
+    uploadedEvidenceCount: Int,
+    discardedEvidenceCount: Int
+): String = buildString {
+    append("Reporte creado correctamente")
+
+    if (uploadedEvidenceCount > 0) {
+        append(" con ${photoCount(uploadedEvidenceCount)}")
+    }
+
+    append(".")
+
+    if (discardedEvidenceCount > 0) {
+        append(" ${discardedEvidenceMessage(discardedEvidenceCount)}")
+    }
+}
+
+private fun finishWithoutPendingEvidenceLabel(uploadedEvidenceCount: Int): String =
+    if (uploadedEvidenceCount > 0) {
+        "Finalizar con las fotografías subidas"
+    } else {
+        "Finalizar sin fotografías"
+    }
+
+private fun finishWithoutPendingEvidenceMessage(
+    uploadedEvidenceCount: Int,
+    failedEvidenceCount: Int
+): String = buildString {
+    append("El reporte ya fue creado")
+
+    if (uploadedEvidenceCount > 0) {
+        append(" con ${photoCount(uploadedEvidenceCount)}")
+    }
+
+    append(". Se descartarán ${photoCount(failedEvidenceCount)} que no ")
+
+    if (failedEvidenceCount == 1) {
+        append("pudo subirse.")
+    } else {
+        append("pudieron subirse.")
+    }
+}
+
+private fun discardedEvidenceMessage(discardedEvidenceCount: Int): String =
+    if (discardedEvidenceCount == 1) {
+        "Se omitió 1 fotografía que no pudo subirse."
+    } else {
+        "Se omitieron $discardedEvidenceCount fotografías que no pudieron subirse."
+    }
+
+private fun photoCount(count: Int): String =
+    if (count == 1) "1 fotografía" else "$count fotografías"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -228,9 +356,11 @@ private fun CategorySelector(
     loadErrorMessage: String?,
     errorMessage: String?,
     onCategorySelected: (Category) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val isEnabled = enabled && !isLoading
     val supportingMessage = listOfNotNull(errorMessage, loadErrorMessage)
         .joinToString("\n")
         .ifBlank { null }
@@ -238,7 +368,7 @@ private fun CategorySelector(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = {
-            if (!isLoading) {
+            if (isEnabled) {
                 expanded = !expanded
             }
         },
@@ -250,11 +380,11 @@ private fun CategorySelector(
             modifier = Modifier
                 .menuAnchor(
                     type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = !isLoading
+                    enabled = isEnabled
                 )
                 .fillMaxWidth(),
             readOnly = true,
-            enabled = !isLoading,
+            enabled = isEnabled,
             label = { Text("Categoría") },
             leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null) },
             placeholder = {
@@ -290,7 +420,8 @@ private fun CategorySelector(
                         onClick = {
                             onCategorySelected(category)
                             expanded = false
-                        }
+                        },
+                        enabled = isEnabled
                     )
                 }
             }
@@ -310,12 +441,14 @@ private fun ReportTextField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
     errorMessage: String? = null,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
         label = { Text(label) },
         placeholder = { Text(placeholder) },
         singleLine = singleLine,
@@ -375,6 +508,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onRemovePhoto = viewModel::onRemovePhoto,
         onPhotoPreviewError = viewModel::onPhotoPreviewError,
         onCreateReportClick = viewModel::createReport,
+        onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
         onBack = onBack
     )
@@ -402,7 +536,8 @@ private fun CreateReportScreenPreview() {
             onPickPhotoClick = {},
             onRemovePhoto = {},
             onPhotoPreviewError = {},
-            onCreateReportClick = {}
+            onCreateReportClick = {},
+            onFinishWithoutPendingEvidence = {}
         )
     }
 }

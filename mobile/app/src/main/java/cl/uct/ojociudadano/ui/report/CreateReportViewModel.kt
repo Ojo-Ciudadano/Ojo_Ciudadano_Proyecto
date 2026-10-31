@@ -60,17 +60,29 @@ class CreateReportViewModel(
 
     fun onTitleChange(title: String) {
         formState = formState.updateTitle(title)
-        submissionState = CreateReportSubmissionState.Idle
+        onFormEdited()
     }
 
     fun onDescriptionChange(description: String) {
         formState = formState.updateDescription(description)
-        submissionState = CreateReportSubmissionState.Idle
+        onFormEdited()
     }
 
     fun onCategorySelected(category: Category) {
         formState = formState.updateCategory(category)
-        submissionState = CreateReportSubmissionState.Idle
+        onFormEdited()
+    }
+
+    /**
+     * Solo un fallo de creación habilita un nuevo envío.
+     *
+     * Después de crear el incidente, editar el formulario no debe volver al
+     * estado inicial porque habilitaría la creación de un incidente duplicado.
+     */
+    private fun onFormEdited() {
+        if (submissionState is CreateReportSubmissionState.Error) {
+            submissionState = CreateReportSubmissionState.Idle
+        }
     }
 
     /**
@@ -231,8 +243,29 @@ class CreateReportViewModel(
         }
     }
 
+    /**
+     * Crea el incidente y, solo si la operación finaliza correctamente, sube
+     * las fotografías seleccionadas como evidencias.
+     *
+     * Si ya existe un incidente creado con evidencias pendientes, la llamada
+     * reintenta únicamente la subida y nunca crea un segundo incidente.
+     */
     fun createReport() {
-        if (submissionState is CreateReportSubmissionState.Loading) return
+        when (val current = submissionState) {
+            is CreateReportSubmissionState.CreatingIncident,
+            is CreateReportSubmissionState.UploadingEvidence,
+            is CreateReportSubmissionState.Success -> return
+
+            is CreateReportSubmissionState.EvidenceUploadFailed -> {
+                retryEvidenceUploads(current)
+                return
+            }
+
+            is CreateReportSubmissionState.Idle,
+            is CreateReportSubmissionState.Error -> Unit
+        }
+
+        if (formState.activePhotoOperation != null) return
 
         formState = formValidator.validate(formState)
 
@@ -248,11 +281,12 @@ class CreateReportViewModel(
             categoryId = selectedCategory.id,
             location = Sprint1TemporaryLocation.incidentLocation
         )
+        val photos = formState.evidencePhotos.toList()
 
-        submissionState = CreateReportSubmissionState.Loading
+        submissionState = CreateReportSubmissionState.CreatingIncident
 
         viewModelScope.launch {
-            try {
+            val incident = try {
                 // Temporary diagnostic log: verifies the API UUID selected in the dropdown.
                 runCatching {
                     Log.d(
@@ -263,7 +297,6 @@ class CreateReportViewModel(
                     )
                 }
                 incidentRepository.createIncident(input)
-                submissionState = CreateReportSubmissionState.Success
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
@@ -278,8 +311,190 @@ class CreateReportViewModel(
                 submissionState = CreateReportSubmissionState.Error(
                     exception.message ?: "No fue posible crear el reporte"
                 )
+                return@launch
             }
+
+            if (photos.isEmpty()) {
+                submissionState = CreateReportSubmissionState.Success(
+                    incidentId = incident.id,
+                    uploadedEvidenceCount = 0
+                )
+                return@launch
+            }
+
+            uploadEvidencePhotos(
+                incidentId = incident.id,
+                photos = photos,
+                alreadyUploaded = 0
+            )
         }
+    }
+
+    /**
+     * Sube las evidencias de forma secuencial y aislada.
+     *
+     * Un fallo individual se registra y se continúa con la siguiente fotografía.
+     * Las evidencias subidas se eliminan del formulario y del almacén temporal;
+     * las fallidas permanecen para poder reintentarlas contra el mismo
+     * incidente.
+     */
+    private suspend fun uploadEvidencePhotos(
+        incidentId: String,
+        photos: List<IncidentPhotoEvidence>,
+        alreadyUploaded: Int
+    ) {
+        submissionState = CreateReportSubmissionState.UploadingEvidence(
+            incidentId = incidentId,
+            processed = 0,
+            total = photos.size
+        )
+
+        var uploadedNow = 0
+        var failed = 0
+
+        photos.forEachIndexed { index, photo ->
+            if (uploadEvidence(incidentId, photo)) {
+                uploadedNow++
+                formState = formState.removeEvidencePhoto(photo.fileName)
+                deleteEvidenceFile(photo.fileName)
+            } else {
+                failed++
+            }
+
+            submissionState = CreateReportSubmissionState.UploadingEvidence(
+                incidentId = incidentId,
+                processed = index + 1,
+                total = photos.size
+            )
+        }
+
+        if (failed == 0) {
+            clearEvidencePhotoState()
+            submissionState = CreateReportSubmissionState.Success(
+                incidentId = incidentId,
+                uploadedEvidenceCount = alreadyUploaded + uploadedNow
+            )
+            return
+        }
+
+        val totalEvidence = alreadyUploaded + uploadedNow + failed
+        submissionState = CreateReportSubmissionState.EvidenceUploadFailed(
+            incidentId = incidentId,
+            uploadedEvidenceCount = alreadyUploaded + uploadedNow,
+            failedEvidenceCount = failed,
+            message = EvidenceUploadErrors.partial(
+                failed = failed,
+                total = totalEvidence
+            )
+        )
+    }
+
+    /**
+     * Sube una única evidencia y traduce cualquier fallo a un resultado falso.
+     *
+     * La cancelación de la corrutina se propaga: no representa un fallo de la
+     * evidencia, sino que el flujo completo dejó de ejecutarse.
+     */
+    private suspend fun uploadEvidence(
+        incidentId: String,
+        photo: IncidentPhotoEvidence
+    ): Boolean {
+        val file = runCatching { photoFileStore.file(photo.fileName) }.getOrNull()
+
+        if (file == null) {
+            runCatching {
+                Log.w(
+                    "CreateReportViewModel",
+                    "Evidencia no disponible para subir: fileName=${photo.fileName}"
+                )
+            }
+            return false
+        }
+
+        return try {
+            incidentRepository.uploadEvidence(incidentId, file, photo.mimeType)
+            true
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            runCatching {
+                Log.w(
+                    "CreateReportViewModel",
+                    "Error al subir evidencia: incidentId=$incidentId, " +
+                        "fileName=${photo.fileName}, type=${exception::class.java.name}, " +
+                        "message=${exception.message}",
+                    exception
+                )
+            }
+            false
+        }
+    }
+
+    /**
+     * Reintenta solo las evidencias pendientes del incidente ya creado.
+     *
+     * No se ejecuta la validación del formulario ni la creación del incidente:
+     * el único objetivo es completar las fotografías que fallaron.
+     */
+    private fun retryEvidenceUploads(state: CreateReportSubmissionState.EvidenceUploadFailed) {
+        val pending = formState.evidencePhotos.toList()
+
+        if (pending.isEmpty()) {
+            clearEvidencePhotoState()
+            submissionState = CreateReportSubmissionState.Success(
+                incidentId = state.incidentId,
+                uploadedEvidenceCount = state.uploadedEvidenceCount
+            )
+            return
+        }
+
+        submissionState = CreateReportSubmissionState.UploadingEvidence(
+            incidentId = state.incidentId,
+            processed = 0,
+            total = pending.size
+        )
+
+        viewModelScope.launch {
+            uploadEvidencePhotos(
+                incidentId = state.incidentId,
+                photos = pending,
+                alreadyUploaded = state.uploadedEvidenceCount
+            )
+        }
+    }
+
+    /**
+     * Finaliza el flujo conservando únicamente las evidencias ya subidas.
+     *
+     * El incidente y sus fotografías exitosas ya existen en el backend, por lo
+     * que esta operación no vuelve a crear el incidente ni elimina evidencias
+     * remotas. Solo descarta las fotografías locales que quedaron pendientes.
+     */
+    fun finishWithoutPendingEvidence() {
+        val current = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+            ?: return
+
+        clearEvidencePhotoState()
+        submissionState = CreateReportSubmissionState.Success(
+            incidentId = current.incidentId,
+            uploadedEvidenceCount = current.uploadedEvidenceCount,
+            discardedEvidenceCount = current.failedEvidenceCount
+        )
+    }
+
+    /**
+     * Limpia las referencias y los archivos temporales de las fotografías
+     * cuando todas las evidencias fueron subidas correctamente.
+     */
+    private fun clearEvidencePhotoState() {
+        formState.evidencePhotos.forEach { evidence ->
+            deleteEvidenceFile(evidence.fileName)
+        }
+        formState = formState.copy(
+            evidencePhotos = emptyList(),
+            activePhotoOperation = null,
+            photoError = null
+        )
     }
 
     fun loadCategories() {
