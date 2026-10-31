@@ -89,6 +89,10 @@ fun CreateReportScreen(
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val canEditForm = submissionState.canEditForm
+    val isSubmitEnabled = !submissionState.isInProgress &&
+        submissionState !is CreateReportSubmissionState.Success &&
+        state.activePhotoOperation == null
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -115,7 +119,8 @@ fun CreateReportScreen(
                 onNext = { descriptionFocusRequester.requestFocus() }
             ),
             errorMessage = state.titleError,
-            leadingIcon = Icons.Filled.Edit
+            leadingIcon = Icons.Filled.Edit,
+            enabled = canEditForm
         )
 
         ReportTextField(
@@ -138,7 +143,8 @@ fun CreateReportScreen(
                 }
             ),
             errorMessage = state.descriptionError,
-            leadingIcon = Icons.Filled.Description
+            leadingIcon = Icons.Filled.Description,
+            enabled = canEditForm
         )
 
         CategorySelector(
@@ -147,14 +153,15 @@ fun CreateReportScreen(
             isLoading = isLoadingCategories,
             loadErrorMessage = categoryLoadError,
             errorMessage = state.categoryError,
-            onCategorySelected = onCategorySelected
+            onCategorySelected = onCategorySelected,
+            enabled = canEditForm
         )
 
         EvidencePhotoSection(
             evidencePhotos = state.evidencePhotos,
             activePhotoOperation = state.activePhotoOperation,
             errorMessage = state.photoError,
-            enabled = !submissionState.isInProgress,
+            enabled = canEditForm,
             onTakePhotoClick = onTakePhotoClick,
             onPickPhotoClick = onPickPhotoClick,
             onRemovePhoto = onRemovePhoto,
@@ -193,31 +200,51 @@ fun CreateReportScreen(
                 onCreateReportClick()
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !submissionState.isInProgress
+            enabled = isSubmitEnabled
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))
-            Text(
-                when (submissionState) {
-                    is CreateReportSubmissionState.CreatingIncident -> "Creando reporte..."
-                    is CreateReportSubmissionState.UploadingEvidence -> "Subiendo evidencias..."
-                    else -> "Crear reporte"
-                }
+            Text(submitButtonLabel(submissionState))
+        }
+
+        when (submissionState) {
+            is CreateReportSubmissionState.Success -> Text(
+                text = successMessage(submissionState.uploadedEvidenceCount)
             )
-        }
 
-        if (submissionState is CreateReportSubmissionState.Success) {
-            Text("Reporte creado correctamente")
-        }
-
-        if (submissionState is CreateReportSubmissionState.Error) {
-            Text(
+            is CreateReportSubmissionState.EvidenceUploadFailed -> Text(
                 text = submissionState.message,
                 color = MaterialTheme.colorScheme.error
             )
+
+            is CreateReportSubmissionState.Error -> Text(
+                text = submissionState.message,
+                color = MaterialTheme.colorScheme.error
+            )
+
+            else -> Unit
         }
     }
 }
+
+private fun submitButtonLabel(
+    submissionState: CreateReportSubmissionState
+): String = when (submissionState) {
+    CreateReportSubmissionState.CreatingIncident -> "Creando reporte..."
+    is CreateReportSubmissionState.UploadingEvidence ->
+        "Subiendo evidencias (${submissionState.processed}/${submissionState.total})..."
+    is CreateReportSubmissionState.EvidenceUploadFailed ->
+        "Reintentar evidencias (${submissionState.failedEvidenceCount})"
+    is CreateReportSubmissionState.Success -> "Reporte creado"
+    else -> "Crear reporte"
+}
+
+private fun successMessage(uploadedEvidenceCount: Int): String =
+    when (uploadedEvidenceCount) {
+        0 -> "Reporte creado correctamente"
+        1 -> "Reporte creado correctamente. Se adjuntó 1 fotografía."
+        else -> "Reporte creado correctamente. Se adjuntaron $uploadedEvidenceCount fotografías."
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -228,9 +255,11 @@ private fun CategorySelector(
     loadErrorMessage: String?,
     errorMessage: String?,
     onCategorySelected: (Category) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val isEnabled = enabled && !isLoading
     val supportingMessage = listOfNotNull(errorMessage, loadErrorMessage)
         .joinToString("\n")
         .ifBlank { null }
@@ -238,7 +267,7 @@ private fun CategorySelector(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = {
-            if (!isLoading) {
+            if (isEnabled) {
                 expanded = !expanded
             }
         },
@@ -250,11 +279,11 @@ private fun CategorySelector(
             modifier = Modifier
                 .menuAnchor(
                     type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = !isLoading
+                    enabled = isEnabled
                 )
                 .fillMaxWidth(),
             readOnly = true,
-            enabled = !isLoading,
+            enabled = isEnabled,
             label = { Text("Categoría") },
             leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null) },
             placeholder = {
@@ -290,7 +319,8 @@ private fun CategorySelector(
                         onClick = {
                             onCategorySelected(category)
                             expanded = false
-                        }
+                        },
+                        enabled = isEnabled
                     )
                 }
             }
@@ -310,12 +340,14 @@ private fun ReportTextField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
     errorMessage: String? = null,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
         label = { Text(label) },
         placeholder = { Text(placeholder) },
         singleLine = singleLine,
