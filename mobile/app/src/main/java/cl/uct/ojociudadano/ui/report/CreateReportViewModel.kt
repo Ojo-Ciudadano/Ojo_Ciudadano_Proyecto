@@ -464,6 +464,25 @@ class CreateReportViewModel(
     }
 
     /**
+     * Finaliza el flujo conservando únicamente las evidencias ya subidas.
+     *
+     * El incidente y sus fotografías exitosas ya existen en el backend, por lo
+     * que esta operación no vuelve a crear el incidente ni elimina evidencias
+     * remotas. Solo descarta las fotografías locales que quedaron pendientes.
+     */
+    fun finishWithoutPendingEvidence() {
+        val current = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+            ?: return
+
+        clearEvidencePhotoState()
+        submissionState = CreateReportSubmissionState.Success(
+            incidentId = current.incidentId,
+            uploadedEvidenceCount = current.uploadedEvidenceCount,
+            discardedEvidenceCount = current.failedEvidenceCount
+        )
+    }
+
+    /**
      * Limpia las referencias y los archivos temporales de las fotografías
      * cuando todas las evidencias fueron subidas correctamente.
      */

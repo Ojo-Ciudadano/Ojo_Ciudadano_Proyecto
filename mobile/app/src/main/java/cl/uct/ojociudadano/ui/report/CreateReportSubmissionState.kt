@@ -19,9 +19,17 @@ sealed interface CreateReportSubmissionState {
         val total: Int
     ) : CreateReportSubmissionState
 
+    /**
+     * El incidente fue creado y su evidencia quedó resuelta.
+     *
+     * [discardedEvidenceCount] es mayor que cero cuando el usuario decidió
+     * finalizar con las fotografías que sí se subieron y descartar las
+     * pendientes.
+     */
     data class Success(
         val incidentId: String,
-        val uploadedEvidenceCount: Int
+        val uploadedEvidenceCount: Int,
+        val discardedEvidenceCount: Int = 0
     ) : CreateReportSubmissionState
 
     /**

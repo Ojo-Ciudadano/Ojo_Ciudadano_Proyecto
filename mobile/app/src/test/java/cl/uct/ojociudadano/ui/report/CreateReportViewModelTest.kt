@@ -144,6 +144,7 @@ class CreateReportViewModelTest {
             viewModel.submissionState
         )
         assertEquals(1, incidentRepository.createInputs.size)
+        assertTrue(incidentRepository.uploadAttempts.isEmpty())
 
         val input = incidentRepository.createInputs.single()
         assertEquals("Poste dañado", input.title)
@@ -159,22 +160,29 @@ class CreateReportViewModelTest {
 
     @Test
     fun `exposes error when incident creation fails`() = runTest {
+        val incidentRepository = FakeIncidentRepository(
+            failure = IllegalStateException("Error de red")
+        )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
-            incidentRepository = FakeIncidentRepository(
-                failure = IllegalStateException("Error de red")
-            )
+            incidentRepository = incidentRepository
         )
 
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
 
         viewModel.createReport()
 
         assertEquals(
             CreateReportSubmissionState.Error("Error de red"),
             viewModel.submissionState
+        )
+        assertTrue(incidentRepository.uploadAttempts.isEmpty())
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
         )
     }
 
@@ -880,14 +888,14 @@ class CreateReportViewModelTest {
     @Test
     fun `creates the report and uploads the selected evidence photos`() = runTest {
         val incidentRepository = FakeIncidentRepository()
+        val photoFileStore = FakeEvidencePhotoFileStore()
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
-            incidentRepository = incidentRepository
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
         )
 
-        viewModel.onTitleChange("Poste dañado")
-        viewModel.onDescriptionChange("El poste bloquea la vereda")
-        viewModel.onCategorySelected(sampleCategory)
+        viewModel.fillValidForm()
         viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
 
         viewModel.createReport()
@@ -910,12 +918,408 @@ class CreateReportViewModelTest {
         )
         assertEquals(
             listOf(
-                "incident-id" to samplePhoto.fileName,
-                "incident-id" to secondSamplePhoto.fileName
+                UploadedEvidence("incident-id", samplePhoto.fileName, samplePhoto.mimeType),
+                UploadedEvidence(
+                    "incident-id",
+                    secondSamplePhoto.fileName,
+                    secondSamplePhoto.mimeType
+                )
             ),
-            incidentRepository.uploadedEvidenceFiles
+            incidentRepository.uploadAttempts
         )
         assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+        assertEquals(
+            listOf(samplePhoto.fileName, secondSamplePhoto.fileName),
+            photoFileStore.deletedFileNames
+        )
+    }
+
+    @Test
+    fun `uploads several photos with their own mime types and the created incident id`() = runTest {
+        val pngPhoto = secondSamplePhoto.copy(
+            fileName = "evidence_png.png",
+            mimeType = "image/png"
+        )
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, pngPhoto)
+
+        viewModel.createReport()
+
+        assertEquals(
+            listOf(
+                UploadedEvidence("incident-id", samplePhoto.fileName, "image/jpeg"),
+                UploadedEvidence("incident-id", pngPhoto.fileName, "image/png")
+            ),
+            incidentRepository.uploadAttempts
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
+    }
+
+    @Test
+    fun `continues uploading the remaining photos when one evidence fails`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { file, _ ->
+                if (file.name == secondSamplePhoto.fileName) {
+                    error("Fallo de red")
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto, thirdSamplePhoto)
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.EvidenceUploadFailed(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 2,
+                failedEvidenceCount = 1,
+                message = EvidenceUploadErrors.partial(failed = 1, total = 3)
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(3, incidentRepository.uploadAttempts.size)
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals(
+            listOf(secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertEquals(
+            listOf(samplePhoto.fileName, thirdSamplePhoto.fileName),
+            photoFileStore.deletedFileNames
+        )
+    }
+
+    @Test
+    fun `keeps every photo when all evidence uploads fail`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = FakeIncidentRepository(
+                onUpload = { _, _ -> error("Sin conexión") }
+            ),
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.EvidenceUploadFailed(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0,
+                failedEvidenceCount = 2,
+                message = EvidenceUploadErrors.partial(failed = 2, total = 2)
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+    }
+
+    @Test
+    fun `retries only pending evidence against the existing incident`() = runTest {
+        var failFirstPhoto = true
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { file, _ ->
+                if (failFirstPhoto && file.name == samplePhoto.fileName) {
+                    failFirstPhoto = false
+                    error("Fallo temporal")
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.EvidenceUploadFailed(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 1,
+                failedEvidenceCount = 1,
+                message = EvidenceUploadErrors.partial(failed = 1, total = 2)
+            ),
+            viewModel.submissionState
+        )
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 2
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals(3, incidentRepository.uploadAttempts.size)
+        assertEquals(
+            UploadedEvidence("incident-id", samplePhoto.fileName, samplePhoto.mimeType),
+            incidentRepository.uploadAttempts.last()
+        )
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+        assertEquals(
+            listOf(secondSamplePhoto.fileName, samplePhoto.fileName),
+            photoFileStore.deletedFileNames
+        )
+    }
+
+    @Test
+    fun `reports upload progress and clears photos only after the last evidence`() = runTest {
+        val firstUploadStarted = CompletableDeferred<Unit>()
+        val releaseFirstUpload = CompletableDeferred<Unit>()
+        val secondUploadStarted = CompletableDeferred<Unit>()
+        val releaseSecondUpload = CompletableDeferred<Unit>()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { file, _ ->
+                if (file.name == samplePhoto.fileName) {
+                    firstUploadStarted.complete(Unit)
+                    releaseFirstUpload.await()
+                } else {
+                    secondUploadStarted.complete(Unit)
+                    releaseSecondUpload.await()
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+
+        viewModel.createReport()
+        firstUploadStarted.await()
+
+        assertEquals(
+            CreateReportSubmissionState.UploadingEvidence(
+                incidentId = "incident-id",
+                processed = 0,
+                total = 2
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+
+        releaseFirstUpload.complete(Unit)
+        secondUploadStarted.await()
+
+        assertEquals(
+            CreateReportSubmissionState.UploadingEvidence(
+                incidentId = "incident-id",
+                processed = 1,
+                total = 2
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(
+            listOf(secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+
+        releaseSecondUpload.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 2
+            ),
+            viewModel.submissionState
+        )
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+    }
+
+    @Test
+    fun `prevents duplicate incident creation while evidence is uploading`() = runTest {
+        val uploadStarted = CompletableDeferred<Unit>()
+        val releaseUpload = CompletableDeferred<Unit>()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { _, _ ->
+                uploadStarted.complete(Unit)
+                releaseUpload.await()
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto)
+
+        viewModel.createReport()
+        uploadStarted.await()
+        viewModel.createReport()
+
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals(1, incidentRepository.uploadAttempts.size)
+        assertEquals(
+            CreateReportSubmissionState.UploadingEvidence(
+                incidentId = "incident-id",
+                processed = 0,
+                total = 1
+            ),
+            viewModel.submissionState
+        )
+
+        releaseUpload.complete(Unit)
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 1
+            ),
+            viewModel.submissionState
+        )
+    }
+
+    @Test
+    fun `treats a missing local file as a controlled evidence failure`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        photoFileStore.markMissing(samplePhoto.fileName)
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.EvidenceUploadFailed(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 1,
+                failedEvidenceCount = 1,
+                message = EvidenceUploadErrors.partial(failed = 1, total = 2)
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.uploadAttempts.size)
+        assertEquals(
+            UploadedEvidence("incident-id", secondSamplePhoto.fileName, secondSamplePhoto.mimeType),
+            incidentRepository.uploadAttempts.single()
+        )
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+    }
+
+    @Test
+    fun `editing the form after a partial upload does not create another incident`() = runTest {
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { _, _ -> error("Sin conexión") }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto)
+        viewModel.createReport()
+
+        assertTrue(viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed)
+
+        viewModel.onTitleChange("Otro título")
+
+        assertTrue(viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed)
+        assertEquals(1, incidentRepository.createInputs.size)
+
+        viewModel.createReport()
+
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals(2, incidentRepository.uploadAttempts.size)
+    }
+
+    @Test
+    fun `finishes with the uploaded photos and discards the pending evidence`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { file, _ ->
+                if (file.name == samplePhoto.fileName) {
+                    error("Fallo de red")
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        viewModel.createReport()
+
+        assertTrue(viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed)
+
+        viewModel.finishWithoutPendingEvidence()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 1,
+                discardedEvidenceCount = 1
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals(2, incidentRepository.uploadAttempts.size)
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+        assertEquals(
+            listOf(secondSamplePhoto.fileName, samplePhoto.fileName),
+            photoFileStore.deletedFileNames
+        )
+    }
+
+    @Test
+    fun `does not finish early when the incident has not been created`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.seedPhotos(samplePhoto)
+
+        viewModel.finishWithoutPendingEvidence()
+
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+        assertTrue(incidentRepository.createInputs.isEmpty())
     }
 }
 
@@ -938,6 +1342,12 @@ private fun CreateReportViewModel.seedPhoto(photo: IncidentPhotoEvidence) {
 
 private fun CreateReportViewModel.seedPhotos(vararg photos: IncidentPhotoEvidence) {
     photos.forEach { seedPhoto(it) }
+}
+
+private fun CreateReportViewModel.fillValidForm() {
+    onTitleChange("Poste dañado")
+    onDescriptionChange("El poste bloquea la vereda")
+    onCategorySelected(sampleCategory)
 }
 
 private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {
@@ -1023,13 +1433,20 @@ private class FakeCategoryRepository(
     }
 }
 
+private data class UploadedEvidence(
+    val incidentId: String,
+    val fileName: String,
+    val mimeType: String
+)
+
 private class FakeIncidentRepository(
     private val failure: Throwable? = null,
-    private val onCreate: suspend () -> Unit = {}
+    private val onCreate: suspend () -> Unit = {},
+    private val onUpload: suspend (file: File, mimeType: String) -> Unit = { _, _ -> }
 ) : IncidentRepository {
 
     val createInputs = mutableListOf<CreateIncidentInput>()
-    val uploadedEvidenceFiles = mutableListOf<Pair<String, String>>()
+    val uploadAttempts = mutableListOf<UploadedEvidence>()
 
     override suspend fun getIncidents(): List<Incident> = emptyList()
 
@@ -1046,17 +1463,18 @@ private class FakeIncidentRepository(
 
     override suspend fun uploadEvidence(
         incidenteId: String,
-        file: java.io.File,
+        file: File,
         mimeType: String
     ): cl.uct.ojociudadano.domain.model.Evidence {
-        uploadedEvidenceFiles += incidenteId to file.name
+        uploadAttempts += UploadedEvidence(incidenteId, file.name, mimeType)
+        onUpload(file, mimeType)
         return cl.uct.ojociudadano.domain.model.Evidence(
-            id = "evidence-${uploadedEvidenceFiles.size}",
+            id = "evidence-${uploadAttempts.size}",
             incidentId = incidenteId,
             mimeType = mimeType,
             size = file.length(),
             createdAt = "2026-10-30T00:00:00.000Z",
-            fileUrl = "/evidencias/evidence-${uploadedEvidenceFiles.size}/archivo"
+            fileUrl = "/evidencias/evidence-${uploadAttempts.size}/archivo"
         )
     }
 
