@@ -71,7 +71,7 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
     path: '/incidentes',
     label: 'Incidentes',
-    allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
+    allowedRoles: [ROLES.ADMIN],
     section: 'main',
   },
   {
