@@ -1,5 +1,6 @@
-import { type ReactNode, useState, useCallback, createContext, useContext, Fragment } from 'react'
+import { type ReactNode,  useState,  useCallback,  useEffect,  createContext,  useContext,  Fragment,} from 'react'
 import { Snackbar, Alert, type AlertColor } from '@mui/material'
+import { onPermissionDenied, onSessionInvalidated } from '../../services/api'
 
 interface NotificationContextType {
   showNotification: (message: string, severity?: AlertColor) => void
@@ -27,6 +28,21 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   const showNotification = useCallback((message: string, severity: AlertColor = 'info') => {
     setNotification({ message, severity })
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe401 = onSessionInvalidated((event) => {
+      setNotification({ message: event.message, severity: 'warning' })
+    })
+
+    const unsubscribe403 = onPermissionDenied((event) => {
+      setNotification({ message: event.message, severity: 'error' })
+    })
+
+    return () => {
+      unsubscribe401()
+      unsubscribe403()
+    }
   }, [])
 
   const handleClose = () => {
