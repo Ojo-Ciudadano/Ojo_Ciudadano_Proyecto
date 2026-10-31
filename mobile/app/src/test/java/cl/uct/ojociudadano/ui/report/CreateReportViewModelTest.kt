@@ -721,7 +721,7 @@ class CreateReportViewModelTest {
     }
 
     @Test
-    fun `removes a photo whose file is no longer available`() = runTest {
+    fun `keeps a photo whose file is no longer available and reports it`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore()
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -733,11 +733,11 @@ class CreateReportViewModelTest {
         viewModel.onPhotoPreviewError(samplePhoto)
 
         assertEquals(
-            listOf(secondSamplePhoto),
+            listOf(samplePhoto, secondSamplePhoto),
             viewModel.formState.evidencePhotos
         )
         assertEquals(PhotoPreviewErrors.UNAVAILABLE, viewModel.formState.photoError)
-        assertEquals(listOf(samplePhoto.fileName), photoFileStore.deletedFileNames)
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
     }
 
     @Test
@@ -986,7 +986,12 @@ class CreateReportViewModelTest {
             CreateReportSubmissionState.EvidenceUploadFailed(
                 incidentId = "incident-id",
                 uploadedEvidenceCount = 2,
-                failedEvidenceCount = 1,
+                pendingEvidence = listOf(
+                    PendingEvidenceUpload(
+                        photo = secondSamplePhoto,
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                    )
+                ),
                 message = EvidenceUploadErrors.partial(failed = 1, total = 3)
             ),
             viewModel.submissionState
@@ -1023,7 +1028,16 @@ class CreateReportViewModelTest {
             CreateReportSubmissionState.EvidenceUploadFailed(
                 incidentId = "incident-id",
                 uploadedEvidenceCount = 0,
-                failedEvidenceCount = 2,
+                pendingEvidence = listOf(
+                    PendingEvidenceUpload(
+                        photo = samplePhoto,
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                    ),
+                    PendingEvidenceUpload(
+                        photo = secondSamplePhoto,
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                    )
+                ),
                 message = EvidenceUploadErrors.partial(failed = 2, total = 2)
             ),
             viewModel.submissionState
@@ -1062,7 +1076,12 @@ class CreateReportViewModelTest {
             CreateReportSubmissionState.EvidenceUploadFailed(
                 incidentId = "incident-id",
                 uploadedEvidenceCount = 1,
-                failedEvidenceCount = 1,
+                pendingEvidence = listOf(
+                    PendingEvidenceUpload(
+                        photo = samplePhoto,
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                    )
+                ),
                 message = EvidenceUploadErrors.partial(failed = 1, total = 2)
             ),
             viewModel.submissionState
@@ -1224,7 +1243,12 @@ class CreateReportViewModelTest {
             CreateReportSubmissionState.EvidenceUploadFailed(
                 incidentId = "incident-id",
                 uploadedEvidenceCount = 1,
-                failedEvidenceCount = 1,
+                pendingEvidence = listOf(
+                    PendingEvidenceUpload(
+                        photo = samplePhoto,
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                    )
+                ),
                 message = EvidenceUploadErrors.partial(failed = 1, total = 2)
             ),
             viewModel.submissionState
@@ -1236,6 +1260,58 @@ class CreateReportViewModelTest {
         )
         assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
     }
+
+    @Test
+    fun `keeps a pending evidence after its preview fails and does not report success on retry`() =
+        runTest {
+            val photoFileStore = FakeEvidencePhotoFileStore()
+            val incidentRepository = FakeIncidentRepository(
+                onUpload = { file, _ ->
+                    if (file.name == samplePhoto.fileName) {
+                        error("Fallo de red")
+                    }
+                }
+            )
+            val viewModel = createViewModel(
+                categoryRepository = FakeCategoryRepository(),
+                incidentRepository = incidentRepository,
+                photoFileStore = photoFileStore
+            )
+
+            viewModel.fillValidForm()
+            viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+            viewModel.createReport()
+
+            assertTrue(
+                viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed
+            )
+
+            photoFileStore.markMissing(samplePhoto.fileName)
+            viewModel.onPhotoPreviewError(samplePhoto)
+
+            assertEquals(
+                listOf(samplePhoto),
+                viewModel.formState.evidencePhotos
+            )
+            assertEquals(PhotoPreviewErrors.UNAVAILABLE, viewModel.formState.photoError)
+            assertEquals(
+                listOf(samplePhoto),
+                (viewModel.submissionState as CreateReportSubmissionState.EvidenceUploadFailed)
+                    .pendingEvidence
+                    .map { it.photo }
+            )
+
+            viewModel.createReport()
+
+            assertEquals(
+                listOf(samplePhoto),
+                (viewModel.submissionState as CreateReportSubmissionState.EvidenceUploadFailed)
+                    .pendingEvidence
+                    .map { it.photo }
+            )
+            assertEquals(1, incidentRepository.createInputs.size)
+            assertEquals(2, incidentRepository.uploadAttempts.size)
+        }
 
     @Test
     fun `editing the form after a partial upload does not create another incident`() = runTest {

@@ -1,5 +1,31 @@
 package cl.uct.ojociudadano.ui.report
 
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+
+/**
+ * Resultado de una evidencia que no pudo subirse.
+ *
+ * [CONFIRMED] indica que la petición no llegó a guardarse en el servidor.
+ * [POSSIBLY_UPLOADED] indica que el resultado es incierto: la petición pudo
+ * haberse guardado aunque la aplicación no recibiera la confirmación.
+ */
+enum class EvidenceUploadFailureKind {
+    CONFIRMED,
+    POSSIBLY_UPLOADED
+}
+
+/**
+ * Evidencia local que sigue pendiente después de un intento de subida.
+ *
+ * Se conserva separada de las miniaturas visibles para que un error de
+ * previsualización no pueda eliminar la posibilidad de reintentar la subida.
+ */
+data class PendingEvidenceUpload(
+    val photo: IncidentPhotoEvidence,
+    val failureKind: EvidenceUploadFailureKind,
+    val reason: String? = null
+)
+
 /**
  * Representa el avance del envío del formulario.
  *
@@ -36,14 +62,25 @@ sealed interface CreateReportSubmissionState {
      * El incidente ya fue creado, pero quedaron evidencias pendientes.
      *
      * [uploadedEvidenceCount] acumula las evidencias subidas en intentos
-     * anteriores y [failedEvidenceCount] indica cuántas siguen sin subirse.
+     * anteriores y [pendingEvidence] contiene las fotografías que aún deben
+     * reintentarse. Esta lista es la fuente de verdad para reintentos: no
+     * depende de las miniaturas visibles del formulario.
      */
     data class EvidenceUploadFailed(
         val incidentId: String,
         val uploadedEvidenceCount: Int,
-        val failedEvidenceCount: Int,
+        val pendingEvidence: List<PendingEvidenceUpload>,
         val message: String
-    ) : CreateReportSubmissionState
+    ) : CreateReportSubmissionState {
+
+        val failedEvidenceCount: Int
+            get() = pendingEvidence.size
+
+        val hasUncertainEvidence: Boolean
+            get() = pendingEvidence.any {
+                it.failureKind == EvidenceUploadFailureKind.POSSIBLY_UPLOADED
+            }
+    }
 
     data class Error(val message: String) : CreateReportSubmissionState
 }

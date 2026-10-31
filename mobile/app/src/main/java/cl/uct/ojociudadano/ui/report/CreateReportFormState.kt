@@ -104,25 +104,6 @@ data class CreateReportFormState(
     }
 
     /**
-     * Elimina una referencia que ya no está disponible y expone el motivo.
-     *
-     * Las demás evidencias de la colección se conservan.
-     */
-    fun removeUnavailablePhoto(
-        fileName: String,
-        message: String
-    ): CreateReportFormState {
-        if (evidencePhotos.none { it.fileName == fileName }) {
-            return this
-        }
-
-        return copy(
-            evidencePhotos = evidencePhotos.filterNot { it.fileName == fileName },
-            photoError = message
-        )
-    }
-
-    /**
      * Informa un fallo de previsualización sin alterar la colección.
      */
     fun reportPhotoPreviewError(message: String): CreateReportFormState =

@@ -220,27 +220,23 @@ class CreateReportViewModel(
     /**
      * Gestiona un fallo al previsualizar una evidencia local.
      *
-     * Si el archivo temporal ya no existe, la referencia se elimina para no
-     * conservar una evidencia inválida. Si el archivo sigue disponible pero no
-     * puede decodificarse, se conserva y solo se informa el fallo para que el
-     * usuario decida eliminarla.
+     * La fotografía nunca se elimina automáticamente: si el archivo dejó de
+     * estar disponible, se informa el problema para que el usuario decida
+     * eliminarla o reemplazarla. Así una evidencia pendiente de subida no puede
+     * desaparecer de la colección y convertir un fallo en un éxito incorrecto.
      */
     fun onPhotoPreviewError(photo: IncidentPhotoEvidence) {
         val current = formState.evidencePhotos.firstOrNull {
             it.fileName == photo.fileName
         } ?: return
 
-        if (isEvidenceFileAvailable(current.fileName)) {
-            formState = formState.reportPhotoPreviewError(
+        formState = formState.reportPhotoPreviewError(
+            if (isEvidenceFileAvailable(current.fileName)) {
                 PhotoPreviewErrors.RENDER_FAILED
-            )
-        } else {
-            formState = formState.removeUnavailablePhoto(
-                current.fileName,
+            } else {
                 PhotoPreviewErrors.UNAVAILABLE
-            )
-            deleteEvidenceFile(current.fileName)
-        }
+            }
+        )
     }
 
     /**
@@ -350,7 +346,7 @@ class CreateReportViewModel(
         )
 
         var uploadedNow = 0
-        var failed = 0
+        val pendingEvidence = mutableListOf<PendingEvidenceUpload>()
 
         photos.forEachIndexed { index, photo ->
             if (uploadEvidence(incidentId, photo)) {
@@ -358,7 +354,10 @@ class CreateReportViewModel(
                 formState = formState.removeEvidencePhoto(photo.fileName)
                 deleteEvidenceFile(photo.fileName)
             } else {
-                failed++
+                pendingEvidence += PendingEvidenceUpload(
+                    photo = photo,
+                    failureKind = EvidenceUploadFailureKind.CONFIRMED
+                )
             }
 
             submissionState = CreateReportSubmissionState.UploadingEvidence(
@@ -368,7 +367,7 @@ class CreateReportViewModel(
             )
         }
 
-        if (failed == 0) {
+        if (pendingEvidence.isEmpty()) {
             clearEvidencePhotoState()
             submissionState = CreateReportSubmissionState.Success(
                 incidentId = incidentId,
@@ -377,13 +376,13 @@ class CreateReportViewModel(
             return
         }
 
-        val totalEvidence = alreadyUploaded + uploadedNow + failed
+        val totalEvidence = alreadyUploaded + uploadedNow + pendingEvidence.size
         submissionState = CreateReportSubmissionState.EvidenceUploadFailed(
             incidentId = incidentId,
             uploadedEvidenceCount = alreadyUploaded + uploadedNow,
-            failedEvidenceCount = failed,
+            pendingEvidence = pendingEvidence,
             message = EvidenceUploadErrors.partial(
-                failed = failed,
+                failed = pendingEvidence.size,
                 total = totalEvidence
             )
         )
@@ -433,20 +432,15 @@ class CreateReportViewModel(
     /**
      * Reintenta solo las evidencias pendientes del incidente ya creado.
      *
-     * No se ejecuta la validación del formulario ni la creación del incidente:
-     * el único objetivo es completar las fotografías que fallaron.
+     * La lista de pendientes vive en [CreateReportSubmissionState.EvidenceUploadFailed],
+     * no en las miniaturas visibles. Así una fotografía cuyo archivo desapareció
+     * sigue siendo un fallo explícito y no se declara un éxito por una colección
+     * visible vacía.
      */
     private fun retryEvidenceUploads(state: CreateReportSubmissionState.EvidenceUploadFailed) {
-        val pending = formState.evidencePhotos.toList()
+        val pending = state.pendingEvidence.map { it.photo }
 
-        if (pending.isEmpty()) {
-            clearEvidencePhotoState()
-            submissionState = CreateReportSubmissionState.Success(
-                incidentId = state.incidentId,
-                uploadedEvidenceCount = state.uploadedEvidenceCount
-            )
-            return
-        }
+        if (pending.isEmpty()) return
 
         submissionState = CreateReportSubmissionState.UploadingEvidence(
             incidentId = state.incidentId,
@@ -474,22 +468,30 @@ class CreateReportViewModel(
         val current = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
             ?: return
 
-        clearEvidencePhotoState()
+        clearEvidencePhotoState(
+            extraPhotos = current.pendingEvidence.map { it.photo }
+        )
         submissionState = CreateReportSubmissionState.Success(
             incidentId = current.incidentId,
             uploadedEvidenceCount = current.uploadedEvidenceCount,
-            discardedEvidenceCount = current.failedEvidenceCount
+            discardedEvidenceCount = current.pendingEvidence.size
         )
     }
 
     /**
-     * Limpia las referencias y los archivos temporales de las fotografías
-     * cuando todas las evidencias fueron subidas correctamente.
+     * Limpia las referencias y los archivos temporales de las fotografías.
+     *
+     * [extraPhotos] permite borrar pendientes que ya no estén en la colección
+     * visible, por ejemplo si su miniatura dejó de estar disponible.
      */
-    private fun clearEvidencePhotoState() {
-        formState.evidencePhotos.forEach { evidence ->
-            deleteEvidenceFile(evidence.fileName)
-        }
+    private fun clearEvidencePhotoState(
+        extraPhotos: List<IncidentPhotoEvidence> = emptyList()
+    ) {
+        (formState.evidencePhotos + extraPhotos)
+            .distinctBy { it.fileName }
+            .forEach { evidence ->
+                deleteEvidenceFile(evidence.fileName)
+            }
         formState = formState.copy(
             evidencePhotos = emptyList(),
             activePhotoOperation = null,
@@ -552,9 +554,18 @@ class CreateReportViewModel(
         synchronized(photoOperationLock) {
             activePhotoToken = null
         }
-        formState.evidencePhotos.forEach { evidence ->
-            deleteEvidenceFile(evidence.fileName)
-        }
+
+        val pendingEvidence =
+            (submissionState as? CreateReportSubmissionState.EvidenceUploadFailed)
+                ?.pendingEvidence
+                .orEmpty()
+                .map { it.photo }
+
+        (formState.evidencePhotos + pendingEvidence)
+            .distinctBy { it.fileName }
+            .forEach { evidence ->
+                deleteEvidenceFile(evidence.fileName)
+            }
     }
 
     private fun beginPhotoOperation(operation: PhotoOperation): PhotoOperationToken =
