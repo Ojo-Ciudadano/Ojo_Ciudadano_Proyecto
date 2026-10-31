@@ -14,6 +14,7 @@ import {
 
 import { IncidentesService } from './incidentes.service';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { FindIncidentesQueryDto } from './dto/find-incidentes-query.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { UpdatePrioridadDto } from './dto/update-prioridad.dto';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -30,8 +31,8 @@ export class IncidentesController {
   ) {}
 
   @Get()
-  findAll(@Query('usuarioReportaId') usuarioReportaId?: string) {
-    return this.incidentesService.findAll(usuarioReportaId);
+  findAll(@Query() filtros: FindIncidentesQueryDto) {
+    return this.incidentesService.findAll(filtros);
   }
 
   @Get(':id')
