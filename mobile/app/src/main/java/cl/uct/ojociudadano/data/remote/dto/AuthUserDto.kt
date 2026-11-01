@@ -1,8 +1,8 @@
 package cl.uct.ojociudadano.data.remote.dto
 
 data class AuthUserDto(
-    val id: String,
-    val nombre: String,
-    val email: String,
+    val id: String? = null,
+    val nombre: String? = null,
+    val email: String? = null,
     val roles: List<String>? = null
 )

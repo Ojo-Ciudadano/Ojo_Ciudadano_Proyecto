@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.data.remote
 
+import cl.uct.ojociudadano.BuildConfig
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -11,11 +12,11 @@ import org.junit.Test
 class RetrofitClientTest {
 
     @Test
-    fun `create uses remote UCT base url by default`() {
+    fun `create uses the compiled API configuration by default`() {
         val retrofit = RetrofitClient.create()
 
         assertEquals(
-            "https://api-ojociudadano.dev.censei.cl/",
+            RetrofitClient.normalizeBaseUrl(BuildConfig.API_BASE_URL),
             retrofit.baseUrl().toString()
         )
     }
