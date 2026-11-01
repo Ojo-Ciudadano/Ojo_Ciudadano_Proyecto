@@ -12,6 +12,7 @@ import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
+import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
@@ -37,6 +38,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -967,7 +969,7 @@ class CreateReportViewModelTest {
         val incidentRepository = FakeIncidentRepository(
             onUpload = { file, _ ->
                 if (file.name == secondSamplePhoto.fileName) {
-                    error("Fallo de red")
+                    throw confirmedUploadFailure()
                 }
             }
         )
@@ -989,7 +991,8 @@ class CreateReportViewModelTest {
                 pendingEvidence = listOf(
                     PendingEvidenceUpload(
                         photo = secondSamplePhoto,
-                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                        reason = "Archivo inválido"
                     )
                 ),
                 message = EvidenceUploadErrors.partial(failed = 1, total = 3)
@@ -1014,7 +1017,7 @@ class CreateReportViewModelTest {
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
             incidentRepository = FakeIncidentRepository(
-                onUpload = { _, _ -> error("Sin conexión") }
+                onUpload = { _, _ -> throw confirmedUploadFailure() }
             ),
             photoFileStore = photoFileStore
         )
@@ -1031,11 +1034,13 @@ class CreateReportViewModelTest {
                 pendingEvidence = listOf(
                     PendingEvidenceUpload(
                         photo = samplePhoto,
-                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                        reason = "Archivo inválido"
                     ),
                     PendingEvidenceUpload(
                         photo = secondSamplePhoto,
-                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                        reason = "Archivo inválido"
                     )
                 ),
                 message = EvidenceUploadErrors.partial(failed = 2, total = 2)
@@ -1057,7 +1062,7 @@ class CreateReportViewModelTest {
             onUpload = { file, _ ->
                 if (failFirstPhoto && file.name == samplePhoto.fileName) {
                     failFirstPhoto = false
-                    error("Fallo temporal")
+                    throw confirmedUploadFailure()
                 }
             }
         )
@@ -1079,7 +1084,8 @@ class CreateReportViewModelTest {
                 pendingEvidence = listOf(
                     PendingEvidenceUpload(
                         photo = samplePhoto,
-                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                        reason = "Archivo inválido"
                     )
                 ),
                 message = EvidenceUploadErrors.partial(failed = 1, total = 2)
@@ -1107,6 +1113,148 @@ class CreateReportViewModelTest {
             listOf(secondSamplePhoto.fileName, samplePhoto.fileName),
             photoFileStore.deletedFileNames
         )
+    }
+
+    @Test
+    fun `marks a transport failure as possibly uploaded and requires confirmation before retrying`() =
+        runTest {
+            var attempts = 0
+            val incidentRepository = FakeIncidentRepository(
+                onUpload = { _, _ ->
+                    attempts++
+                    if (attempts == 1) {
+                        throw ApiException.Network(IOException("timeout"))
+                    }
+                }
+            )
+            val viewModel = createViewModel(
+                categoryRepository = FakeCategoryRepository(),
+                incidentRepository = incidentRepository
+            )
+
+            viewModel.fillValidForm()
+            viewModel.seedPhotos(samplePhoto)
+            viewModel.createReport()
+
+            val failed =
+                viewModel.submissionState as CreateReportSubmissionState.EvidenceUploadFailed
+            val pending = failed.pendingEvidence.single()
+            assertEquals(samplePhoto, pending.photo)
+            assertEquals(
+                EvidenceUploadFailureKind.POSSIBLY_UPLOADED,
+                pending.failureKind
+            )
+            assertTrue(failed.hasUncertainEvidence)
+            assertEquals(
+                EvidenceUploadErrors.partial(
+                    failed = 1,
+                    total = 1,
+                    hasUncertainEvidence = true
+                ),
+                failed.message
+            )
+            assertEquals(1, incidentRepository.createInputs.size)
+            assertEquals(1, incidentRepository.uploadAttempts.size)
+
+            viewModel.createReport()
+
+            assertEquals(1, incidentRepository.uploadAttempts.size)
+            assertEquals(1, incidentRepository.createInputs.size)
+            assertTrue(
+                viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed
+            )
+
+            viewModel.confirmRetryAfterPossibleDuplicate()
+
+            assertEquals(
+                CreateReportSubmissionState.Success(
+                    incidentId = "incident-id",
+                    uploadedEvidenceCount = 1
+                ),
+                viewModel.submissionState
+            )
+            assertEquals(2, incidentRepository.uploadAttempts.size)
+            assertEquals(1, incidentRepository.createInputs.size)
+        }
+
+    @Test
+    fun `treats server errors as possibly uploaded and blocks automatic retry`() = runTest {
+        var attempts = 0
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { _, _ ->
+                attempts++
+                if (attempts == 1) {
+                    throw ApiException.Http(500, emptyList(), null, null)
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto)
+        viewModel.createReport()
+
+        val failed =
+            viewModel.submissionState as CreateReportSubmissionState.EvidenceUploadFailed
+        assertEquals(
+            EvidenceUploadFailureKind.POSSIBLY_UPLOADED,
+            failed.pendingEvidence.single().failureKind
+        )
+        assertTrue(failed.hasUncertainEvidence)
+
+        viewModel.createReport()
+
+        assertEquals(1, incidentRepository.uploadAttempts.size)
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertTrue(viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed)
+    }
+
+    @Test
+    fun `retries confirmed failures without duplicate confirmation`() = runTest {
+        var attempts = 0
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { _, _ ->
+                attempts++
+                if (attempts == 1) {
+                    throw confirmedUploadFailure()
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto)
+        viewModel.createReport()
+
+        val failed =
+            viewModel.submissionState as CreateReportSubmissionState.EvidenceUploadFailed
+        assertEquals(
+            EvidenceUploadFailureKind.CONFIRMED,
+            failed.pendingEvidence.single().failureKind
+        )
+        assertFalse(failed.hasUncertainEvidence)
+        assertEquals(
+            EvidenceUploadErrors.partial(failed = 1, total = 1),
+            failed.message
+        )
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 1
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(2, incidentRepository.uploadAttempts.size)
+        assertEquals(1, incidentRepository.createInputs.size)
     }
 
     @Test
@@ -1246,7 +1394,8 @@ class CreateReportViewModelTest {
                 pendingEvidence = listOf(
                     PendingEvidenceUpload(
                         photo = samplePhoto,
-                        failureKind = EvidenceUploadFailureKind.CONFIRMED
+                        failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                        reason = EvidenceUploadErrors.FILE_UNAVAILABLE
                     )
                 ),
                 message = EvidenceUploadErrors.partial(failed = 1, total = 2)
@@ -1268,7 +1417,7 @@ class CreateReportViewModelTest {
             val incidentRepository = FakeIncidentRepository(
                 onUpload = { file, _ ->
                     if (file.name == samplePhoto.fileName) {
-                        error("Fallo de red")
+                        throw confirmedUploadFailure()
                     }
                 }
             )
@@ -1316,7 +1465,7 @@ class CreateReportViewModelTest {
     @Test
     fun `editing the form after a partial upload does not create another incident`() = runTest {
         val incidentRepository = FakeIncidentRepository(
-            onUpload = { _, _ -> error("Sin conexión") }
+            onUpload = { _, _ -> throw confirmedUploadFailure() }
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -1346,7 +1495,7 @@ class CreateReportViewModelTest {
         val incidentRepository = FakeIncidentRepository(
             onUpload = { file, _ ->
                 if (file.name == samplePhoto.fileName) {
-                    error("Fallo de red")
+                    throw confirmedUploadFailure()
                 }
             }
         )
@@ -1508,6 +1657,14 @@ private class FakeCategoryRepository(
         return categories
     }
 }
+
+private fun confirmedUploadFailure(): ApiException.Http =
+    ApiException.Http(
+        statusCode = 400,
+        serverMessages = emptyList(),
+        error = "Archivo inválido",
+        path = "/api/v1/incidentes/evidencias"
+    )
 
 private data class UploadedEvidence(
     val incidentId: String,

@@ -87,6 +87,7 @@ fun CreateReportScreen(
     onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
     onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit,
     onCreateReportClick: () -> Unit,
+    onConfirmRetry: () -> Unit,
     onFinishWithoutPendingEvidence: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {}
@@ -95,6 +96,7 @@ fun CreateReportScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     var showFinishConfirmation by rememberSaveable { mutableStateOf(false) }
+    var showRetryConfirmation by rememberSaveable { mutableStateOf(false) }
     val canEditForm = submissionState.canEditForm
     val isSubmitEnabled = !submissionState.isInProgress &&
         submissionState !is CreateReportSubmissionState.Success &&
@@ -203,7 +205,13 @@ fun CreateReportScreen(
             onClick = {
                 keyboardController?.hide()
                 focusManager.clearFocus()
-                onCreateReportClick()
+                val failedState =
+                    submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+                if (failedState?.hasUncertainEvidence == true) {
+                    showRetryConfirmation = true
+                } else {
+                    onCreateReportClick()
+                }
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = isSubmitEnabled
@@ -251,6 +259,29 @@ fun CreateReportScreen(
 
     val partialState = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
 
+    if (showRetryConfirmation && partialState?.hasUncertainEvidence == true) {
+        AlertDialog(
+            onDismissRequest = { showRetryConfirmation = false },
+            title = { Text("Reintentar evidencias") },
+            text = { Text(EvidenceUploadErrors.UNCERTAIN_RETRY_WARNING) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRetryConfirmation = false
+                        onConfirmRetry()
+                    }
+                ) {
+                    Text("Reintentar de todas formas")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRetryConfirmation = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     if (showFinishConfirmation && partialState != null) {
         AlertDialog(
             onDismissRequest = { showFinishConfirmation = false },
@@ -259,7 +290,8 @@ fun CreateReportScreen(
                 Text(
                     finishWithoutPendingEvidenceMessage(
                         uploadedEvidenceCount = partialState.uploadedEvidenceCount,
-                        failedEvidenceCount = partialState.failedEvidenceCount
+                        failedEvidenceCount = partialState.failedEvidenceCount,
+                        hasUncertainEvidence = partialState.hasUncertainEvidence
                     )
                 )
             },
@@ -320,7 +352,8 @@ private fun finishWithoutPendingEvidenceLabel(uploadedEvidenceCount: Int): Strin
 
 private fun finishWithoutPendingEvidenceMessage(
     uploadedEvidenceCount: Int,
-    failedEvidenceCount: Int
+    failedEvidenceCount: Int,
+    hasUncertainEvidence: Boolean
 ): String = buildString {
     append("El reporte ya fue creado")
 
@@ -328,20 +361,27 @@ private fun finishWithoutPendingEvidenceMessage(
         append(" con ${photoCount(uploadedEvidenceCount)}")
     }
 
-    append(". Se descartarán ${photoCount(failedEvidenceCount)} que no ")
-
     if (failedEvidenceCount == 1) {
-        append("pudo subirse.")
+        append(". Se descartará 1 fotografía pendiente")
     } else {
-        append("pudieron subirse.")
+        append(". Se descartarán $failedEvidenceCount fotografías pendientes")
+    }
+
+    if (hasUncertainEvidence) {
+        append(
+            ". Algunas de estas fotografías podrían haberse guardado en el " +
+                "servidor, aunque no se recibió confirmación."
+        )
+    } else {
+        append(".")
     }
 }
 
 private fun discardedEvidenceMessage(discardedEvidenceCount: Int): String =
     if (discardedEvidenceCount == 1) {
-        "Se omitió 1 fotografía que no pudo subirse."
+        "Se omitió 1 fotografía pendiente."
     } else {
-        "Se omitieron $discardedEvidenceCount fotografías que no pudieron subirse."
+        "Se omitieron $discardedEvidenceCount fotografías pendientes."
     }
 
 private fun photoCount(count: Int): String =
@@ -508,6 +548,7 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onRemovePhoto = viewModel::onRemovePhoto,
         onPhotoPreviewError = viewModel::onPhotoPreviewError,
         onCreateReportClick = viewModel::createReport,
+        onConfirmRetry = viewModel::confirmRetryAfterPossibleDuplicate,
         onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
         onBack = onBack
@@ -537,6 +578,7 @@ private fun CreateReportScreenPreview() {
             onRemovePhoto = {},
             onPhotoPreviewError = {},
             onCreateReportClick = {},
+            onConfirmRetry = {},
             onFinishWithoutPendingEvidence = {}
         )
     }

@@ -13,6 +13,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
+import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
@@ -253,7 +254,11 @@ class CreateReportViewModel(
             is CreateReportSubmissionState.Success -> return
 
             is CreateReportSubmissionState.EvidenceUploadFailed -> {
-                retryEvidenceUploads(current)
+                // Un resultado incierto no se reenvía automáticamente: el
+                // usuario debe confirmar el riesgo de duplicar la evidencia.
+                if (!current.hasUncertainEvidence) {
+                    retryEvidenceUploads(current)
+                }
                 return
             }
 
@@ -327,6 +332,23 @@ class CreateReportViewModel(
     }
 
     /**
+     * Reintenta las evidencias pendientes después de que el usuario confirmó
+     * que acepta el riesgo de duplicarlas.
+     *
+     * Solo tiene efecto cuando el estado actual contiene al menos una evidencia
+     * cuyo resultado es incierto. El reintento conserva el incidente original y
+     * nunca vuelve a llamar a [IncidentRepository.createIncident].
+     */
+    fun confirmRetryAfterPossibleDuplicate() {
+        val current = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+            ?: return
+
+        if (!current.hasUncertainEvidence) return
+
+        retryEvidenceUploads(current)
+    }
+
+    /**
      * Sube las evidencias de forma secuencial y aislada.
      *
      * Un fallo individual se registra y se continúa con la siguiente fotografía.
@@ -349,15 +371,20 @@ class CreateReportViewModel(
         val pendingEvidence = mutableListOf<PendingEvidenceUpload>()
 
         photos.forEachIndexed { index, photo ->
-            if (uploadEvidence(incidentId, photo)) {
-                uploadedNow++
-                formState = formState.removeEvidencePhoto(photo.fileName)
-                deleteEvidenceFile(photo.fileName)
-            } else {
-                pendingEvidence += PendingEvidenceUpload(
-                    photo = photo,
-                    failureKind = EvidenceUploadFailureKind.CONFIRMED
-                )
+            when (val result = uploadEvidence(incidentId, photo)) {
+                EvidenceUploadResult.Uploaded -> {
+                    uploadedNow++
+                    formState = formState.removeEvidencePhoto(photo.fileName)
+                    deleteEvidenceFile(photo.fileName)
+                }
+
+                is EvidenceUploadResult.Failed -> {
+                    pendingEvidence += PendingEvidenceUpload(
+                        photo = photo,
+                        failureKind = result.failureKind,
+                        reason = result.reason
+                    )
+                }
             }
 
             submissionState = CreateReportSubmissionState.UploadingEvidence(
@@ -377,19 +404,38 @@ class CreateReportViewModel(
         }
 
         val totalEvidence = alreadyUploaded + uploadedNow + pendingEvidence.size
+        val hasUncertainEvidence = pendingEvidence.any {
+            it.failureKind == EvidenceUploadFailureKind.POSSIBLY_UPLOADED
+        }
         submissionState = CreateReportSubmissionState.EvidenceUploadFailed(
             incidentId = incidentId,
             uploadedEvidenceCount = alreadyUploaded + uploadedNow,
             pendingEvidence = pendingEvidence,
             message = EvidenceUploadErrors.partial(
                 failed = pendingEvidence.size,
-                total = totalEvidence
+                total = totalEvidence,
+                hasUncertainEvidence = hasUncertainEvidence
             )
         )
     }
 
     /**
-     * Sube una única evidencia y traduce cualquier fallo a un resultado falso.
+     * Resultado de un intento de subida individual.
+     *
+     * [Failed.failureKind] distingue un rechazo confirmado de un resultado
+     * incierto que podría haberse guardado en el servidor.
+     */
+    private sealed interface EvidenceUploadResult {
+        data object Uploaded : EvidenceUploadResult
+
+        data class Failed(
+            val failureKind: EvidenceUploadFailureKind,
+            val reason: String? = null
+        ) : EvidenceUploadResult
+    }
+
+    /**
+     * Sube una única evidencia y clasifica el resultado de un eventual fallo.
      *
      * La cancelación de la corrutina se propaga: no representa un fallo de la
      * evidencia, sino que el flujo completo dejó de ejecutarse.
@@ -397,7 +443,7 @@ class CreateReportViewModel(
     private suspend fun uploadEvidence(
         incidentId: String,
         photo: IncidentPhotoEvidence
-    ): Boolean {
+    ): EvidenceUploadResult {
         val file = runCatching { photoFileStore.file(photo.fileName) }.getOrNull()
 
         if (file == null) {
@@ -407,12 +453,15 @@ class CreateReportViewModel(
                     "Evidencia no disponible para subir: fileName=${photo.fileName}"
                 )
             }
-            return false
+            return EvidenceUploadResult.Failed(
+                failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                reason = EvidenceUploadErrors.FILE_UNAVAILABLE
+            )
         }
 
         return try {
             incidentRepository.uploadEvidence(incidentId, file, photo.mimeType)
-            true
+            EvidenceUploadResult.Uploaded
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
@@ -425,8 +474,31 @@ class CreateReportViewModel(
                     exception
                 )
             }
-            false
+            EvidenceUploadResult.Failed(
+                failureKind = classifyEvidenceUploadFailure(exception),
+                reason = exception.message
+            )
         }
+    }
+
+    /**
+     * Distingue un rechazo confirmado de un resultado incierto.
+     *
+     * Los errores 4xx y las validaciones locales permiten afirmar que el
+     * backend no guardó la evidencia. Los timeouts, desconexiones, respuestas
+     * 5xx y errores inesperados no permiten saberlo: la petición pudo haber
+     * llegado al servidor y su respuesta se perdió en el camino.
+     */
+    private fun classifyEvidenceUploadFailure(
+        exception: Exception
+    ): EvidenceUploadFailureKind = when {
+        exception is ApiException.Http && exception.statusCode in 400..499 ->
+            EvidenceUploadFailureKind.CONFIRMED
+
+        exception is IllegalArgumentException ->
+            EvidenceUploadFailureKind.CONFIRMED
+
+        else -> EvidenceUploadFailureKind.POSSIBLY_UPLOADED
     }
 
     /**

@@ -12,6 +12,7 @@ import cl.uct.ojociudadano.data.session.TestSessionStorage
 import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.ui.report.CreateReportSubmissionState
 import cl.uct.ojociudadano.ui.report.CreateReportViewModel
+import cl.uct.ojociudadano.ui.report.EvidenceUploadFailureKind
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
@@ -97,22 +98,7 @@ class EvidenceUploadFlowTest {
                 .setBody(evidenceJson("evidence-2"))
         )
 
-        val manager = DefaultSessionManager(
-            sessionStorage = TestSessionStorage(session),
-            ioDispatcher = Dispatchers.Unconfined
-        )
-        manager.restore()
-        val api = RetrofitClient.createApiService(
-            baseUrl = server.url("/").toString(),
-            tokenProvider = manager,
-            onUnauthorized = manager::invalidateIfCurrent
-        )
-        val viewModel = CreateReportViewModel(
-            categoryRepository = FakeCategoryRepository(listOf(category)),
-            incidentRepository = RemoteIncidentRepository(api, manager),
-            photoFileStore = photoStore,
-            ioDispatcher = Dispatchers.Unconfined
-        )
+        val viewModel = createViewModel()
 
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
@@ -165,6 +151,99 @@ class EvidenceUploadFlowTest {
         }
 
         assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun `uncertain upload requires confirmation and reuses the created incident`() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(incidentJson())
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setBody("""{"error":"storage"}""")
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(evidenceJson("evidence-2"))
+        )
+
+        val viewModel = createViewModel()
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.onDescriptionChange("El poste bloquea la vereda")
+        viewModel.onCategorySelected(category)
+        seedPhoto(viewModel, firstFile)
+        seedPhoto(viewModel, secondFile)
+
+        viewModel.createReport()
+        awaitTerminalState(viewModel)
+
+        val failed =
+            viewModel.submissionState as CreateReportSubmissionState.EvidenceUploadFailed
+        assertEquals(1, failed.uploadedEvidenceCount)
+        assertEquals(1, failed.pendingEvidence.size)
+        assertEquals(
+            EvidenceUploadFailureKind.POSSIBLY_UPLOADED,
+            failed.pendingEvidence.single().failureKind
+        )
+        assertTrue(failed.hasUncertainEvidence)
+        assertEquals(3, server.requestCount)
+        assertEquals(listOf(firstFile.name), viewModel.formState.evidencePhotos.map { it.fileName })
+
+        viewModel.createReport()
+
+        assertEquals(3, server.requestCount)
+
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(evidenceJson("evidence-3"))
+        )
+        viewModel.confirmRetryAfterPossibleDuplicate()
+        awaitTerminalState(viewModel)
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = INCIDENT_ID,
+                uploadedEvidenceCount = 2
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(4, server.requestCount)
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+
+        val requests = List(4) { takeRequest() }
+        assertEquals("POST", requests.first().method)
+        assertEquals("/api/v1/incidentes", requests.first().path)
+        assertEquals(
+            3,
+            requests.drop(1).count {
+                it.path == "/api/v1/incidentes/$INCIDENT_ID/evidencias"
+            }
+        )
+        assertEquals(1, requests.count { it.path == "/api/v1/incidentes" })
+    }
+
+    private suspend fun createViewModel(): CreateReportViewModel {
+        val manager = DefaultSessionManager(
+            sessionStorage = TestSessionStorage(session),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+        manager.restore()
+        val api = RetrofitClient.createApiService(
+            baseUrl = server.url("/").toString(),
+            tokenProvider = manager,
+            onUnauthorized = manager::invalidateIfCurrent
+        )
+        return CreateReportViewModel(
+            categoryRepository = FakeCategoryRepository(listOf(category)),
+            incidentRepository = RemoteIncidentRepository(api, manager),
+            photoFileStore = photoStore,
+            ioDispatcher = Dispatchers.Unconfined
+        )
     }
 
     private fun seedPhoto(viewModel: CreateReportViewModel, file: File) {
