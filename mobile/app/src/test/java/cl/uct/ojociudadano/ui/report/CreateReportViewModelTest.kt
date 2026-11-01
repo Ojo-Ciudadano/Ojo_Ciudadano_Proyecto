@@ -889,6 +889,37 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `deletes pending evidence when cleared after a partial upload`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { _, _ -> throw confirmedUploadFailure() }
+        )
+        val viewModelStore = ViewModelStore()
+        val factory = CreateReportViewModelFactory(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+        val viewModel = ViewModelProvider(viewModelStore, factory)
+            .get(CreateReportViewModel::class.java)
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        viewModel.createReport()
+
+        assertTrue(
+            viewModel.submissionState is CreateReportSubmissionState.EvidenceUploadFailed
+        )
+
+        viewModelStore.clear()
+
+        assertEquals(
+            listOf(samplePhoto.fileName, secondSamplePhoto.fileName),
+            photoFileStore.deletedFileNames
+        )
+    }
+
+    @Test
     fun `creates the report and uploads the selected evidence photos`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val photoFileStore = FakeEvidencePhotoFileStore()
