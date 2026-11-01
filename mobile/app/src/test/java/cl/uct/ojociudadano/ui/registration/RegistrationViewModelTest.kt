@@ -6,6 +6,7 @@ import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import java.io.IOException
+import javax.net.ssl.SSLHandshakeException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import org.junit.After
@@ -76,6 +77,21 @@ class RegistrationViewModelTest {
         val vm = RegistrationViewModel(Repository { throw CancellationException() })
         vm.register(input)
         assertFalse(vm.uiState.value is RegistrationUiState.Error)
+    }
+    @Test fun tlsFailureDoesNotSuggestRepeatingTheRegistration() {
+        val error = errorVm(ApiException.Network(SSLHandshakeException("private details"))).uiState.value as RegistrationUiState.Error
+        assertEquals("No se pudo establecer una conexión segura con el servidor. Intenta más tarde.", error.message)
+        assertFalse(error.message.contains("private details"))
+    }
+    @Test fun wrongEndpointAndUnavailableMicroserviceRemainErrors() {
+        for (code in listOf(404, 405, 502)) {
+            val state = errorVm(http(code)).uiState.value as RegistrationUiState.Error
+            assertTrue(state.message.contains(if (code == 502) "servidor no pudo" else "servicio de registro no está disponible"))
+        }
+    }
+    @Test fun invalidResponseDoesNotPretendTheAccountWasCreated() {
+        val state = errorVm(ApiException.Unexpected(IllegalStateException("private response"))).uiState.value as RegistrationUiState.Error
+        assertEquals("El servidor devolvió una respuesta de registro inválida. Si tu cuenta ya fue creada, intenta iniciar sesión.", state.message)
     }
     private fun errorVm(error: Exception) = RegistrationViewModel(Repository { throw error }).also { it.register(input) }
     private fun http(code: Int, messages: List<String> = emptyList()) = ApiException.Http(code, messages, null, null)

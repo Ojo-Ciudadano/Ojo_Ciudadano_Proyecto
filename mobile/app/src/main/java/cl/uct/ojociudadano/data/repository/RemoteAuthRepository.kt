@@ -39,10 +39,13 @@ class RemoteAuthRepository(
     override suspend fun login(
         email: String,
         password: String
-    ): AuthenticatedSession {
-        val response = executeApiCall {
+    ): AuthenticatedSession = executeApiCall {
+        val response = try {
             apiService.login(LoginRequestDto(email, password))
+        } catch (exception: MalformedJsonException) {
+            // Gson también lanza IOException al recibir HTML en vez de JSON.
+            throw IllegalStateException("Respuesta de login inválida", exception)
         }
-        return response.toAuthenticatedSession()
+        response.toAuthenticatedSession()
     }
 }

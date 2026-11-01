@@ -10,7 +10,14 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const { user, login, isLoading, isAuthenticated } = useAuth()
+  const {
+    user,
+    login,
+    isLoading,
+    isAuthenticated,
+    sessionExpiredMessage,
+    clearSessionExpiredMessage,
+  } = useAuth()
   const { showNotification } = useNotification()
   const navigate = useNavigate()
   const location = useLocation()
@@ -27,6 +34,7 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    clearSessionExpiredMessage()
 
     try {
       const loggedUser = await login(email, password)
@@ -44,6 +52,8 @@ export function LoginPage() {
       showNotification(errorMessage, 'error')
     }
   }
+
+  const visibleMessage = error ?? sessionExpiredMessage
 
   return (
     <div className="web-auth">
@@ -74,7 +84,11 @@ export function LoginPage() {
             />
           </div>
 
-          {error && <div className="error-message">{error}</div>}
+          {visibleMessage && (
+            <div className="error-message" role="alert">
+              {visibleMessage}
+            </div>
+          )}
 
           <button type="submit" className="btn btn-primary" disabled={isLoading}>
             {isLoading ? 'Cargando...' : 'Iniciar sesión'}

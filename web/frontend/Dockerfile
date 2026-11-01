@@ -7,16 +7,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# URL publica del API Gateway. Vite incrusta las variables VITE_* en el bundle
-# durante `npm run build`; el valor por defecto apunta al API Gateway remoto de
-# Kubernetes UCT para que la imagen desplegada nunca use localhost.
 ARG VITE_API_URL=https://ojociudadano.dev.censei.cl
 ENV VITE_API_URL=${VITE_API_URL}
 
-# Se copian primero los manifiestos de dependencias para aprovechar la cache de
-# capas de Docker mientras el codigo fuente no cambie.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
+RUN npm install -g typescript
 
 COPY . .
 RUN npm run build
@@ -34,6 +30,6 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

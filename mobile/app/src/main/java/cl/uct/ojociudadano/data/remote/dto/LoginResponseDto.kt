@@ -1,8 +1,8 @@
 package cl.uct.ojociudadano.data.remote.dto
 
 data class LoginResponseDto(
-    val access_token: String,
-    val token_type: String,
+    val access_token: String? = null,
+    val token_type: String? = null,
     val usuario: AuthUserDto? = null,
     val user: AuthUserDto? = null
 ) {

@@ -1,10 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { JwtService } from '@nestjs/jwt';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { UsuariosService } from '../usuarios/usuarios.service';
-import { PrismaService } from '../prisma/prisma.service';
 
 describe('AuthService', () => {
   let service: AuthService;

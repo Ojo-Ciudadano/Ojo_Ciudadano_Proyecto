@@ -23,10 +23,12 @@ import {
   PRIORIDAD_MINIMA,
 } from './prioridad/prioridad.constants';
 import { evidenciaSelect } from './mappers/evidencia.mapper';
+import { toHistorialEstadoResponse } from './mappers/historial-estado.mapper';
 import { toIncidenteResponse } from './mappers/incidente.mapper';
 import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
 import { toAsignacionResponse } from './mappers/asignacion.mapper';
 import { AuthUsuariosClient } from './auth/auth-usuarios.client';
+
 
 const include = {
   categoria: true,
@@ -75,7 +77,26 @@ export class IncidentesService {
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
     return toIncidenteResponse(incidente);
   }
+  async findHistorial(id: string) {
+    if (!isUUID(id, 'all'))
+      throw new BadRequestException('El id del incidente debe ser un UUID valido');
+    // La existencia se verifica antes de consultar el historial para distinguir
+    // un incidente inexistente (404) de un incidente sin registros ([]).
+    const incidente = await this.prisma.incidente.findUnique({
+      where: { id },
+      select: { id: true },
+    }); 
+    if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
+    const historial = await this.prisma.historialEstado.findMany({
+      where: { incidenteId: id },
+      include: { estado: true },
+      // Orden cronologico ascendente y desempate determinista por id.
+      orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
+    });
+
+    return historial.map(toHistorialEstadoResponse);
+  }
   async create(dto: CreateIncidenteDto) {
     if (!dto.titulo?.trim() || !dto.descripcion?.trim() || !dto.ubicacion)
       throw new BadRequestException('titulo, descripcion y ubicacion son obligatorios');

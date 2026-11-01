@@ -1,4 +1,4 @@
-import { apiClient } from './api'
+import { apiClient, clearSessionStorage } from './api'
 import type { LoginRequest, LoginResponse, User } from '../types'
 
 export const authService = {
@@ -8,8 +8,7 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('user')
+    clearSessionStorage()
   },
 
   /**

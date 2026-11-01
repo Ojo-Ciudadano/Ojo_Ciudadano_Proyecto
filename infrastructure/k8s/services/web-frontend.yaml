@@ -26,7 +26,7 @@ spec:
         - name: web-frontend
           # Etiqueta de version identificable. Para rollback determinista se
           # puede fijar el SHA corto del commit (ver docs/DESPLIEGUE_WEB_K8S_GHCR.md).
-          image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/web:v1.0.0
+          image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/web:v1.0.2
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
