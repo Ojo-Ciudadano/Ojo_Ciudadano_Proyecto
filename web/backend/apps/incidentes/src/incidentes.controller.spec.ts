@@ -11,6 +11,7 @@ describe('IncidentesController', () => {
   const mockService = {
     findAll: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue({ id: '1' }),
+    findHistorial: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockResolvedValue({ id: '1' }),
     updatePrioridad: jest.fn().mockResolvedValue({ id: '1', nivelPrioridad: 4 }),
     updateEstado: jest.fn().mockResolvedValue({
@@ -56,6 +57,11 @@ describe('IncidentesController', () => {
   it('delega findOne con el id', async () => {
     await controller.findOne('1');
     expect(mockService.findOne).toHaveBeenCalledWith('1');
+  });
+  
+  it('delega findHistorial con el id', async () => {
+    await controller.findHistorial('1');
+    expect(mockService.findHistorial).toHaveBeenCalledWith('1');
   });
 
   it('delega create con el dto', async () => {
