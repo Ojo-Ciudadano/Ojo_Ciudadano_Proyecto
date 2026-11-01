@@ -1,16 +1,3 @@
-# Aprovisionamiento reproducible del Secret TLS (no versionado en Git por seguridad):
-# 1. Generar par de claves autofirmado con CN y SAN para ojociudadano.dev.censei.cl:
-#    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-#      -keyout tls.key -out tls.crt \
-#      -subj "/CN=ojociudadano.dev.censei.cl" \
-#      -addext "subjectAltName=DNS:ojociudadano.dev.censei.cl"
-# 2. Crear/actualizar el Secret en el namespace correspondiente:
-#    kubectl create secret tls uct-ingress-tls --key tls.key --cert tls.crt \
-#      -n student-daalvarez --dry-run=client -o yaml | kubectl apply -f -
-# 3. Estrategia de rotacion (previo a expiracion en oct 2027):
-#    Publicar una version de la APK que incluya tanto el certificado vigente como el nuevo
-#    trust anchor en res/xml/network_security_config.xml (trust overlap) antes de rotar el
-#    secret uct-ingress-tls en el cluster, y eliminar los archivos locales tls.key/tls.crt.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -25,21 +12,12 @@ spec:
   tls:
   - hosts:
     - ojociudadano.dev.censei.cl
+    - api.ojociudadano.dev.censei.cl
     secretName: uct-ingress-tls
   rules:
   - host: ojociudadano.dev.censei.cl
     http:
       paths:
-      # Estrategia Single-Host (#128): Web y API Gateway comparten host y origen.
-      # /api se enruta primero (prefijo mas especifico) al API Gateway.
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: api-gateway-svc
-            port:
-              number: 3000
-      # Todo el resto (aplicacion React, rutas SPA y /assets) lo sirve Nginx.
       - path: /
         pathType: Prefix
         backend:
@@ -47,3 +25,13 @@ spec:
             name: web-frontend-svc
             port:
               number: 80
+  - host: api.ojociudadano.dev.censei.cl
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-svc
+            port:
+              number: 3000

@@ -10,7 +10,7 @@ import cl.uct.ojociudadano.data.remote.auth.RegistrationRequestInterceptor
 
 object RetrofitClient {
 
-    const val DEFAULT_BASE_URL = "https://ojociudadano.dev.censei.cl/"
+    const val DEFAULT_BASE_URL = "https://api-ojociudadano.dev.censei.cl/api/v1/"
 
     fun normalizeBaseUrl(baseUrl: String): String {
         require(baseUrl.isNotBlank()) {
