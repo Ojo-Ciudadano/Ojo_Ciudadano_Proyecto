@@ -8,7 +8,9 @@ import {
 import { isUUID } from 'class-validator';
 
 import { PrismaService } from './prisma/prisma.service';
+import { Prisma } from './generated/prisma/client';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { FindIncidentesQueryDto } from './dto/find-incidentes-query.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { UpdatePrioridadDto } from './dto/update-prioridad.dto';
 import {
@@ -33,9 +35,29 @@ const include = {
 export class IncidentesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(usuarioReportaId?: string) {
+  async findAll(filtros: FindIncidentesQueryDto = {}) {
+    const where: Prisma.IncidenteWhereInput = {};
+    const comuna = filtros.comuna?.trim();
+
+    if (filtros.usuarioReportaId) {
+      where.usuarioReportaId = filtros.usuarioReportaId;
+    }
+    if (filtros.estadoId) {
+      where.estadoId = filtros.estadoId;
+    }
+    if (filtros.categoriaId) {
+      where.categoriaId = filtros.categoriaId;
+    }
+    if (comuna) {
+      where.ubicacion = {
+        is: {
+          comuna: { equals: comuna, mode: 'insensitive' },
+        },
+      };
+    }
+
     const incidentes = await this.prisma.incidente.findMany({
-      where: usuarioReportaId ? { usuarioReportaId } : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       include,
       orderBy: { fechaCreacion: 'desc' },
     });

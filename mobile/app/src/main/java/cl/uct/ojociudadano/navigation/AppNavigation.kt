@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.navOptions
 import cl.uct.ojociudadano.data.session.SessionManager
+import cl.uct.ojociudadano.data.session.SessionState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
@@ -19,6 +20,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
+import cl.uct.ojociudadano.ui.admin.AdminHomeScreen
+import cl.uct.ojociudadano.ui.admin.AdminIncidentsPendingScreen
 import cl.uct.ojociudadano.ui.home.HomeScreen
 import cl.uct.ojociudadano.ui.login.LoginCredentials
 import cl.uct.ojociudadano.ui.login.LoginScreen
@@ -30,6 +33,7 @@ import cl.uct.ojociudadano.ui.reports.ReportsScreen
 
 object AppRoutes {
     const val ADMIN = "admin"
+    const val ADMIN_INCIDENTS = "admin/incidents"
     const val ROLE_UNAVAILABLE = "role_unavailable"
     const val HOME = "home"
     const val REPORTS = "reports"
@@ -97,11 +101,22 @@ fun AppNavigation(
             modifier = Modifier.padding(innerPadding)
         ) {
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN) {
-                SessionDestinationScreen(
-                    title = "Administrador",
-                    message = "Pantalla provisional. Las funcionalidades administrativas aún no están disponibles.",
+                val session = (sessionState as? SessionState.Authenticated)?.session
+                AdminHomeScreen(
+                    name = session?.name.orEmpty(),
+                    email = session?.email.orEmpty(),
+                    onIncidentManagementClick = { navigate(AppRoutes.ADMIN_INCIDENTS) },
                     onLogout = onLogout
                 )
+            }
+            protectedComposable(sessionManager, navController, AppRoutes.ADMIN_INCIDENTS) {
+                AdminIncidentsPendingScreen(onBack = {
+                    if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN) &&
+                        !navController.popBackStack(AppRoutes.ADMIN, inclusive = false)
+                    ) {
+                        navigate(AppRoutes.ADMIN)
+                    }
+                })
             }
             protectedComposable(sessionManager, navController, AppRoutes.ROLE_UNAVAILABLE) {
                 SessionDestinationScreen(

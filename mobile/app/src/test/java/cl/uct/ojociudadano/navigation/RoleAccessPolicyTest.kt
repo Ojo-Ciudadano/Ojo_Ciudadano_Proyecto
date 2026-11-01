@@ -15,13 +15,14 @@ class RoleAccessPolicyTest {
     private val citizenRoutes = listOf(AppRoutes.HOME, AppRoutes.REPORTS,
         AppRoutes.INCIDENT_DETAIL, "incident/test-id", "incident/id%2Fencoded",
         AppRoutes.CREATE_REPORT, AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE)
-    private val routes = citizenRoutes + listOf(AppRoutes.ADMIN, AppRoutes.ROLE_UNAVAILABLE,
+    private val adminRoutes = listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS)
+    private val routes = citizenRoutes + adminRoutes + listOf(AppRoutes.ROLE_UNAVAILABLE,
         AppRoutes.LOGIN, AppRoutes.REGISTER)
 
     @Test fun `each valid role can access only its own screens and actions`() {
         for (route in routes) {
             assertEquals(route, route in citizenRoutes, RoleAccessPolicy.allows(state("CIUDADANO"), route))
-            assertEquals(route, route == AppRoutes.ADMIN, RoleAccessPolicy.allows(state("ADMIN"), route))
+            assertEquals(route, route in adminRoutes, RoleAccessPolicy.allows(state("ADMIN"), route))
         }
     }
 
@@ -70,9 +71,11 @@ class RoleAccessPolicyTest {
         for (role in listOf("ADMIN", "CIUDADANO", "ADMIN")) {
             manager.establish(testSession().copy(roles = listOf(role)))
             assertEquals(role == "ADMIN", RoleAccessPolicy.allows(manager.state.value, AppRoutes.ADMIN))
+            assertEquals(role == "ADMIN", RoleAccessPolicy.allows(manager.state.value, AppRoutes.ADMIN_INCIDENTS))
             assertEquals(role == "CIUDADANO", RoleAccessPolicy.allows(manager.state.value, AppRoutes.CREATE_REPORT))
             manager.logout()
             assertFalse(RoleAccessPolicy.allows(manager.state.value, AppRoutes.ADMIN))
+            assertFalse(RoleAccessPolicy.allows(manager.state.value, AppRoutes.ADMIN_INCIDENTS))
             assertFalse(RoleAccessPolicy.allows(manager.state.value, AppRoutes.CREATE_REPORT))
         }
     }

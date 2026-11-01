@@ -167,6 +167,68 @@ class RoleNavigationTest {
         }
     }
 
+    @Test fun administratorOpensPendingManagementReturnsAndLogsOutWithoutProtectedHistory() {
+        val manager = DefaultSessionManager(Storage(session("ADMIN")))
+        showGate(manager)
+        compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
+        compose.onNodeWithText("Panel de administración").assertIsDisplayed()
+        compose.onNodeWithText("test@example.invalid").assertIsDisplayed()
+        compose.onNodeWithText("Gestión de incidentes").performClick()
+        compose.onNodeWithText("Funcionalidad pendiente").assertIsDisplayed()
+        compose.onNodeWithText("Volver al panel").performClick()
+        compose.onNodeWithText("Panel de administración").assertIsDisplayed()
+        compose.onNodeWithText("Gestión de incidentes").performClick()
+        compose.onNodeWithText("Funcionalidad pendiente").assertIsDisplayed()
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithText("Panel de administración").assertIsDisplayed()
+        compose.onNodeWithText("Cerrar sesión").performClick()
+        compose.waitUntil(5_000) { manager.state.value == SessionState.Unauthenticated }
+        compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
+        compose.onNodeWithText("Panel de administración").assertDoesNotExist()
+        compose.onNodeWithText("Funcionalidad pendiente").assertDoesNotExist()
+        compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
+    }
+
+    @Test fun invalidationWhileInPendingManagementRemovesAdministrativeNavigation() {
+        val manager = DefaultSessionManager(Storage(session("ADMIN")))
+        showGate(manager)
+        compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
+        compose.onNodeWithText("Gestión de incidentes").performClick()
+        compose.onNodeWithText("Funcionalidad pendiente").assertIsDisplayed()
+        compose.runOnIdle {
+            manager.invalidateIfCurrent(requireNotNull(manager.currentTokenSnapshot()))
+        }
+        compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
+        compose.onNodeWithText("Funcionalidad pendiente").assertDoesNotExist()
+        compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
+    }
+
+    @Test fun citizenCannotOpenAdministrativeDestinationsEvenBypassingActionGuard() {
+        val manager = DefaultSessionManager(Storage(session("CIUDADANO")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme {
+                AppNavigation(manager, controller, startDestination = AppRoutes.HOME)
+            }
+        }
+        for (route in listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS)) {
+            compose.runOnIdle {
+                assertFalse(controller.navigateIfAllowed(manager, route))
+                controller.navigate(route)
+            }
+            compose.waitForIdle()
+            compose.onNodeWithText("Panel de administración").assertDoesNotExist()
+            compose.onNodeWithText("Funcionalidad pendiente").assertDoesNotExist()
+            compose.onNodeWithTag("citizen_home").assertIsDisplayed()
+            compose.runOnIdle {
+                assertEquals(AppRoutes.HOME, controller.currentDestination?.route)
+                assertNull(controller.previousBackStackEntry)
+            }
+        }
+    }
+
     private fun showGate(manager: SessionManager) {
         compose.setContent {
             OjoCiudadanoTheme {
