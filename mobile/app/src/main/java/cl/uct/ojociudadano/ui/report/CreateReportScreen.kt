@@ -40,10 +40,14 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -506,7 +510,11 @@ private fun ReportTextField(
  * la pantalla tenga un propietario de estado dedicado.
  */
 @Composable
-fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
+fun CreateReportScreen(
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
+    onExitRiskChanged: (CreateReportExitRisk?) -> Unit = {}
+) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val fileStore = application.container.evidencePhotoStore
     val viewModel: CreateReportViewModel = viewModel(
@@ -518,6 +526,22 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
             )
         }
     )
+
+    val currentOnExitRiskChanged by rememberUpdatedState(onExitRiskChanged)
+    val exitRisk = CreateReportExitPolicy.riskOf(
+        state = viewModel.submissionState,
+        visiblePhotos = viewModel.formState.evidencePhotos
+    )
+
+    LaunchedEffect(exitRisk) {
+        currentOnExitRiskChanged(exitRisk)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { currentOnExitRiskChanged(null) }
+    }
+
+    BackHandler { onBack() }
 
     val photoCaptureLauncher = rememberPhotoCaptureLauncher(
         fileStore = fileStore,

@@ -6,12 +6,19 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import android.net.Uri
 import cl.uct.ojociudadano.ui.reports.IncidentDetailScreen
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.navOptions
 import cl.uct.ojociudadano.data.session.SessionManager
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -25,6 +32,8 @@ import cl.uct.ojociudadano.ui.login.LoginScreen
 import cl.uct.ojociudadano.ui.map.MapScreen
 import cl.uct.ojociudadano.ui.notifications.NotificationsScreen
 import cl.uct.ojociudadano.ui.profile.ProfileScreen
+import cl.uct.ojociudadano.ui.report.CreateReportExitPolicy
+import cl.uct.ojociudadano.ui.report.CreateReportExitRisk
 import cl.uct.ojociudadano.ui.report.CreateReportScreen
 import cl.uct.ojociudadano.ui.reports.ReportsScreen
 
@@ -65,6 +74,30 @@ fun AppNavigation(
         }
     }
 
+    var createReportExitRisk by remember {
+        mutableStateOf<CreateReportExitRisk?>(null)
+    }
+    var pendingExitAction by remember {
+        mutableStateOf<(() -> Unit)?>(null)
+    }
+    var showExitConfirmation by remember { mutableStateOf(false) }
+
+    fun requestNavigation(action: () -> Unit) {
+        if (createReportExitRisk == null) {
+            action()
+        } else {
+            pendingExitAction = action
+            showExitConfirmation = true
+        }
+    }
+
+    LaunchedEffect(createReportExitRisk) {
+        if (createReportExitRisk == null) {
+            showExitConfirmation = false
+            pendingExitAction = null
+        }
+    }
+
     Scaffold(
         bottomBar = {
             if (currentRoute in citizenRoutes && RoleAccessPolicy.allows(sessionState, currentRoute)) {
@@ -72,16 +105,24 @@ fun AppNavigation(
                     currentRoute = currentRoute,
                     isDestinationAllowed = { RoleAccessPolicy.allows(sessionState, it) }
                 ) { route ->
-                    if (route == AppRoutes.HOME) {
-                        navigateToHome()
-                    } else {
-                        navController.navigateIfAllowed(sessionManager, route, navOptions {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                    if (route != currentRoute) {
+                        requestNavigation {
+                            if (route == AppRoutes.HOME) {
+                                navigateToHome()
+                            } else {
+                                navController.navigateIfAllowed(
+                                    sessionManager,
+                                    route,
+                                    navOptions {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                )
                             }
-                            launchSingleTop = true
-                            restoreState = true
-                        })
+                        }
                     }
                 }
             }
@@ -139,7 +180,10 @@ fun AppNavigation(
                 IncidentDetailScreen(entry.arguments?.getString("id").orEmpty(), onBack = { navController.navigateUp() })
             }
             protectedComposable(sessionManager, navController, AppRoutes.CREATE_REPORT) {
-                CreateReportScreen(onBack = ::navigateToHome)
+                CreateReportScreen(
+                    onBack = { requestNavigation { navigateToHome() } },
+                    onExitRiskChanged = { createReportExitRisk = it }
+                )
             }
             protectedComposable(sessionManager, navController, AppRoutes.NOTIFICATIONS) {
                 NotificationsScreen(onBack = navController::navigateUp)
@@ -147,6 +191,40 @@ fun AppNavigation(
             protectedComposable(sessionManager, navController, AppRoutes.MAP) { MapScreen() }
             protectedComposable(sessionManager, navController, AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
         }
+    }
+
+    val exitRisk = createReportExitRisk
+    if (showExitConfirmation && exitRisk != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showExitConfirmation = false
+                pendingExitAction = null
+            },
+            title = { Text("Salir del reporte") },
+            text = { Text(CreateReportExitPolicy.message(exitRisk)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val action = pendingExitAction
+                        showExitConfirmation = false
+                        pendingExitAction = null
+                        action?.invoke()
+                    }
+                ) {
+                    Text("Salir y descartar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showExitConfirmation = false
+                        pendingExitAction = null
+                    }
+                ) {
+                    Text("Seguir aquí")
+                }
+            }
+        )
     }
 }
 
