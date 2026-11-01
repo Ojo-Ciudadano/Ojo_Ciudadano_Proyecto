@@ -3,6 +3,7 @@ package cl.uct.ojociudadano.data.repository
 import cl.uct.ojociudadano.data.mapper.toDomain
 import cl.uct.ojociudadano.data.mapper.toRequestDto
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.error.executeApiCall
@@ -21,11 +22,6 @@ class RemoteIncidentRepository(
     private val apiService: ApiService,
     private val sessionManager: SessionManager
 ) : IncidentRepository {
-
-    companion object {
-        private const val MAX_BACKEND_FILE_SIZE = 10L * 1024L * 1024L
-        private val ALLOWED_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp")
-    }
 
     override suspend fun getIncidents(): List<Incident> {
         val response = withCurrentIdentity { identity ->
@@ -75,10 +71,10 @@ class RemoteIncidentRepository(
         if (!file.exists() || !file.canRead() || file.length() <= 0L) {
             throw IllegalArgumentException("El archivo de evidencia no existe, está vacío o no es legible")
         }
-        if (file.length() > MAX_BACKEND_FILE_SIZE) {
+        if (file.length() > EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES) {
             throw IllegalArgumentException("El archivo supera el límite máximo de 10 MB aceptado por el backend")
         }
-        if (mimeType !in ALLOWED_MIME_TYPES) {
+        if (!EvidenceUploadConstraints.isSupportedMimeType(mimeType)) {
             throw IllegalArgumentException("Formato de archivo no soportado por el backend. Use JPEG, PNG o WebP")
         }
 
