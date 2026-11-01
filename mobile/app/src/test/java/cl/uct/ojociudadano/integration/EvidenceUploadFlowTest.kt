@@ -227,6 +227,39 @@ class EvidenceUploadFlowTest {
         assertEquals(1, requests.count { it.path == "/api/v1/incidentes" })
     }
 
+    @Test
+    fun `does not create the incident when evidence format is not supported`() = runBlocking {
+        val viewModel = createViewModel()
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.onDescriptionChange("El poste bloquea la vereda")
+        viewModel.onCategorySelected(category)
+
+        val token = viewModel.onPhotoCaptureStarted()
+        viewModel.onPhotoCaptured(
+            token,
+            IncidentPhotoEvidence(
+                localUri = "content://evidences/${firstFile.name}",
+                fileName = firstFile.name,
+                mimeType = "image/heic",
+                sizeBytes = firstFile.length(),
+                capturedAt = 1_700_000_000_000L
+            )
+        )
+
+        viewModel.createReport()
+
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertEquals(0, server.requestCount)
+        assertTrue(
+            viewModel.formState.photoError.orEmpty().contains("formato no compatible")
+        )
+        assertEquals(
+            listOf(firstFile.name),
+            viewModel.formState.evidencePhotos.map { it.fileName }
+        )
+        assertTrue(firstFile.exists())
+    }
+
     private suspend fun createViewModel(): CreateReportViewModel {
         val manager = DefaultSessionManager(
             sessionStorage = TestSessionStorage(session),

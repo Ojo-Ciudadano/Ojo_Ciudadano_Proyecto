@@ -110,6 +110,15 @@ data class CreateReportFormState(
         copy(photoError = message)
 
     /**
+     * Informa que una o más fotografías no cumplen los límites del backend.
+     *
+     * La colección se conserva para que el usuario pueda eliminar o reemplazar
+     * las fotografías señaladas antes de volver a enviar el formulario.
+     */
+    fun reportEvidenceValidationError(message: String): CreateReportFormState =
+        copy(photoError = message)
+
+    /**
      * El usuario canceló la operación: no es un error y las fotografías
      * anteriores, si existían, se mantienen disponibles.
      */

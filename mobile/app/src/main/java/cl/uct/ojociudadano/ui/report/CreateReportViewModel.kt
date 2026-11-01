@@ -11,6 +11,7 @@ import cl.uct.ojociudadano.data.media.PhotoImportException
 import cl.uct.ojociudadano.data.media.PhotoImportFailure
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.error.ApiException
@@ -271,6 +272,16 @@ class CreateReportViewModel(
         formState = formValidator.validate(formState)
 
         if (formState.hasValidationErrors()) {
+            submissionState = CreateReportSubmissionState.Idle
+            return
+        }
+
+        val evidenceValidationErrors = validateEvidencePhotos(formState.evidencePhotos)
+
+        if (evidenceValidationErrors.isNotEmpty()) {
+            formState = formState.reportEvidenceValidationError(
+                evidenceValidationErrors.joinToString("\n")
+            )
             submissionState = CreateReportSubmissionState.Idle
             return
         }
@@ -702,6 +713,31 @@ class CreateReportViewModel(
 
     private fun isEvidenceFileAvailable(fileName: String): Boolean =
         runCatching { photoFileStore.exists(fileName) }.getOrDefault(false)
+
+    /**
+     * Comprueba que todas las fotografías puedan subirse antes de crear el
+     * incidente.
+     *
+     * Si alguna no cumple los límites del backend, el usuario recibe el motivo
+     * específico y el formulario sigue editable para eliminarla o reemplazarla.
+     * Así no se crea un incidente con evidencias que nunca podrán asociarse.
+     */
+    private fun validateEvidencePhotos(
+        photos: List<IncidentPhotoEvidence>
+    ): List<String> = photos.mapIndexedNotNull { index, photo ->
+        val issues = EvidenceUploadConstraints.issuesFor(
+            photo = photo,
+            fileAvailable = isEvidenceFileAvailable(photo.fileName)
+        )
+
+        issues.takeIf { it.isNotEmpty() }?.let {
+            EvidenceUploadErrors.compatibility(
+                position = index + 1,
+                photo = photo,
+                issues = it
+            )
+        }
+    }
 
     /**
      * Elimina el archivo de un resultado que ya no corresponde a la operación

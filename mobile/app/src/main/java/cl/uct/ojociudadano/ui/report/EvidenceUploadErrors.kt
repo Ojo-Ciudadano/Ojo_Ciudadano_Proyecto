@@ -1,5 +1,9 @@
 package cl.uct.ojociudadano.ui.report
 
+import cl.uct.ojociudadano.data.model.EvidenceCompatibilityIssue
+import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+
 /**
  * Mensajes que el formulario muestra cuando una o más evidencias no pueden
  * subirse después de crear el incidente.
@@ -8,6 +12,35 @@ package cl.uct.ojociudadano.ui.report
  * dispersos y para poder reutilizarlos en las pruebas.
  */
 object EvidenceUploadErrors {
+
+    /**
+     * Mensaje específico para una fotografía que no cumple los límites del
+     * backend. Se usa antes de crear el incidente para que el usuario pueda
+     * corregir o reemplazar la selección.
+     */
+    fun compatibility(
+        position: Int,
+        photo: IncidentPhotoEvidence,
+        issues: List<EvidenceCompatibilityIssue>
+    ): String {
+        val reasons = issues.joinToString("; ") { issue ->
+            when (issue) {
+                EvidenceCompatibilityIssue.FILE_UNAVAILABLE ->
+                    "el archivo ya no está disponible"
+
+                EvidenceCompatibilityIssue.UNSUPPORTED_FORMAT ->
+                    "formato no compatible (usa JPEG, PNG o WebP)"
+
+                EvidenceCompatibilityIssue.EMPTY_FILE ->
+                    "el archivo está vacío"
+
+                EvidenceCompatibilityIssue.FILE_TOO_LARGE ->
+                    "supera el límite de ${EvidenceUploadConstraints.MAX_FILE_SIZE_MB} MB"
+            }
+        }
+
+        return "Fotografía ${position.coerceAtLeast(1)} (${photo.fileName}): $reasons."
+    }
 
     /**
      * Mensaje para un fallo parcial: el incidente existe y las fotografías

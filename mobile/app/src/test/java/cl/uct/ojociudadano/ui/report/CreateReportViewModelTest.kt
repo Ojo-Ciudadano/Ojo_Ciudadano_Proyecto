@@ -7,6 +7,7 @@ import cl.uct.ojociudadano.data.media.PhotoImportFailure
 import cl.uct.ojociudadano.data.media.TEMP_EVIDENCE_MAX_AGE_MILLIS
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
@@ -1372,9 +1373,11 @@ class CreateReportViewModelTest {
     }
 
     @Test
-    fun `treats a missing local file as a controlled evidence failure`() = runTest {
+    fun `treats a file that disappears after creation as a controlled evidence failure`() = runTest {
         val photoFileStore = FakeEvidencePhotoFileStore()
-        val incidentRepository = FakeIncidentRepository()
+        val incidentRepository = FakeIncidentRepository(
+            onCreate = { photoFileStore.markMissing(samplePhoto.fileName) }
+        )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
             incidentRepository = incidentRepository,
@@ -1383,7 +1386,6 @@ class CreateReportViewModelTest {
 
         viewModel.fillValidForm()
         viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
-        photoFileStore.markMissing(samplePhoto.fileName)
 
         viewModel.createReport()
 
@@ -1408,6 +1410,159 @@ class CreateReportViewModelTest {
             incidentRepository.uploadAttempts.single()
         )
         assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+    }
+
+    @Test
+    fun `does not create the incident when a photo file is missing before submission`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto)
+        photoFileStore.markMissing(samplePhoto.fileName)
+
+        viewModel.createReport()
+
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertTrue(incidentRepository.uploadAttempts.isEmpty())
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+        assertTrue(viewModel.formState.photoError.orEmpty().contains("no está disponible"))
+        assertTrue(viewModel.formState.photoError.orEmpty().contains(samplePhoto.fileName))
+    }
+
+    @Test
+    fun `blocks submission when a photo format is not supported`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val heicPhoto = samplePhoto.copy(mimeType = "image/heic")
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(heicPhoto)
+
+        viewModel.createReport()
+
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertTrue(incidentRepository.uploadAttempts.isEmpty())
+        assertEquals(listOf(heicPhoto), viewModel.formState.evidencePhotos)
+        assertTrue(viewModel.formState.photoError.orEmpty().contains("formato no compatible"))
+        assertTrue(viewModel.formState.photoError.orEmpty().contains(heicPhoto.fileName))
+    }
+
+    @Test
+    fun `blocks submission when a photo exceeds the backend size limit`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val oversizedPhoto = samplePhoto.copy(
+            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(oversizedPhoto)
+
+        viewModel.createReport()
+
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertTrue(incidentRepository.uploadAttempts.isEmpty())
+        assertEquals(listOf(oversizedPhoto), viewModel.formState.evidencePhotos)
+        assertTrue(viewModel.formState.photoError.orEmpty().contains("límite de 10 MB"))
+        assertTrue(viewModel.formState.photoError.orEmpty().contains(oversizedPhoto.fileName))
+    }
+
+    @Test
+    fun `reports format and size problems together for the same photo`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val invalidPhoto = samplePhoto.copy(
+            mimeType = "image/heic",
+            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(invalidPhoto)
+
+        viewModel.createReport()
+
+        val message = viewModel.formState.photoError.orEmpty()
+        assertTrue(message.contains("formato no compatible"))
+        assertTrue(message.contains("límite de 10 MB"))
+        assertTrue(incidentRepository.createInputs.isEmpty())
+    }
+
+    @Test
+    fun `accepts a photo exactly at the backend size limit`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val maxSizePhoto = samplePhoto.copy(
+            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(maxSizePhoto)
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 1
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals(1, incidentRepository.uploadAttempts.size)
+    }
+
+    @Test
+    fun `allows correcting an incompatible photo before creating the incident`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val heicPhoto = samplePhoto.copy(mimeType = "image/heic")
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(heicPhoto)
+
+        viewModel.createReport()
+
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertTrue(viewModel.formState.photoError.orEmpty().contains("formato no compatible"))
+
+        viewModel.onRemovePhoto(heicPhoto)
+
+        assertNull(viewModel.formState.photoError)
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
     }
 
     @Test
