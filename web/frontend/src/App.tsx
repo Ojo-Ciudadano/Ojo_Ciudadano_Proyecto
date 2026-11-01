@@ -4,22 +4,25 @@ import { AppLayout } from './components/layout/AppLayout'
 import { LoginPage } from './pages/auth/LoginPage'
 import { HomePage } from './pages/home/HomePage'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
+import { IncidentesPage } from './pages/incidentes/IncidentesPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
 import { ROLES, getInitialRouteForRoles } from './config/navigation'
 
 /**
- * Redirige o muestra la raíz '/' según las reglas centralizadas del rol:
- * - ADMIN -> /dashboard (gestión administrativa)
- * - CIUDADANO -> HomePage en '/'
+ * Destino inicial según el rol:
+ * - ADMIN: /dashboard
+ * - CIUDADANO: inicio en /
  */
 function RoleHomeRedirect() {
   const { user } = useAuth()
   const initialRoute = getInitialRouteForRoles(user?.roles)
+
   if (initialRoute !== '/') {
     return <Navigate to={initialRoute} replace />
   }
+
   return <HomePage />
 }
 
@@ -28,7 +31,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Rutas generales protegidas que requieren sesión autenticada */}
+      {/* Rutas que requieren una sesión autenticada */}
       <Route
         path="/"
         element={
@@ -37,7 +40,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* Destino inicial inteligente según rol */}
+        {/* Destino inicial según el rol */}
         <Route
           index
           element={
@@ -47,7 +50,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Dashboard: Exclusivo para rol ADMIN */}
+        {/* Dashboard: exclusivo para ADMIN */}
         <Route
           path="dashboard"
           element={
@@ -57,15 +60,17 @@ function AppRoutes() {
           }
         />
 
-        {/* Incidentes y mapa territorial accesibles para roles autenticados conocidos */}
+        {/* Gestión de incidentes: exclusiva para ADMIN */}
         <Route
           path="incidentes"
           element={
-            <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
-              <HomePage />
+            <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
+              <IncidentesPage />
             </RoleGuard>
           }
         />
+
+        {/* Mapa territorial: disponible para ambos roles */}
         <Route
           path="mapa"
           element={
@@ -75,7 +80,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Administración: Exclusiva para rol ADMIN */}
+        {/* Administración: exclusiva para ADMIN */}
         <Route
           path="admin"
           element={
