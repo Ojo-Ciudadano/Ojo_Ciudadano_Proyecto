@@ -5,8 +5,8 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { isUUID } from 'class-validator';
 
+import { isUUID } from 'class-validator';
 import { PrismaService } from './prisma/prisma.service';
 import { Prisma } from './generated/prisma/client';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
@@ -24,6 +24,9 @@ import {
 } from './prioridad/prioridad.constants';
 import { evidenciaSelect } from './mappers/evidencia.mapper';
 import { toIncidenteResponse } from './mappers/incidente.mapper';
+import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
+import { toAsignacionResponse } from './mappers/asignacion.mapper';
+import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 
 const include = {
   categoria: true,
@@ -33,7 +36,10 @@ const include = {
 };
 @Injectable()
 export class IncidentesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authUsuariosClient: AuthUsuariosClient,
+  ) {}
 
   async findAll(filtros: FindIncidentesQueryDto = {}) {
     const where: Prisma.IncidenteWhereInput = {};
@@ -199,6 +205,85 @@ export class IncidentesService {
       });
 
       return toIncidenteResponse(actualizado);
+    });
+  }
+
+  async asignarResponsable(id: string, dto: AsignarResponsableDto, actorId: string, authHeader?: string) {
+    if (!isUUID(id, 'all'))
+      throw new BadRequestException('El id del incidente debe ser un UUID valido');
+    if (!isUUID(dto?.usuarioAsignadoId, 'all'))
+      throw new BadRequestException('El usuario asignado debe ser un UUID valido');
+    if (!isUUID(actorId, 'all'))
+      throw new UnauthorizedException('Usuario autenticado no identificado');
+
+    // Validar que el usuario propuesto exista y tenga rol ADMIN vigente
+    const usuarioAsignado = await this.authUsuariosClient.obtenerUsuarioConRoles(
+      dto.usuarioAsignadoId,
+      authHeader,
+    );
+    const roles = Array.isArray(usuarioAsignado.roles) ? usuarioAsignado.roles : [];
+    if (!roles.includes('ADMIN')) {
+      throw new BadRequestException('El usuario propuesto debe tener rol ADMIN vigente');
+    }
+
+    // Asignación y reasignación atómicas, garantizando max 1 activa, trazabilidad y registro en historial
+    return this.prisma.$transaction(async (tx) => {
+      // Bloquear incidente
+      const filas = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
+      `;
+      if (filas.length === 0) throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+      const incidente = await tx.incidente.findUnique({
+        where: { id },
+        select: { id: true, estadoId: true },
+      });
+      if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+      // Buscar asignación activa actual
+      const asignacionActiva = await tx.asignacion.findFirst({
+        where: { incidenteId: id, activa: true },
+        orderBy: { fechaAsignacion: 'desc' },
+      });
+
+      // Si ya está asignado al mismo usuario, comportamiento definido sin duplicar registros/eventos
+      if (asignacionActiva && asignacionActiva.usuarioAsignadoId === dto.usuarioAsignadoId) {
+        // No crear nueva asignación ni nuevo registro de historial; devolver asignación confirmada
+        return toAsignacionResponse(asignacionActiva);
+      }
+
+      // Desactivar asignación activa anterior si existe (conservar trazabilidad)
+      if (asignacionActiva) {
+        await tx.asignacion.update({
+          where: { id: asignacionActiva.id },
+          data: { activa: false },
+        });
+      }
+
+      // Crear nueva asignación activa
+      const nuevaAsignacion = await tx.asignacion.create({
+        data: {
+          incidenteId: id,
+          usuarioAsignadoId: dto.usuarioAsignadoId,
+          asignadoPorId: actorId,
+          activa: true,
+        },
+      });
+
+      // Registrar en historial con estado actual, actor y observación descriptiva
+      const observacion = asignacionActiva
+        ? `Reasignado de ${asignacionActiva.usuarioAsignadoId} a ${dto.usuarioAsignadoId}`
+        : `Asignado a ${dto.usuarioAsignadoId}`;
+      await tx.historialEstado.create({
+        data: {
+          incidenteId: id,
+          estadoId: incidente.estadoId,
+          usuarioId: actorId,
+          observacion,
+        },
+      });
+
+      return toAsignacionResponse(nuevaAsignacion);
     });
   }
 }

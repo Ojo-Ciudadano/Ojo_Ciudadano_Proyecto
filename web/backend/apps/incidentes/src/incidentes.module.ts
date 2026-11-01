@@ -1,8 +1,8 @@
-
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-
+import { HttpModule } from '@nestjs/axios';
+import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 import { IncidentesController } from './incidentes.controller';
 import { IncidentesService } from './incidentes.service';
 import { CategoriasModule } from './categorias/categorias.module';
@@ -13,18 +13,22 @@ import { RolesGuard } from './auth/roles.guard';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    JwtModule.registerAsync({
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.getOrThrow<string>('JWT_SECRET'),
+      ConfigModule.forRoot({ isGlobal: true }),
+      JwtModule.registerAsync({
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService) => ({
+          secret: configService.getOrThrow<string>('JWT_SECRET'),
+        }),
       }),
-    }),
-    PrismaModule,
-    CategoriasModule,
-    EvidenciasModule,
-  ],
-  controllers: [IncidentesController],
-  providers: [IncidentesService, JwtAuthGuard, RolesGuard],
+      HttpModule.register({
+        timeout: 5000,
+        maxRedirects: 0,
+      }),
+      PrismaModule,
+      CategoriasModule,
+      EvidenciasModule,
+    ],
+    controllers: [IncidentesController],
+    providers: [IncidentesService, JwtAuthGuard, RolesGuard, AuthUsuariosClient],
 })
 export class IncidentesModule {}

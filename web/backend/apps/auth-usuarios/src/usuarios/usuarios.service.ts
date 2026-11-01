@@ -48,7 +48,41 @@ export class UsuariosService {
 
     return usuario;
   }
+  // Obtener usuario por ID con sus roles vigentes (uso interno para validación entre microservicios)
+  async obtenerUsuarioPorIdConRoles(usuarioId: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: {
+        id: usuarioId,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        telefono: true,
+        roles: {
+          select: {
+            rol: {
+              select: {
+                nombre: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    return {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      roles: usuario.roles.map((relacion) => relacion.rol.nombre),
+    };
+  }
   // Listar usuarios con paginación y filtro opcional por rol (Issue #121)
   async listarUsuarios(filtros: ListarUsuariosDto) {
     const page = filtros.page ?? 1;
