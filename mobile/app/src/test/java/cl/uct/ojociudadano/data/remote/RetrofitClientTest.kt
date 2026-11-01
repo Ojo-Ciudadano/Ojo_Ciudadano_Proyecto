@@ -15,7 +15,7 @@ class RetrofitClientTest {
         val retrofit = RetrofitClient.create()
 
         assertEquals(
-            "https://ojociudadano.dev.censei.cl/",
+            "https://api-ojociudadano.dev.censei.cl/",
             retrofit.baseUrl().toString()
         )
     }
@@ -23,11 +23,11 @@ class RetrofitClientTest {
     @Test
     fun `create normalizes api v1 suffix to avoid duplicated prefix`() {
         val retrofit = RetrofitClient.create(
-            "https://ojociudadano.dev.censei.cl/api/v1/"
+            "https://api-ojociudadano.dev.censei.cl/api/v1/"
         )
 
         assertEquals(
-            "https://ojociudadano.dev.censei.cl/",
+            "https://api-ojociudadano.dev.censei.cl/",
             retrofit.baseUrl().toString()
         )
     }
