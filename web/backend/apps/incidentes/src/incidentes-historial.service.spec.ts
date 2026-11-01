@@ -1,6 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { IncidentesService } from './incidentes.service';
 import { PrismaService } from './prisma/prisma.service';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { AuthUsuariosClient } from './auth/auth-usuarios.client';
+import { IncidentesService } from './incidentes.service';
+import { PrismaService } from './prisma/prisma.service';
 
 const INCIDENTE_ID = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13';
 const OTRO_INCIDENTE_ID = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23';
@@ -37,7 +41,10 @@ describe('IncidentesService - historial (#120)', () => {
     jest.resetAllMocks();
     prisma.incidente.findUnique.mockResolvedValue({ id: INCIDENTE_ID });
     prisma.historialEstado.findMany.mockResolvedValue([]);
-    service = new IncidentesService(prisma as unknown as PrismaService);
+    service = new IncidentesService(
+      prisma as unknown as PrismaService,
+      { obtenerUsuarioConRoles: jest.fn() } as unknown as AuthUsuariosClient,
+    );
   });
 
   it('consulta solo el incidente solicitado y ordena por fecha y id ascendente', async () => {
