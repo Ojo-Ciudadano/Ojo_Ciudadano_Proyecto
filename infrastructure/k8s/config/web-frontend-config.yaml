@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-frontend-config
+  namespace: student-daalvarez
+  labels:
+    app: web-frontend
+data:
+  # URL publica del API Gateway remoto (sin barra final ni /api/v1; api.ts
+  # agrega /api/v1 automaticamente). Es configuracion publica, no sensible.
+  # Recordatorio: Vite incrusta VITE_API_URL en tiempo de compilacion, por lo
+  # que un cambio real requiere reconstruir y publicar la imagen (ver guia).
+  VITE_API_URL: "https://ojociudadano.dev.censei.cl"

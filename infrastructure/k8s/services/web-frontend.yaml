@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: student-daalvarez
+  labels:
+    app: web-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-frontend
+  strategy:
+    type: RollingUpdate
+    # Obligatorio en el vcluster UCT: no crear pods adicionales que excedan la
+    # ResourceQuota del namespace student-daalvarez.
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: web-frontend
+    spec:
+      containers:
+        - name: web-frontend
+          # Etiqueta de version identificable. Para rollback determinista se
+          # puede fijar el SHA corto del commit (ver docs/DESPLIEGUE_WEB_K8S_GHCR.md).
+          image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/web:v1.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: web-frontend-config
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # Ajuste estricto a la cuota del namespace UCT (evita los valores por
+          # defecto del LimitRange: 500m CPU / 512Mi RAM).
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 50m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend-svc
+  namespace: student-daalvarez
+  labels:
+    app: web-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: web-frontend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
