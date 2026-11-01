@@ -35,6 +35,20 @@ export class IncidentesController {
     return this.incidentesService.findAll(filtros);
   }
 
+  @Get(':id/historial')
+  findHistorial(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          new BadRequestException('El id del incidente debe ser un UUID valido'),
+      }),
+    )
+    id: string,
+  ) {
+    return this.incidentesService.findHistorial(id);
+  }
+  
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.incidentesService.findOne(id);
