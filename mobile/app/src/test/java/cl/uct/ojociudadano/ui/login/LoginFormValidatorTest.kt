@@ -11,6 +11,16 @@ class LoginFormValidatorTest {
     private val validator = LoginFormValidator()
 
     @Test
+    fun `email with surrounding whitespace reaches login without changing password`() {
+        val state = LoginFormState(email = " ciudadano@example.invalid ", password = " secreta ")
+        val validated = validator.validate(state)
+
+        assertFalse(validated.hasValidationErrors())
+        assertEquals(state.email, validated.email)
+        assertEquals(state.password, validated.password)
+    }
+
+    @Test
     fun `empty email and password have required field errors`() {
         val validatedState = validator.validate(LoginFormState())
 

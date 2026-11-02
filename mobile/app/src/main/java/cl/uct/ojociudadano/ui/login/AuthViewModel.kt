@@ -8,6 +8,7 @@ import cl.uct.ojociudadano.data.session.AuthenticatedSession
 import cl.uct.ojociudadano.data.session.SessionManager
 import java.io.IOException
 import java.util.concurrent.CancellationException
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,6 +95,18 @@ sealed interface AuthError {
         override val message = "No fue posible conectar con el servidor. Intenta nuevamente."
     }
 
+    data object SecureConnection : AuthError {
+        override val message = "No se pudo establecer una conexión segura con el servidor. Intenta más tarde."
+    }
+
+    data object InvalidServerResponse : AuthError {
+        override val message = "El servidor devolvió una respuesta de inicio de sesión inválida. Intenta más tarde."
+    }
+
+    data object EndpointUnavailable : AuthError {
+        override val message = "El servicio de inicio de sesión no está disponible en el servidor. Intenta más tarde."
+    }
+
     data object Server : AuthError {
         override val message = "El servidor no pudo procesar el inicio de sesión. Intenta más tarde."
     }
@@ -104,11 +117,14 @@ sealed interface AuthError {
 }
 
 private fun Exception.toAuthError(): AuthError = when (this) {
-    is ApiException.Network,
+    is ApiException.Network -> if (cause is SSLException) AuthError.SecureConnection else AuthError.Network
+    is SSLException -> AuthError.SecureConnection
     is IOException -> AuthError.Network
+    is ApiException.Unexpected -> AuthError.InvalidServerResponse
 
     is ApiException.Http -> when {
         statusCode == HTTP_UNAUTHORIZED -> AuthError.InvalidCredentials
+        statusCode == 404 || statusCode == 405 -> AuthError.EndpointUnavailable
         statusCode == HTTP_BAD_REQUEST || statusCode == HTTP_UNPROCESSABLE_ENTITY -> {
             AuthError.Validation(
                 message = serverMessages

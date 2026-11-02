@@ -31,7 +31,7 @@ const crearDto = (
 
 const evidencia = {
   id: 'evi-1',
-  incidenteId: 'inc-1',
+  incidenteId: INCIDENTE_ID,
   tipoMime: 'image/png',
   tamanoArchivo: 100,
   fechaCreacion: new Date('2026-10-22T12:00:00.000Z'),
@@ -52,6 +52,12 @@ describe('IncidentesService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    historialEstado: {
+      findMany: jest.fn(),
+    },
+    asignacion: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -71,6 +77,8 @@ describe('IncidentesService', () => {
       id: ESTADO_ID,
       nombre: 'Nuevo',
     });
+    prisma.historialEstado.findMany.mockResolvedValue([]);
+    prisma.asignacion.findFirst.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(
       async (callback: (tx: unknown) => unknown) => callback(tx),
     );
@@ -228,8 +236,7 @@ describe('IncidentesService', () => {
       prisma.incidente.findMany.mockResolvedValue([
         { id: 'inc-1', evidencias: [evidencia] },
       ]);
-
-      const res = await service.findAll('user-1');
+      const res = await service.findAll({ usuarioReportaId: USUARIO_ID });
 
       const args = prisma.incidente.findMany.mock.calls[0][0];
       expect(args.include.evidencias.select).not.toHaveProperty(
@@ -254,17 +261,117 @@ describe('IncidentesService', () => {
 
     it('findOne incluye evidencias asociadas', async () => {
       prisma.incidente.findUnique.mockResolvedValue({
-        id: 'inc-1',
+        id: INCIDENTE_ID,
         evidencias: [evidencia],
       });
-      const res = await service.findOne('inc-1');
+      const res = await service.findOne(INCIDENTE_ID);
       expect(res.evidencias).toHaveLength(1);
-      expect(res.evidencias[0].incidenteId).toBe('inc-1');
+      expect(res.evidencias[0].incidenteId).toBe(INCIDENTE_ID);
     });
 
     it('findOne mantiene el 404 cuando no existe', async () => {
       prisma.incidente.findUnique.mockResolvedValue(null);
-      await expect(service.findOne('x')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(INCIDENTE_ID)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+    describe('findAll con filtros', () => {
+    beforeEach(() => {
+      prisma.incidente.findMany.mockResolvedValue([]);
+    });
+
+    it('sin filtros conserva where undefined y el orden original', async () => {
+      await service.findAll();
+
+      const args = prisma.incidente.findMany.mock.calls[0][0];
+      expect(args.where).toBeUndefined();
+      expect(args.orderBy).toEqual({ fechaCreacion: 'desc' });
+      expect(args.include).toEqual(
+        expect.objectContaining({
+          categoria: true,
+          estado: true,
+          ubicacion: true,
+        }),
+      );
+    });
+
+    it('conserva el filtro usuarioReportaId', async () => {
+      await service.findAll({ usuarioReportaId: USUARIO_ID });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { usuarioReportaId: USUARIO_ID },
+        }),
+      );
+    });
+
+    it('filtra por estado actual', async () => {
+      await service.findAll({ estadoId: ESTADO_ID });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { estadoId: ESTADO_ID },
+        }),
+      );
+    });
+
+    it('filtra por categoria', async () => {
+      await service.findAll({ categoriaId: CATEGORIA_ID });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { categoriaId: CATEGORIA_ID },
+        }),
+      );
+    });
+
+    it('filtra por comuna con coincidencia exacta sin distinguir mayusculas', async () => {
+      await service.findAll({ comuna: '  Temuco  ' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                comuna: { equals: 'Temuco', mode: 'insensitive' },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('combina todos los filtros y usuarioReportaId mediante AND', async () => {
+      await service.findAll({
+        usuarioReportaId: USUARIO_ID,
+        estadoId: ESTADO_ID,
+        categoriaId: CATEGORIA_ID,
+        comuna: 'Temuco',
+      });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            usuarioReportaId: USUARIO_ID,
+            estadoId: ESTADO_ID,
+            categoriaId: CATEGORIA_ID,
+            ubicacion: {
+              is: {
+                comuna: { equals: 'Temuco', mode: 'insensitive' },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('devuelve una coleccion vacia cuando no hay coincidencias', async () => {
+      prisma.incidente.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.findAll({ estadoId: ESTADO_ID, comuna: 'Sin resultados' }),
+      ).resolves.toEqual([]);
     });
   });
 });

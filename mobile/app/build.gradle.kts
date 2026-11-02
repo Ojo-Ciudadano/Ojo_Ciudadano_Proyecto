@@ -26,7 +26,7 @@ fun String.asBuildConfigString(): String {
 
 val apiBaseUrl = configurationValue(
     name = "API_BASE_URL",
-    fallback = "https://ojociudadano.dev.censei.cl/"
+    fallback = "https://api-ojociudadano.dev.censei.cl/"
 )
 
 android {

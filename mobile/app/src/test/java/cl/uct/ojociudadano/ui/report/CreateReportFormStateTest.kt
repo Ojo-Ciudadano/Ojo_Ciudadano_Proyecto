@@ -212,31 +212,6 @@ class CreateReportFormStateTest {
     }
 
     @Test
-    fun `removing an unavailable photo sets a controlled message`() {
-        val state = CreateReportFormState(
-            evidencePhotos = listOf(samplePhoto, secondSamplePhoto)
-        )
-        val message = "La fotografía ya no está disponible"
-
-        val updatedState = state.removeUnavailablePhoto(samplePhoto.fileName, message)
-
-        assertEquals(listOf(secondSamplePhoto), updatedState.evidencePhotos)
-        assertEquals(message, updatedState.photoError)
-    }
-
-    @Test
-    fun `removing an unknown unavailable photo does not change the state`() {
-        val state = CreateReportFormState(evidencePhotos = listOf(samplePhoto))
-
-        val updatedState = state.removeUnavailablePhoto(
-            fileName = "missing.jpg",
-            message = "La fotografía ya no está disponible"
-        )
-
-        assertEquals(state, updatedState)
-    }
-
-    @Test
     fun `reporting a preview error keeps the collection`() {
         val state = CreateReportFormState(evidencePhotos = listOf(samplePhoto))
         val message = "No fue posible mostrar la fotografía"

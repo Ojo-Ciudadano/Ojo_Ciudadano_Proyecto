@@ -13,7 +13,7 @@ class LoginFormValidator {
 
 private fun String.emailValidationError(): String? = when {
     isBlank() -> "El correo electrónico es obligatorio"
-    !EMAIL_PATTERN.matches(this) -> "Ingresa un correo electrónico válido"
+    !EMAIL_PATTERN.matches(trim()) -> "Ingresa un correo electrónico válido"
     else -> null
 }
 

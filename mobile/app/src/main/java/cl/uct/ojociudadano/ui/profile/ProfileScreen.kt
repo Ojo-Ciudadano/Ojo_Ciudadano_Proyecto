@@ -1,5 +1,13 @@
 package cl.uct.ojociudadano.ui.profile
 
+import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.data.session.SessionState
+import cl.uct.ojociudadano.ui.components.CitizenHeader
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,17 +38,17 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
     onLogout: () -> Unit = {}
 ) {
+    val app = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val sessionState by app.container.sessionManager.state.collectAsState()
+    val session = (sessionState as? SessionState.Authenticated)?.session
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Perfil",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
+        CitizenHeader("Mi perfil")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Row(
                 modifier = Modifier
@@ -58,8 +66,9 @@ fun ProfileScreen(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Column {
-                    Text("Ciudadano", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text("Información de cuenta", style = MaterialTheme.typography.bodyMedium)
+                    Text(session?.name ?: "Mi cuenta", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(session?.email.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                    Text(session?.roles?.joinToString().orEmpty(), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -72,7 +81,7 @@ fun ProfileScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(Icons.Filled.Settings, contentDescription = null)
-                Text("Preferencias", style = MaterialTheme.typography.bodyLarge)
+                Text("La apariencia y el movimiento respetan las preferencias del sistema.", style = MaterialTheme.typography.bodyMedium)
             }
         }
         Button(

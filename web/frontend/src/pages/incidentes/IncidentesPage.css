@@ -1,0 +1,137 @@
+.incidentes-pagina {
+  width: 100%;
+  color: #121212;
+}
+
+.incidentes-encabezado {
+  margin-bottom: 28px;
+}
+
+.incidentes-encabezado h1 {
+  margin: 0 0 10px;
+  color: #0b1f4d;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+}
+
+.incidentes-encabezado p {
+  margin: 0;
+  color: #60646c;
+  line-height: 1.6;
+}
+
+.incidentes-tabla-contenedor {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+}
+
+.incidentes-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+
+.incidentes-tabla caption {
+  padding: 18px 20px;
+  text-align: left;
+  font-weight: 600;
+  color: #0b1f4d;
+}
+
+.incidentes-tabla th {
+  padding: 16px 20px;
+  background: #f5f6f8;
+  color: #616875;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e3e5e8;
+}
+
+.incidentes-tabla td {
+  padding: 18px 20px;
+  border-bottom: 1px solid #edf0f2;
+}
+
+.incidentes-tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.incidentes-tabla tbody tr:hover {
+  background: #fafbfe;
+}
+
+.incidente-folio {
+  font-family: monospace;
+  font-weight: 600;
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
+  min-width: 180px;
+}
+
+.incidente-prioridad {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.incidente-prioridad-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0b1f4d;
+  flex-shrink: 0;
+}
+
+.incidente-estado {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eaf0ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.incidentes-mensaje {
+  padding: 36px 24px;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  text-align: center;
+  color: #60646c;
+}
+
+.incidentes-error {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.incidentes-error p {
+  margin: 0 0 16px;
+}
+
+.incidentes-error button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #0b1f4d;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.incidentes-error button:hover {
+  background: #1d4ed8;
+}
+
+.incidentes-error button:focus-visible {
+  outline: 3px solid #f97316;
+  outline-offset: 3px;
+}

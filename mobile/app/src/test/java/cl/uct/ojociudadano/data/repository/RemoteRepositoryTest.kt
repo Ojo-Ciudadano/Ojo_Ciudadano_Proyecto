@@ -11,11 +11,16 @@ import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
 import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.session.TokenSnapshot
+import cl.uct.ojociudadano.data.session.testSession
+import cl.uct.ojociudadano.data.session.testSessionManager
 import kotlinx.coroutines.test.runTest
 import okhttp3.ResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
+import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
 
 class RemoteRepositoryTest {
 
@@ -41,7 +46,7 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incidents = listOf(sampleIncidentDto())
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val incidents = repository.getIncidents()
 
@@ -54,14 +59,24 @@ class RemoteRepositoryTest {
     }
 
     @Test
-    fun `getIncidentsByReporter forwards reporter user id`() = runTest {
+    fun `getCurrentUserIncidents uses session identity`() = runTest {
         val apiService = FakeApiService()
-        val repository = RemoteIncidentRepository(apiService)
-        val userId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+        val userId = testSession().userId
 
-        repository.getIncidentsByReporter(userId)
+        repository.getCurrentUserIncidents()
 
         assertEquals(userId, apiService.lastReporterUserId)
+    }
+
+    @Test
+    fun `own incident results exclude other users even when server ignores filter`() = runTest {
+        val mine = sampleIncidentDto().copy(usuarioReportaId = testSession().userId)
+        val other = mine.copy(id = "other", usuarioReportaId = "another-user")
+        val api = FakeApiService(incidents = listOf(mine, other))
+        val repository = RemoteIncidentRepository(api, testSessionManager())
+        assertEquals(listOf(mine.id), repository.getCurrentUserIncidents().map { it.id })
+        assertEquals(2, repository.getIncidents().size)
     }
 
     @Test
@@ -69,7 +84,7 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val incident = repository.getIncidentById(
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -88,13 +103,12 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val input = CreateIncidentInput(
             title = "Poste caído",
             description = "Poste bloqueando parcialmente la calle",
             categoryId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            reporterUserId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
             location = CreateIncidentLocationInput(
                 latitude = -38.7359,
                 longitude = -72.5904,
@@ -119,7 +133,7 @@ class RemoteRepositoryTest {
             request.categoriaId
         )
         assertEquals(
-            "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+            testSession().userId,
             request.usuarioReportaId
         )
 
@@ -165,6 +179,8 @@ class RemoteRepositoryTest {
         private val categories: List<CategoryDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+        override suspend fun register(request: RegisterRequestDto): RegisterResponseDto =
+            error("Registration is not used by this test")
 
         var lastLoginRequest: LoginRequestDto? = null
             private set
@@ -176,20 +192,21 @@ class RemoteRepositoryTest {
 
         override suspend fun uploadEvidence(
             incidenteId: String,
-            file: okhttp3.MultipartBody.Part
+            file: okhttp3.MultipartBody.Part,
+            expectedSession: TokenSnapshot?
         ): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
             throw NotImplementedError("No implementado para esta prueba")
         }
 
-        override suspend fun getEvidencesByIncident(incidenteId: String): List<cl.uct.ojociudadano.data.remote.dto.EvidenceDto> {
+        override suspend fun getEvidencesByIncident(incidenteId: String, expectedSession: TokenSnapshot?): List<cl.uct.ojociudadano.data.remote.dto.EvidenceDto> {
             return emptyList()
         }
 
-        override suspend fun getEvidenceById(id: String): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+        override suspend fun getEvidenceById(id: String, expectedSession: TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
             throw NotImplementedError("No implementado para esta prueba")
         }
 
-        override suspend fun downloadEvidenceFile(id: String): ResponseBody {
+        override suspend fun downloadEvidenceFile(id: String, expectedSession: TokenSnapshot?): ResponseBody {
             throw NotImplementedError("No implementado para esta prueba")
         }
 
@@ -203,14 +220,16 @@ class RemoteRepositoryTest {
             private set
 
         override suspend fun getIncidents(
-            usuarioReportaId: String?
+            usuarioReportaId: String?,
+            expectedSession: TokenSnapshot?
         ): List<IncidentDto> {
             lastReporterUserId = usuarioReportaId
             return incidents
         }
 
         override suspend fun getIncidentById(
-            id: String
+            id: String,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             lastIncidentId = id
             return incident
@@ -221,7 +240,8 @@ class RemoteRepositoryTest {
         }
 
         override suspend fun createIncident(
-            request: CreateIncidentRequestDto
+            request: CreateIncidentRequestDto,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             lastCreateRequest = request
             return incident

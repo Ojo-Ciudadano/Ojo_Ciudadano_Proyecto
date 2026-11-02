@@ -6,6 +6,7 @@ import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class PhotoCaptureOutcomeTest {
 
@@ -67,6 +68,8 @@ private class FakeEvidencePhotoFileStore(
         requireNotNull(completed) { "No hay una evidencia importada configurada" }
 
     override fun exists(fileName: String): Boolean = true
+
+    override fun file(fileName: String): File? = null
 
     override fun delete(fileName: String) {
         deletedFileNames += fileName

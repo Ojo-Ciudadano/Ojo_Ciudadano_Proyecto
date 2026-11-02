@@ -7,6 +7,7 @@ import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.data.session.TokenSnapshot
 import java.io.IOException
+import javax.net.ssl.SSLHandshakeException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,6 +23,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import cl.uct.ojociudadano.data.model.RegisteredUser
+import cl.uct.ojociudadano.data.model.RegistrationInput
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
@@ -157,6 +160,40 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun `TLS failure is distinguished from offline network`() {
+        val viewModel = errorViewModel(ApiException.Network(SSLHandshakeException("private certificate details")))
+        assertEquals(AuthUiState.Error(AuthError.SecureConnection), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `unavailable auth microservice is a server failure`() {
+        val viewModel = errorViewModel(ApiException.Http(502, listOf("Auth service no disponible"), null, null))
+        assertEquals(AuthUiState.Error(AuthError.Server), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `wrong endpoint is distinguished from invalid credentials`() {
+        for (code in listOf(404, 405)) {
+            val viewModel = errorViewModel(ApiException.Http(code, emptyList(), null, null))
+            assertEquals(AuthUiState.Error(AuthError.EndpointUnavailable), viewModel.uiState.value)
+        }
+    }
+
+    @Test
+    fun `invalid server response never establishes a session`() {
+        val manager = FakeSessionManager()
+        val viewModel = AuthViewModel(
+            FakeAuthRepository(onLogin = { throw ApiException.Unexpected(IllegalStateException("private response")) }),
+            manager
+        )
+        viewModel.login("ciudadano@example.invalid", "password-not-stored")
+
+        assertEquals(AuthUiState.Error(AuthError.InvalidServerResponse), viewModel.uiState.value)
+        assertEquals(null, manager.establishedSession)
+        assertEquals(SessionState.Unauthenticated, manager.state.value)
+    }
+
+    @Test
     fun `unexpected exception does not leave state in loading`() = runTest {
         val viewModel = errorViewModel(IllegalStateException("not shown to the user"))
 
@@ -272,6 +309,8 @@ private class FakeAuthRepository(
         outcomes.removeFirst().getOrElse { throw it }
     }
 ) : AuthRepository {
+    override suspend fun register(input: RegistrationInput): RegisteredUser =
+        error("Registration is not used by this test")
 
     val loginCredentials = mutableListOf<LoginCredentials>()
 

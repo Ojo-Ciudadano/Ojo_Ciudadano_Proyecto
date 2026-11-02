@@ -4,7 +4,7 @@ import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LocationRequestDto
 
-fun CreateIncidentInput.toRequestDto(): CreateIncidentRequestDto {
+fun CreateIncidentInput.toRequestDto(reporterUserId: String): CreateIncidentRequestDto {
     return CreateIncidentRequestDto(
         titulo = title,
         descripcion = description,

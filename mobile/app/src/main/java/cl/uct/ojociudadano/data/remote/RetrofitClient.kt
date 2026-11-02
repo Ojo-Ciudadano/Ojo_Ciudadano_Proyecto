@@ -1,15 +1,18 @@
 package cl.uct.ojociudadano.data.remote
 
+import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.remote.auth.BearerTokenInterceptor
 import cl.uct.ojociudadano.data.session.TokenProvider
 import cl.uct.ojociudadano.data.session.TokenSnapshot
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import cl.uct.ojociudadano.data.remote.auth.RegistrationRequestInterceptor
 
 object RetrofitClient {
 
-    const val DEFAULT_BASE_URL = "https://ojociudadano.dev.censei.cl/"
+    // La app, la persistencia y las pruebas remotas comparten el mismo entorno configurado.
+    const val DEFAULT_BASE_URL = BuildConfig.API_BASE_URL
 
     fun normalizeBaseUrl(baseUrl: String): String {
         require(baseUrl.isNotBlank()) {
@@ -35,6 +38,8 @@ object RetrofitClient {
         val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
 
         val httpClient = OkHttpClient.Builder()
+            .configureEnvironmentTls(normalizedBaseUrl)
+            .addInterceptor(RegistrationRequestInterceptor())
             .apply {
                 tokenProvider?.let {
                     addInterceptor(

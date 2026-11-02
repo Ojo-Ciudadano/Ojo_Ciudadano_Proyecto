@@ -8,6 +8,8 @@ import { ProxyService } from './proxy.service';
 @Controller()
 export class ProxyController {
   constructor(private readonly proxyService: ProxyService) {}
+
+  // Issue #122: cambio de rol de usuarios - solo Administrador
   @Patch('usuarios/:id/rol')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -18,13 +20,18 @@ export class ProxyController {
     await this.proxyService.forward(req, res);
   }
 
-   @All(['auth', 'auth/*', 'usuarios', 'usuarios/*', 'roles', 'roles/*'])
-  async handleAuthProxy(
+  // Issue #117: cambio de estado de incidentes - solo Administrador
+  @Patch('incidentes/:id/estado')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async handleIncidentesEstadoProxy(
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
     await this.proxyService.forward(req, res);
   }
+
+  // Issue #124: cambio de prioridad de incidentes - solo Administrador
   @Patch('incidentes/:id/prioridad')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -34,6 +41,28 @@ export class ProxyController {
   ): Promise<void> {
     await this.proxyService.forward(req, res);
   }
+
+  // Issue #123: asignación y reasignación de responsables - solo Administrador
+  @Patch('incidentes/:id/asignacion')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async handleIncidentesAsignacionProxy(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyService.forward(req, res);
+  }
+
+  // Rutas generales de autenticación y usuarios
+  @All(['auth', 'auth/*', 'usuarios', 'usuarios/*', 'roles', 'roles/*'])
+  async handleAuthProxy(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyService.forward(req, res);
+  }
+
+  // Rutas generales de incidentes
   @All([
     'incidentes',
     'incidentes/*',
@@ -50,6 +79,7 @@ export class ProxyController {
     await this.proxyService.forward(req, res);
   }
 
+  // Rutas generales de notificaciones
   @All(['notificaciones', 'notificaciones/*'])
   async handleNotificacionesProxy(
     @Req() req: Request,

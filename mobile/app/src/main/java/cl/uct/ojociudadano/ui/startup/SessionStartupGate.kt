@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,11 +21,21 @@ import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.navigation.AppNavigation
+import cl.uct.ojociudadano.navigation.navigateIfAllowed
 import cl.uct.ojociudadano.navigation.AppRoutes
+import cl.uct.ojociudadano.navigation.InitialDestination
+import cl.uct.ojociudadano.navigation.resolveInitialDestination
 import cl.uct.ojociudadano.ui.login.AuthViewModel
 import cl.uct.ojociudadano.ui.login.AuthViewModelFactory
 import cl.uct.ojociudadano.ui.login.LoginRoute
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.navigation.compose.rememberNavController
+import cl.uct.ojociudadano.ui.registration.RegistrationRoute
+import cl.uct.ojociudadano.ui.registration.RegistrationViewModel
+import cl.uct.ojociudadano.ui.registration.RegistrationViewModelFactory
 
 @Composable
 fun SessionStartupGate(
@@ -38,16 +49,25 @@ fun SessionStartupGate(
         sessionManager.restore()
     }
 
-    when (state) {
-        SessionState.Restoring -> StartupLoading()
-        is SessionState.Authenticated -> AppNavigation(
-            onLogout = {
-                coroutineScope.launch {
-                    runCatching { sessionManager.logout() }
+    val destination = resolveInitialDestination(state)
+    when (destination) {
+        InitialDestination.LOADING -> StartupLoading()
+        InitialDestination.CITIZEN,
+        InitialDestination.ADMINISTRATOR,
+        InitialDestination.UNAVAILABLE -> key((state as SessionState.Authenticated).session, destination) {
+            // Dispose the old controller/back stack when the account, session or role changes.
+            // Recomposition with the same session keeps the current destination unchanged.
+            AppNavigation(
+                sessionManager = sessionManager,
+                startDestination = requireNotNull(destination.route),
+                onLogout = {
+                    coroutineScope.launch {
+                        runCatching { sessionManager.logout() }
+                    }
                 }
-            }
-        )
-        SessionState.Unauthenticated -> LoginNavigation(
+            )
+        }
+        InitialDestination.AUTHENTICATION -> LoginNavigation(
             sessionManager = sessionManager,
             authRepository = authRepository
         )
@@ -65,10 +85,38 @@ private fun LoginNavigation(
         }
     )
 
+    val navController = rememberNavController()
+    var registrationSucceeded by rememberSaveable {
+        mutableStateOf(false)
+    }
     AppNavigation(
+        sessionManager = sessionManager,
+        navController = navController,
         startDestination = AppRoutes.LOGIN,
         loginContent = {
-            LoginRoute(viewModel = authViewModel)
+            LoginRoute(
+                viewModel = authViewModel,
+                onRegister = {
+                    registrationSucceeded = false
+                    navController.navigateIfAllowed(sessionManager, AppRoutes.REGISTER)
+                },
+                registrationSucceeded = registrationSucceeded
+            )
+        },
+        registrationContent = { onBack ->
+            val registrationViewModel: RegistrationViewModel = viewModel(
+                factory = remember(authRepository) {
+                    RegistrationViewModelFactory(authRepository)
+                }
+            )
+            RegistrationRoute(
+                viewModel = registrationViewModel,
+                onBack = onBack,
+                onSuccess = {
+                    registrationSucceeded = true
+                    onBack()
+                }
+            )
         }
     )
 }

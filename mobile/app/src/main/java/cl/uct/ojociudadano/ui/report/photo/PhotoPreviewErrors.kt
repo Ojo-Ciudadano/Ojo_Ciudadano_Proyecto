@@ -10,7 +10,7 @@ package cl.uct.ojociudadano.ui.report.photo
 object PhotoPreviewErrors {
 
     const val UNAVAILABLE =
-        "Una fotografía ya no está disponible y fue eliminada del reporte"
+        "Una fotografía ya no está disponible en el dispositivo; elimínala o vuelve a seleccionarla"
 
     const val RENDER_FAILED =
         "No fue posible mostrar una fotografía; puedes eliminarla del reporte"

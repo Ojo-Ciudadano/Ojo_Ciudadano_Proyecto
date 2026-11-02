@@ -12,6 +12,8 @@ import cl.uct.ojociudadano.ui.login.LoginTestTags
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import org.junit.Rule
 import org.junit.Test
+import cl.uct.ojociudadano.data.model.RegisteredUser
+import cl.uct.ojociudadano.data.model.RegistrationInput
 
 class SessionStartupGateTest {
 
@@ -42,6 +44,9 @@ class SessionStartupGateTest {
     }
 
     private class FailingAuthRepository : AuthRepository {
+        override suspend fun register(input: RegistrationInput): RegisteredUser =
+            error("Registration is not used by this test")
+
         var loginCalls = 0
 
         override suspend fun login(email: String, password: String): AuthenticatedSession {

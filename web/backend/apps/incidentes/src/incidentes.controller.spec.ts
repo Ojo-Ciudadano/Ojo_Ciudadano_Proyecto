@@ -11,8 +11,13 @@ describe('IncidentesController', () => {
   const mockService = {
     findAll: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue({ id: '1' }),
+    findHistorial: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockResolvedValue({ id: '1' }),
     updatePrioridad: jest.fn().mockResolvedValue({ id: '1', nivelPrioridad: 4 }),
+    updateEstado: jest.fn().mockResolvedValue({
+      id: '1',
+      estado: { nombre: 'En revisión' },
+    }),
   };
 
   beforeEach(async () => {
@@ -33,18 +38,30 @@ describe('IncidentesController', () => {
   });
 
   it('delega findAll al service sin filtro', async () => {
-    await controller.findAll();
-    expect(mockService.findAll).toHaveBeenCalledWith(undefined);
+    await controller.findAll({});
+    expect(mockService.findAll).toHaveBeenCalledWith({});
   });
 
-  it('delega findAll con filtro usuarioReportaId', async () => {
-    await controller.findAll('uuid-1');
-    expect(mockService.findAll).toHaveBeenCalledWith('uuid-1');
+  it('delega findAll con filtros combinados', async () => {
+    const filtros = {
+      usuarioReportaId: 'uuid-1',
+      estadoId: 'uuid-2',
+      categoriaId: 'uuid-3',
+      comuna: 'Temuco',
+    };
+
+    await controller.findAll(filtros);
+    expect(mockService.findAll).toHaveBeenCalledWith(filtros);
   });
 
   it('delega findOne con el id', async () => {
     await controller.findOne('1');
     expect(mockService.findOne).toHaveBeenCalledWith('1');
+  });
+  
+  it('delega findHistorial con el id', async () => {
+    await controller.findHistorial('1');
+    expect(mockService.findHistorial).toHaveBeenCalledWith('1');
   });
 
   it('delega create con el dto', async () => {
@@ -66,6 +83,35 @@ describe('IncidentesController', () => {
     expect(
       reflector.getAllAndOverride(ROLES_KEY, [
         IncidentesController.prototype.updatePrioridad,
+        IncidentesController,
+      ]),
+    ).toEqual([Role.ADMIN]);
+  });
+
+  it('delega updateEstado con el id, el dto y el usuario autenticado', async () => {
+    const dto: any = {
+      estado: 'En revisión',
+      observacion: 'Inicio de evaluacion',
+    };
+
+    await controller.updateEstado('incidente-1', dto, {
+      sub: 'usuario-admin',
+      roles: ['ADMIN'],
+    });
+
+    expect(mockService.updateEstado).toHaveBeenCalledWith(
+      'incidente-1',
+      dto,
+      'usuario-admin',
+    );
+  });
+
+  it('restringe updateEstado al rol Administrador', () => {
+    const reflector = new Reflector();
+
+    expect(
+      reflector.getAllAndOverride(ROLES_KEY, [
+        IncidentesController.prototype.updateEstado,
         IncidentesController,
       ]),
     ).toEqual([Role.ADMIN]);

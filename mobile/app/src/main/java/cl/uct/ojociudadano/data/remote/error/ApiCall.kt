@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.data.remote.error
 
+import cl.uct.ojociudadano.data.session.SessionRequiredException
 import com.google.gson.JsonParser
 import java.io.IOException
 import java.util.concurrent.CancellationException
@@ -14,6 +15,8 @@ suspend fun <T> executeApiCall(
         throw exception
     } catch (exception: HttpException) {
         throw exception.toApiException()
+    } catch (exception: SessionRequiredException) {
+        throw exception
     } catch (exception: IOException) {
         throw ApiException.Network(exception)
     } catch (exception: Exception) {

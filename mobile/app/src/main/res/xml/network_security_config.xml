@@ -7,7 +7,7 @@
     </base-config>
 
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="false">ojociudadano.dev.censei.cl</domain>
+        <domain includeSubdomains="false">api-ojociudadano.dev.censei.cl</domain>
         <trust-anchors>
             <certificates src="system" />
             <certificates src="@raw/uct_ingress_cert" />

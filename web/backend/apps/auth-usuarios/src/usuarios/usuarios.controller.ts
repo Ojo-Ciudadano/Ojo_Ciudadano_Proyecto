@@ -10,19 +10,23 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+
 import type { Request } from 'express';
+
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+
 import { AuthGuard } from '@nestjs/passport';
 
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { ListarUsuariosDto } from './dto/listar-usuarios.dto';
 import { PerfilUsuarioDto } from './dto/perfil-usuario.dto';
 import { UpdateUsuarioRolDto } from './dto/update-usuario-rol.dto';
+import { UsuarioConRolesDto } from './dto/usuario-con-roles.dto';
 
 import { UsuariosService } from './usuarios.service';
 import { RolesGuard } from '../auth/guards/roles.guards';
@@ -59,6 +63,35 @@ export class UsuariosController {
     return this.usuariosService.obtenerMiPerfil(
       request.user.userId,
     );
+  }
+
+  // Obtener usuario por ID con sus roles vigentes (Issue #123)
+  @Get(':id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Obtener usuario por ID con sus roles vigentes',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario obtenido correctamente.',
+    type: UsuarioConRolesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Usuario no autenticado.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Acceso permitido únicamente a administradores.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado.',
+  })
+  async obtenerUsuarioPorId(@Param('id') id: string) {
+    return this.usuariosService.obtenerUsuarioPorIdConRoles(id);
   }
 
   // Registrar un nuevo ciudadano

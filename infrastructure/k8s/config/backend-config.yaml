@@ -19,5 +19,5 @@ data:
   INCIDENTES_SERVICE_URL: "http://incidentes-svc:3002"
   NOTIFICACIONES_SERVICE_URL: "http://notificaciones-svc:3003"
 
-  PUBLIC_API_URL: "https://ojociudadano.dev.censei.cl"
+  PUBLIC_API_URL: "https://api-ojociudadano.dev.censei.cl"
   CORS_ORIGINS: "https://ojociudadano.dev.censei.cl"

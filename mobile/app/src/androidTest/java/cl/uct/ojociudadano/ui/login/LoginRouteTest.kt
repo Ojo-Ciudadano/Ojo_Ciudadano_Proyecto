@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import cl.uct.ojociudadano.data.model.RegisteredUser
+import cl.uct.ojociudadano.data.model.RegistrationInput
 
 class LoginRouteTest {
 
@@ -50,6 +52,8 @@ class LoginRouteTest {
     }
 
     private class RecordingAuthRepository : AuthRepository {
+        override suspend fun register(input: RegistrationInput): RegisteredUser =
+            error("Registration is not used by this test")
 
         val loginCredentials = mutableListOf<LoginCredentials>()
 

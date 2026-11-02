@@ -1,5 +1,5 @@
-import { apiClient } from './api'
-import type { LoginRequest, LoginResponse } from '../types'
+import { apiClient, clearSessionStorage } from './api'
+import type { LoginRequest, LoginResponse, User } from '../types'
 
 export const authService = {
   async login(credentials: LoginRequest): Promise<LoginResponse> {
@@ -8,12 +8,15 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('user')
+    clearSessionStorage()
   },
 
-  async getProfile() {
-    const { data } = await apiClient.get('/auth/profile')
+  /**
+   * Consulta el perfil y rol del usuario autenticado en /api/v1/usuarios/me (#118).
+   * Devuelve id, nombre, email, telefono, fechaRegistro y roles vigentes.
+   */
+  async getProfile(): Promise<User> {
+    const { data } = await apiClient.get<User>('/usuarios/me')
     return data
   },
 }

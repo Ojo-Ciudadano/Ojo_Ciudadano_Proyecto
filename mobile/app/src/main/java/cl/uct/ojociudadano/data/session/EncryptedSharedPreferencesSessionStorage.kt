@@ -194,7 +194,13 @@ class EncryptedSharedPreferencesSessionStorage(
                         userId = json.requiredString(JSON_USER_ID),
                         email = json.requiredString(JSON_EMAIL),
                         name = json.requiredString(JSON_NAME),
-                        roles = json.requiredStringList(JSON_ROLES)
+                        // Older sessions without role information remain explicitly Missing.
+                        // Preserve schema v1 and the original backend values for known/unknown roles.
+                        roles = if (json.has(JSON_ROLES)) {
+                            json.requiredStringList(JSON_ROLES)
+                        } else {
+                            emptyList()
+                        }
                     )
                 )
             }
