@@ -76,7 +76,7 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
   },
   {
     path: '/mapa',
-    label: 'Mapa territorial',
+    label: 'Mapa de incidentes',
     allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
     section: 'main',
   },

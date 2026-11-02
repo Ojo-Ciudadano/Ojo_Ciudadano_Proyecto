@@ -1,0 +1,85 @@
+.mapa-pagina {
+  width: 100%;
+  color: #121212;
+}
+
+.mapa-encabezado {
+  margin-bottom: 20px;
+}
+
+.mapa-encabezado h1 {
+  margin: 0 0 10px;
+  color: #0b1f4d;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+}
+
+.mapa-encabezado p {
+  max-width: 780px;
+  margin: 0;
+  color: #60646c;
+  line-height: 1.6;
+}
+
+.mapa-tarjeta {
+  width: 100%;
+  height: clamp(420px, 62vh, 720px);
+  padding: 8px;
+  border: 1px solid #e3e5e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(11, 31, 77, 0.08);
+}
+
+.mapa-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 16px;
+}
+
+.mapa-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.mapa-leyenda li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mapa-leyenda__punto {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(18, 18, 18, 0.12);
+}
+
+.mapa-nota {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .mapa-tarjeta {
+    height: clamp(360px, 58vh, 520px);
+    padding: 6px;
+  }
+
+  .mapa-pie {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
