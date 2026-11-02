@@ -1,7 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { IncidentesService } from './incidentes.service';
-import { PrismaService } from './prisma/prisma.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 import { IncidentesService } from './incidentes.service';
 import { PrismaService } from './prisma/prisma.service';
