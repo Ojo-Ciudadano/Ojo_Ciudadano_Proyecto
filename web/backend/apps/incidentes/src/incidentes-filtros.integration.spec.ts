@@ -5,7 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-
+import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
@@ -52,6 +52,7 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
         { provide: PrismaService, useValue: prisma },
         JwtAuthGuard,
         RolesGuard,
+        { provide: AuthUsuariosClient, useValue: { obtenerUsuarioConRoles: jest.fn() } },
         { provide: JwtService, useValue: jwt },
         { provide: Reflector, useValue: new Reflector() },
       ],
@@ -70,7 +71,7 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it('responde 401 sin autenticacion y no consulta incidentes', async () => {
