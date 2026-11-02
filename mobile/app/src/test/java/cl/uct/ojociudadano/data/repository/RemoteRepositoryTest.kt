@@ -5,6 +5,7 @@ import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.dto.CategoryDto
 import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
+import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentLocationDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
@@ -56,6 +57,13 @@ class RemoteRepositoryTest {
         assertEquals("Alumbrado público", incidents.single().category.name)
         assertEquals("Nuevo", incidents.single().status.name)
         assertEquals("Temuco", incidents.single().location.commune)
+
+        val evidence = incidents.single().evidences.single()
+        assertEquals("evidencia-1", evidence.id)
+        assertEquals(incidents.single().id, evidence.incidentId)
+        assertEquals("image/jpeg", evidence.mimeType)
+        assertEquals(2048L, evidence.size)
+        assertEquals("/evidencias/evidencia-1/archivo", evidence.fileUrl)
     }
 
     @Test
@@ -96,6 +104,7 @@ class RemoteRepositoryTest {
         )
         assertEquals("Poste caído", incident.title)
         assertEquals(-38.7359, incident.location.latitude, 0.0)
+        assertEquals("evidencia-1", incident.evidences.single().id)
     }
 
     @Test
@@ -300,6 +309,16 @@ class RemoteRepositoryTest {
                     comuna = "Temuco",
                     region = "La Araucanía",
                     sector = "Centro"
+                ),
+                evidencias = listOf(
+                    EvidenceDto(
+                        id = "evidencia-1",
+                        incidenteId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        tipoMime = "image/jpeg",
+                        tamanoArchivo = 2048L,
+                        fechaCreacion = "2026-09-24T01:00:00.000Z",
+                        url = "/evidencias/evidencia-1/archivo"
+                    )
                 )
             )
         }
