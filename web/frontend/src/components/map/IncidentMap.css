@@ -1,0 +1,97 @@
+.incident-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #e8ecef;
+}
+
+.incident-map__canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+}
+
+.incident-map__canvas.leaflet-container {
+  font-family: inherit;
+  background: #e8ecef;
+}
+
+.incident-map__canvas.leaflet-container:focus-visible {
+  outline: 3px solid var(--blue, #1d4ed8);
+  outline-offset: -3px;
+}
+
+.incident-map__error {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.incident-map__error p {
+  max-width: 420px;
+  margin: 0;
+  color: #0b1f4d;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.incident-map__retry {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--blue, #1d4ed8);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.incident-map__retry:hover {
+  background: var(--blue-dark, #0b1f4d);
+}
+
+.incident-map__retry:focus-visible {
+  outline: 3px solid rgba(29, 78, 216, 0.4);
+  outline-offset: 2px;
+}
+
+.incident-map__popup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 240px;
+  color: #121212;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.incident-map__popup strong {
+  color: #0b1f4d;
+  font-size: 14px;
+}
+
+.incident-map__popup p {
+  margin: 0;
+  color: #4b5563;
+}
+
+/* Ajustes visuales de los controles de Leaflet al tema del proyecto. */
+.incident-map .leaflet-control-attribution {
+  font-size: 11px;
+}
+
+.incident-map .leaflet-control-zoom a {
+  color: #0b1f4d;
+}
