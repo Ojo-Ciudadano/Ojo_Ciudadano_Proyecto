@@ -20,6 +20,7 @@ import cl.uct.ojociudadano.data.session.SessionRequiredException
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.CompletableDeferred
@@ -1907,6 +1908,17 @@ private class FakeIncidentRepository(
 
     override suspend fun downloadEvidenceFile(id: String): ResponseBody {
         throw NotImplementedError("No implementado para esta prueba")
+    }
+    override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> {
+        throw NotImplementedError()
+    }
+
+    override suspend fun assignResponsible(incidentId: String, assignedUserId: String): Incident {
+        throw NotImplementedError()
+    }
+
+    override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
+        throw NotImplementedError()
     }
 }
 
