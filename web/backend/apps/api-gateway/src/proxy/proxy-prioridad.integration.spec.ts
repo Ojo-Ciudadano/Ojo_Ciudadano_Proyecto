@@ -23,19 +23,79 @@ describe('ProxyController - prioridad (integracion)', () => {
   let tokenAdmin: string;
   let tokenCiudadano: string;
 
+  const fetchOriginal = global.fetch;
+
+  const fetchMock = jest.fn();
+
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const jwt = new JwtService({ secret: JWT_SECRET });
-    tokenAdmin = jwt.sign({ sub: 'admin-1', roles: ['ADMIN'] });
-    tokenCiudadano = jwt.sign({ sub: 'ciudadano-1', roles: ['CIUDADANO'] });
+
+    tokenAdmin = jwt.sign({
+      sub: 'admin-1',
+      roles: ['ADMIN'],
+    });
+
+    tokenCiudadano = jwt.sign({
+      sub: 'ciudadano-1',
+      roles: ['CIUDADANO'],
+    });
 
     forward = jest.fn((req: Request, res: Response) => {
-      res.status(200).json({ ruta: req.path, metodo: req.method, body: req.body });
+      res.status(200).json({
+        ruta: req.path,
+        metodo: req.method,
+        body: req.body,
+      });
     });
+
+    // Simular la consulta de roles actuales a auth-usuarios.
+    fetchMock.mockImplementation(async (_url: string, options: RequestInit) => {
+      const authorization = new Headers(options.headers).get('Authorization');
+
+      if (authorization === `Bearer ${tokenAdmin}`) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'admin-1',
+            roles: ['ADMIN'],
+          }),
+        };
+      }
+
+      if (authorization === `Bearer ${tokenCiudadano}`) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'ciudadano-1',
+            roles: ['CIUDADANO'],
+          }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 401,
+      };
+    });
+
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [ProxyController],
       providers: [
-        { provide: ProxyService, useValue: { forward } },
+        {
+          provide: ProxyService,
+          useValue: {
+            forward,
+            getServiceUrl: jest.fn().mockReturnValue(
+              'http://localhost:3001',
+            ),
+          },
+        },
         JwtAuthGuard,
         RolesGuard,
         { provide: JwtService, useValue: jwt },
@@ -44,7 +104,9 @@ describe('ProxyController - prioridad (integracion)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+
     app.useGlobalFilters(new HttpExceptionFilter());
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -52,11 +114,13 @@ describe('ProxyController - prioridad (integracion)', () => {
         transform: true,
       }),
     );
+
     await app.init();
   });
 
   afterEach(async () => {
     await app.close();
+    global.fetch = fetchOriginal;
   });
 
   it('responde 401 sin autenticacion', async () => {
@@ -86,6 +150,7 @@ describe('ProxyController - prioridad (integracion)', () => {
       .expect(200);
 
     expect(forward).toHaveBeenCalledTimes(1);
+
     expect(respuesta.body).toMatchObject({
       ruta: URL_PRIORIDAD,
       metodo: 'PATCH',
@@ -111,5 +176,39 @@ describe('ProxyController - prioridad (integracion)', () => {
       .expect(200);
 
     expect(forward).toHaveBeenCalledTimes(1);
+  });
+
+  // Issue #122: comprobar que los permisos se actualizan inmediatamente.
+  it('rechaza un JWT antiguo de ADMIN cuando el usuario fue degradado', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'admin-1',
+        roles: ['CIUDADANO'],
+      }),
+    });
+
+    await request(app.getHttpServer())
+      .patch(URL_PRIORIDAD)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nivelPrioridad: 4 })
+      .expect(403);
+
+    expect(forward).not.toHaveBeenCalled();
+  });
+
+  it('deniega acceso si falla la consulta de roles actuales', async () => {
+    fetchMock.mockRejectedValue(
+      new Error('Servicio de autenticación no disponible'),
+    );
+
+    await request(app.getHttpServer())
+      .patch(URL_PRIORIDAD)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nivelPrioridad: 4 })
+      .expect(503);
+
+    expect(forward).not.toHaveBeenCalled();
   });
 });

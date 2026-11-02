@@ -22,28 +22,83 @@ describe('ProxyController - historial (integracion)', () => {
   let tokenCiudadano: string;
   let tokenSinRol: string;
 
+  // Guardar fetch original para restaurarlo después de cada prueba
+  const fetchOriginal = global.fetch;
+
   beforeEach(async () => {
     const jwt = new JwtService({ secret: JWT_SECRET });
-    tokenCiudadano = jwt.sign({ sub: 'ciudadano-1', roles: ['CIUDADANO'] });
-    tokenSinRol = jwt.sign({ sub: 'usuario-1', roles: ['OTRO'] });
 
-    forward = jest.fn((req: Request, res: Response) => {
-      res.status(200).json({ ruta: req.path, metodo: req.method });
+    tokenCiudadano = jwt.sign({
+      sub: 'ciudadano-1',
+      roles: ['CIUDADANO'],
     });
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      controllers: [ProxyController],
-      providers: [
-        { provide: ProxyService, useValue: { forward } },
-        JwtAuthGuard,
-        RolesGuard,
-        { provide: JwtService, useValue: jwt },
-        { provide: Reflector, useValue: new Reflector() },
-      ],
-    }).compile();
+    tokenSinRol = jwt.sign({
+      sub: 'usuario-1',
+      roles: ['OTRO'],
+    });
+
+    // Simular el reenvío de peticiones del API Gateway
+    forward = jest.fn((req: Request, res: Response) => {
+      res.status(200).json({
+        ruta: req.path,
+        metodo: req.method,
+      });
+    });
+
+    // Simular la consulta al microservicio auth-usuarios
+    global.fetch = jest.fn(async (_url, options) => {
+      const authorization = new Headers(options?.headers).get(
+        'Authorization',
+      );
+
+      const token = authorization?.replace(/^Bearer\s+/i, '');
+
+      const payload = token ? jwt.verify(token) : null;
+
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: payload?.sub,
+          roles:
+            payload?.sub === 'ciudadano-1'
+              ? ['CIUDADANO']
+              : ['OTRO'],
+        }),
+      } as globalThis.Response;
+    }) as typeof fetch;
+
+    const moduleFixture: TestingModule =
+      await Test.createTestingModule({
+        controllers: [ProxyController],
+        providers: [
+          {
+            provide: ProxyService,
+            useValue: {
+              forward,
+              getServiceUrl: jest
+                .fn()
+                .mockReturnValue('http://localhost:3001'),
+            },
+          },
+          JwtAuthGuard,
+          RolesGuard,
+          {
+            provide: JwtService,
+            useValue: jwt,
+          },
+          {
+            provide: Reflector,
+            useValue: new Reflector(),
+          },
+        ],
+      }).compile();
 
     app = moduleFixture.createNestApplication();
+
     app.useGlobalFilters(new HttpExceptionFilter());
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -51,15 +106,21 @@ describe('ProxyController - historial (integracion)', () => {
         transform: true,
       }),
     );
+
     await app.init();
   });
 
   afterEach(async () => {
+    // Restaurar fetch para no afectar otras pruebas
+    global.fetch = fetchOriginal;
+
     await app.close();
   });
 
   it('responde 401 sin autenticacion y no reenvia', async () => {
-    await request(app.getHttpServer()).get(URL_HISTORIAL).expect(401);
+    await request(app.getHttpServer())
+      .get(URL_HISTORIAL)
+      .expect(401);
 
     expect(forward).not.toHaveBeenCalled();
   });
@@ -80,6 +141,7 @@ describe('ProxyController - historial (integracion)', () => {
       .expect(200);
 
     expect(forward).toHaveBeenCalledTimes(1);
+
     expect(respuesta.body).toMatchObject({
       ruta: URL_HISTORIAL,
       metodo: 'GET',

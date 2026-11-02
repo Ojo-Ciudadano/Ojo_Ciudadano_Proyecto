@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListarUsuariosDto } from './dto/listar-usuarios.dto';
+import { Role } from '../auth/decorators/roles.decorator';
 
 interface CrearUsuarioConHash {
   nombre: string;
@@ -88,10 +94,8 @@ export class UsuariosService {
     const page = filtros.page ?? 1;
     const limit = filtros.limit ?? 10;
 
-    // Calcular cuántos registros se deben omitir
     const skip = (page - 1) * limit;
 
-    // Aplicar el filtro por rol solamente cuando se proporciona
     const where = filtros.rol
       ? {
           roles: {
@@ -104,7 +108,6 @@ export class UsuariosService {
         }
       : {};
 
-    // Obtener usuarios y contar el total que cumple el filtro
     const [usuarios, total] = await this.prisma.$transaction([
       this.prisma.usuario.findMany({
         where,
@@ -137,7 +140,6 @@ export class UsuariosService {
       }),
     ]);
 
-    // Preparar la respuesta sin incluir passwordHash
     const data = usuarios.map((usuario) => ({
       id: usuario.id,
       nombre: usuario.nombre,
@@ -147,7 +149,6 @@ export class UsuariosService {
       roles: usuario.roles.map((relacion) => relacion.rol.nombre),
     }));
 
-    // Devolver usuarios y metadatos de paginación
     return {
       data,
       meta: {
@@ -161,7 +162,6 @@ export class UsuariosService {
 
   // Obtener el perfil del usuario autenticado (Issue #118)
   async obtenerMiPerfil(usuarioId: string) {
-    // Buscar el usuario utilizando el ID obtenido del JWT
     const usuario = await this.prisma.usuario.findUnique({
       where: {
         id: usuarioId,
@@ -184,12 +184,10 @@ export class UsuariosService {
       },
     });
 
-    // Si el usuario ya no existe, devolver un error controlado
     if (!usuario) {
       throw new NotFoundException('Usuario no encontrado.');
     }
 
-    // Devolver el perfil con los roles vigentes en la base de datos
     return {
       id: usuario.id,
       nombre: usuario.nombre,
@@ -198,5 +196,88 @@ export class UsuariosService {
       fechaRegistro: usuario.fechaRegistro,
       roles: usuario.roles.map((relacion) => relacion.rol.nombre),
     };
+  }
+
+  // Cambiar el rol de un usuario (Issue #122)
+  async actualizarRolUsuario(
+    usuarioId: string,
+    nuevoRol: Role,
+    administradorId: string,
+  ) {
+    // Ejecutar la actualización dentro de una transacción
+    return this.prisma.$transaction(async (tx) => {
+      // Buscar al usuario y sus roles actuales
+      const usuario = await tx.usuario.findUnique({
+        where: { id: usuarioId },
+        select: {
+          id: true,
+          roles: {
+            select: {
+              rol: {
+                select: {
+                  nombre: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!usuario) {
+        throw new NotFoundException('Usuario no encontrado.');
+      }
+
+      const rolesActuales = usuario.roles.map(
+        (relacion) => relacion.rol.nombre,
+      );
+
+      // Impedir que un administrador se quite su propio rol ADMIN
+      if (
+        usuarioId === administradorId &&
+        nuevoRol === Role.CIUDADANO &&
+        rolesActuales.includes(Role.ADMIN)
+      ) {
+        throw new ForbiddenException(
+          'No puedes quitarte tu propio rol de administrador.',
+        );
+      }
+
+      // Si ya tiene exactamente el rol solicitado, no modificar nada
+      if (
+        rolesActuales.length === 1 &&
+        rolesActuales[0] === nuevoRol
+      ) {
+        return {
+          id: usuario.id,
+          roles: [nuevoRol],
+        };
+      }
+
+      // Buscar o crear el rol solicitado
+      const rol = await tx.rol.upsert({
+        where: { nombre: nuevoRol },
+        update: {},
+        create: { nombre: nuevoRol },
+      });
+
+      // Eliminar los roles anteriores
+      await tx.usuarioRol.deleteMany({
+        where: { usuarioId },
+      });
+
+      // Asignar únicamente el nuevo rol
+      await tx.usuarioRol.create({
+        data: {
+          usuarioId,
+          rolId: rol.id,
+        },
+      });
+
+      // Respuesta sin información sensible
+      return {
+        id: usuario.id,
+        roles: [nuevoRol],
+      };
+    });
   }
 }
