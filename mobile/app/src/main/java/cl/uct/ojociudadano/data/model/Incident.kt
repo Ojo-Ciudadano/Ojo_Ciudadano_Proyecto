@@ -10,5 +10,7 @@ data class Incident(
     val reporterUserId: String,
     val priorityLevel: Int?,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val history: List<IncidentStateHistory> = emptyList(),
+    val activeAssignment: IncidentAssignment? = null
 )

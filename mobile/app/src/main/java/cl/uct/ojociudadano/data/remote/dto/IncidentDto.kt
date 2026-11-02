@@ -13,5 +13,7 @@ data class IncidentDto(
     val fechaActualizacion: String,
     val categoria: CategoryDto,
     val estado: IncidentStatusDto,
-    val ubicacion: IncidentLocationDto
+    val ubicacion: IncidentLocationDto,
+    val historial: List<HistorialEstadoDto>? = null,
+    val asignacionActiva: AsignacionDto? = null
 )
