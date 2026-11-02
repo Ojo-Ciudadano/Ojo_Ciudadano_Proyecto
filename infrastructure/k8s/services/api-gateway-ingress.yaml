@@ -1,20 +1,8 @@
-# Aprovisionamiento reproducible del Secret TLS (no versionado en Git por seguridad):
-# 1. Generar par de claves autofirmado con CN y SAN para ojociudadano.dev.censei.cl:
-#    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-#      -keyout tls.key -out tls.crt \
-#      -subj "/CN=ojociudadano.dev.censei.cl" \
-#      -addext "subjectAltName=DNS:ojociudadano.dev.censei.cl"
-# 2. Crear/actualizar el Secret en el namespace correspondiente:
-#    kubectl create secret tls uct-ingress-tls --key tls.key --cert tls.crt \
-#      -n student-daalvarez --dry-run=client -o yaml | kubectl apply -f -
-# 3. Estrategia de rotacion (previo a expiracion en oct 2027):
-#    Publicar una version de la APK que incluya tanto el certificado vigente como el nuevo
-#    trust anchor en res/xml/network_security_config.xml (trust overlap) antes de rotar el
-#    secret uct-ingress-tls en el cluster, y eliminar los archivos locales tls.key/tls.crt.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gateway-ingress
+  namespace: student-daalvarez
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "12m"
@@ -24,9 +12,20 @@ spec:
   tls:
   - hosts:
     - ojociudadano.dev.censei.cl
+    - api.ojociudadano.dev.censei.cl
     secretName: uct-ingress-tls
   rules:
   - host: ojociudadano.dev.censei.cl
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-frontend-svc
+            port:
+              number: 80
+  - host: api.ojociudadano.dev.censei.cl
     http:
       paths:
       - path: /

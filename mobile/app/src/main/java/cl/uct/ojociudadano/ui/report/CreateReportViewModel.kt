@@ -11,8 +11,10 @@ import cl.uct.ojociudadano.data.media.PhotoImportException
 import cl.uct.ojociudadano.data.media.PhotoImportFailure
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
+import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
@@ -60,17 +62,29 @@ class CreateReportViewModel(
 
     fun onTitleChange(title: String) {
         formState = formState.updateTitle(title)
-        submissionState = CreateReportSubmissionState.Idle
+        onFormEdited()
     }
 
     fun onDescriptionChange(description: String) {
         formState = formState.updateDescription(description)
-        submissionState = CreateReportSubmissionState.Idle
+        onFormEdited()
     }
 
     fun onCategorySelected(category: Category) {
         formState = formState.updateCategory(category)
-        submissionState = CreateReportSubmissionState.Idle
+        onFormEdited()
+    }
+
+    /**
+     * Solo un fallo de creación habilita un nuevo envío.
+     *
+     * Después de crear el incidente, editar el formulario no debe volver al
+     * estado inicial porque habilitaría la creación de un incidente duplicado.
+     */
+    private fun onFormEdited() {
+        if (submissionState is CreateReportSubmissionState.Error) {
+            submissionState = CreateReportSubmissionState.Idle
+        }
     }
 
     /**
@@ -208,35 +222,66 @@ class CreateReportViewModel(
     /**
      * Gestiona un fallo al previsualizar una evidencia local.
      *
-     * Si el archivo temporal ya no existe, la referencia se elimina para no
-     * conservar una evidencia inválida. Si el archivo sigue disponible pero no
-     * puede decodificarse, se conserva y solo se informa el fallo para que el
-     * usuario decida eliminarla.
+     * La fotografía nunca se elimina automáticamente: si el archivo dejó de
+     * estar disponible, se informa el problema para que el usuario decida
+     * eliminarla o reemplazarla. Así una evidencia pendiente de subida no puede
+     * desaparecer de la colección y convertir un fallo en un éxito incorrecto.
      */
     fun onPhotoPreviewError(photo: IncidentPhotoEvidence) {
         val current = formState.evidencePhotos.firstOrNull {
             it.fileName == photo.fileName
         } ?: return
 
-        if (isEvidenceFileAvailable(current.fileName)) {
-            formState = formState.reportPhotoPreviewError(
+        formState = formState.reportPhotoPreviewError(
+            if (isEvidenceFileAvailable(current.fileName)) {
                 PhotoPreviewErrors.RENDER_FAILED
-            )
-        } else {
-            formState = formState.removeUnavailablePhoto(
-                current.fileName,
+            } else {
                 PhotoPreviewErrors.UNAVAILABLE
-            )
-            deleteEvidenceFile(current.fileName)
-        }
+            }
+        )
     }
 
+    /**
+     * Crea el incidente y, solo si la operación finaliza correctamente, sube
+     * las fotografías seleccionadas como evidencias.
+     *
+     * Si ya existe un incidente creado con evidencias pendientes, la llamada
+     * reintenta únicamente la subida y nunca crea un segundo incidente.
+     */
     fun createReport() {
-        if (submissionState is CreateReportSubmissionState.Loading) return
+        when (val current = submissionState) {
+            is CreateReportSubmissionState.CreatingIncident,
+            is CreateReportSubmissionState.UploadingEvidence,
+            is CreateReportSubmissionState.Success -> return
+
+            is CreateReportSubmissionState.EvidenceUploadFailed -> {
+                // Un resultado incierto no se reenvía automáticamente: el
+                // usuario debe confirmar el riesgo de duplicar la evidencia.
+                if (!current.hasUncertainEvidence) {
+                    retryEvidenceUploads(current)
+                }
+                return
+            }
+
+            is CreateReportSubmissionState.Idle,
+            is CreateReportSubmissionState.Error -> Unit
+        }
+
+        if (formState.activePhotoOperation != null) return
 
         formState = formValidator.validate(formState)
 
         if (formState.hasValidationErrors()) {
+            submissionState = CreateReportSubmissionState.Idle
+            return
+        }
+
+        val evidenceValidationErrors = validateEvidencePhotos(formState.evidencePhotos)
+
+        if (evidenceValidationErrors.isNotEmpty()) {
+            formState = formState.reportEvidenceValidationError(
+                evidenceValidationErrors.joinToString("\n")
+            )
             submissionState = CreateReportSubmissionState.Idle
             return
         }
@@ -248,11 +293,12 @@ class CreateReportViewModel(
             categoryId = selectedCategory.id,
             location = Sprint1TemporaryLocation.incidentLocation
         )
+        val photos = formState.evidencePhotos.toList()
 
-        submissionState = CreateReportSubmissionState.Loading
+        submissionState = CreateReportSubmissionState.CreatingIncident
 
         viewModelScope.launch {
-            try {
+            val incident = try {
                 // Temporary diagnostic log: verifies the API UUID selected in the dropdown.
                 runCatching {
                     Log.d(
@@ -263,7 +309,6 @@ class CreateReportViewModel(
                     )
                 }
                 incidentRepository.createIncident(input)
-                submissionState = CreateReportSubmissionState.Success
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
@@ -278,8 +323,263 @@ class CreateReportViewModel(
                 submissionState = CreateReportSubmissionState.Error(
                     exception.message ?: "No fue posible crear el reporte"
                 )
+                return@launch
             }
+
+            if (photos.isEmpty()) {
+                submissionState = CreateReportSubmissionState.Success(
+                    incidentId = incident.id,
+                    uploadedEvidenceCount = 0
+                )
+                return@launch
+            }
+
+            uploadEvidencePhotos(
+                incidentId = incident.id,
+                photos = photos,
+                alreadyUploaded = 0
+            )
         }
+    }
+
+    /**
+     * Reintenta las evidencias pendientes después de que el usuario confirmó
+     * que acepta el riesgo de duplicarlas.
+     *
+     * Solo tiene efecto cuando el estado actual contiene al menos una evidencia
+     * cuyo resultado es incierto. El reintento conserva el incidente original y
+     * nunca vuelve a llamar a [IncidentRepository.createIncident].
+     */
+    fun confirmRetryAfterPossibleDuplicate() {
+        val current = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+            ?: return
+
+        if (!current.hasUncertainEvidence) return
+
+        retryEvidenceUploads(current)
+    }
+
+    /**
+     * Sube las evidencias de forma secuencial y aislada.
+     *
+     * Un fallo individual se registra y se continúa con la siguiente fotografía.
+     * Las evidencias subidas se eliminan del formulario y del almacén temporal;
+     * las fallidas permanecen para poder reintentarlas contra el mismo
+     * incidente.
+     */
+    private suspend fun uploadEvidencePhotos(
+        incidentId: String,
+        photos: List<IncidentPhotoEvidence>,
+        alreadyUploaded: Int
+    ) {
+        submissionState = CreateReportSubmissionState.UploadingEvidence(
+            incidentId = incidentId,
+            processed = 0,
+            total = photos.size
+        )
+
+        var uploadedNow = 0
+        val pendingEvidence = mutableListOf<PendingEvidenceUpload>()
+
+        photos.forEachIndexed { index, photo ->
+            when (val result = uploadEvidence(incidentId, photo)) {
+                EvidenceUploadResult.Uploaded -> {
+                    uploadedNow++
+                    formState = formState.removeEvidencePhoto(photo.fileName)
+                    deleteEvidenceFile(photo.fileName)
+                }
+
+                is EvidenceUploadResult.Failed -> {
+                    pendingEvidence += PendingEvidenceUpload(
+                        photo = photo,
+                        failureKind = result.failureKind,
+                        reason = result.reason
+                    )
+                }
+            }
+
+            submissionState = CreateReportSubmissionState.UploadingEvidence(
+                incidentId = incidentId,
+                processed = index + 1,
+                total = photos.size
+            )
+        }
+
+        if (pendingEvidence.isEmpty()) {
+            clearEvidencePhotoState()
+            submissionState = CreateReportSubmissionState.Success(
+                incidentId = incidentId,
+                uploadedEvidenceCount = alreadyUploaded + uploadedNow
+            )
+            return
+        }
+
+        val totalEvidence = alreadyUploaded + uploadedNow + pendingEvidence.size
+        val hasUncertainEvidence = pendingEvidence.any {
+            it.failureKind == EvidenceUploadFailureKind.POSSIBLY_UPLOADED
+        }
+        submissionState = CreateReportSubmissionState.EvidenceUploadFailed(
+            incidentId = incidentId,
+            uploadedEvidenceCount = alreadyUploaded + uploadedNow,
+            pendingEvidence = pendingEvidence,
+            message = EvidenceUploadErrors.partial(
+                failed = pendingEvidence.size,
+                total = totalEvidence,
+                hasUncertainEvidence = hasUncertainEvidence
+            )
+        )
+    }
+
+    /**
+     * Resultado de un intento de subida individual.
+     *
+     * [Failed.failureKind] distingue un rechazo confirmado de un resultado
+     * incierto que podría haberse guardado en el servidor.
+     */
+    private sealed interface EvidenceUploadResult {
+        data object Uploaded : EvidenceUploadResult
+
+        data class Failed(
+            val failureKind: EvidenceUploadFailureKind,
+            val reason: String? = null
+        ) : EvidenceUploadResult
+    }
+
+    /**
+     * Sube una única evidencia y clasifica el resultado de un eventual fallo.
+     *
+     * La cancelación de la corrutina se propaga: no representa un fallo de la
+     * evidencia, sino que el flujo completo dejó de ejecutarse.
+     */
+    private suspend fun uploadEvidence(
+        incidentId: String,
+        photo: IncidentPhotoEvidence
+    ): EvidenceUploadResult {
+        val file = runCatching { photoFileStore.file(photo.fileName) }.getOrNull()
+
+        if (file == null) {
+            runCatching {
+                Log.w(
+                    "CreateReportViewModel",
+                    "Evidencia no disponible para subir: fileName=${photo.fileName}"
+                )
+            }
+            return EvidenceUploadResult.Failed(
+                failureKind = EvidenceUploadFailureKind.CONFIRMED,
+                reason = EvidenceUploadErrors.FILE_UNAVAILABLE
+            )
+        }
+
+        return try {
+            incidentRepository.uploadEvidence(incidentId, file, photo.mimeType)
+            EvidenceUploadResult.Uploaded
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            runCatching {
+                Log.w(
+                    "CreateReportViewModel",
+                    "Error al subir evidencia: incidentId=$incidentId, " +
+                        "fileName=${photo.fileName}, type=${exception::class.java.name}, " +
+                        "message=${exception.message}",
+                    exception
+                )
+            }
+            EvidenceUploadResult.Failed(
+                failureKind = classifyEvidenceUploadFailure(exception),
+                reason = exception.message
+            )
+        }
+    }
+
+    /**
+     * Distingue un rechazo confirmado de un resultado incierto.
+     *
+     * Los errores 4xx y las validaciones locales permiten afirmar que el
+     * backend no guardó la evidencia. Los timeouts, desconexiones, respuestas
+     * 5xx y errores inesperados no permiten saberlo: la petición pudo haber
+     * llegado al servidor y su respuesta se perdió en el camino.
+     */
+    private fun classifyEvidenceUploadFailure(
+        exception: Exception
+    ): EvidenceUploadFailureKind = when {
+        exception is ApiException.Http && exception.statusCode in 400..499 ->
+            EvidenceUploadFailureKind.CONFIRMED
+
+        exception is IllegalArgumentException ->
+            EvidenceUploadFailureKind.CONFIRMED
+
+        else -> EvidenceUploadFailureKind.POSSIBLY_UPLOADED
+    }
+
+    /**
+     * Reintenta solo las evidencias pendientes del incidente ya creado.
+     *
+     * La lista de pendientes vive en [CreateReportSubmissionState.EvidenceUploadFailed],
+     * no en las miniaturas visibles. Así una fotografía cuyo archivo desapareció
+     * sigue siendo un fallo explícito y no se declara un éxito por una colección
+     * visible vacía.
+     */
+    private fun retryEvidenceUploads(state: CreateReportSubmissionState.EvidenceUploadFailed) {
+        val pending = state.pendingEvidence.map { it.photo }
+
+        if (pending.isEmpty()) return
+
+        submissionState = CreateReportSubmissionState.UploadingEvidence(
+            incidentId = state.incidentId,
+            processed = 0,
+            total = pending.size
+        )
+
+        viewModelScope.launch {
+            uploadEvidencePhotos(
+                incidentId = state.incidentId,
+                photos = pending,
+                alreadyUploaded = state.uploadedEvidenceCount
+            )
+        }
+    }
+
+    /**
+     * Finaliza el flujo conservando únicamente las evidencias ya subidas.
+     *
+     * El incidente y sus fotografías exitosas ya existen en el backend, por lo
+     * que esta operación no vuelve a crear el incidente ni elimina evidencias
+     * remotas. Solo descarta las fotografías locales que quedaron pendientes.
+     */
+    fun finishWithoutPendingEvidence() {
+        val current = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+            ?: return
+
+        clearEvidencePhotoState(
+            extraPhotos = current.pendingEvidence.map { it.photo }
+        )
+        submissionState = CreateReportSubmissionState.Success(
+            incidentId = current.incidentId,
+            uploadedEvidenceCount = current.uploadedEvidenceCount,
+            discardedEvidenceCount = current.pendingEvidence.size
+        )
+    }
+
+    /**
+     * Limpia las referencias y los archivos temporales de las fotografías.
+     *
+     * [extraPhotos] permite borrar pendientes que ya no estén en la colección
+     * visible, por ejemplo si su miniatura dejó de estar disponible.
+     */
+    private fun clearEvidencePhotoState(
+        extraPhotos: List<IncidentPhotoEvidence> = emptyList()
+    ) {
+        (formState.evidencePhotos + extraPhotos)
+            .distinctBy { it.fileName }
+            .forEach { evidence ->
+                deleteEvidenceFile(evidence.fileName)
+            }
+        formState = formState.copy(
+            evidencePhotos = emptyList(),
+            activePhotoOperation = null,
+            photoError = null
+        )
     }
 
     fun loadCategories() {
@@ -337,9 +637,18 @@ class CreateReportViewModel(
         synchronized(photoOperationLock) {
             activePhotoToken = null
         }
-        formState.evidencePhotos.forEach { evidence ->
-            deleteEvidenceFile(evidence.fileName)
-        }
+
+        val pendingEvidence =
+            (submissionState as? CreateReportSubmissionState.EvidenceUploadFailed)
+                ?.pendingEvidence
+                .orEmpty()
+                .map { it.photo }
+
+        (formState.evidencePhotos + pendingEvidence)
+            .distinctBy { it.fileName }
+            .forEach { evidence ->
+                deleteEvidenceFile(evidence.fileName)
+            }
     }
 
     private fun beginPhotoOperation(operation: PhotoOperation): PhotoOperationToken =
@@ -404,6 +713,31 @@ class CreateReportViewModel(
 
     private fun isEvidenceFileAvailable(fileName: String): Boolean =
         runCatching { photoFileStore.exists(fileName) }.getOrDefault(false)
+
+    /**
+     * Comprueba que todas las fotografías puedan subirse antes de crear el
+     * incidente.
+     *
+     * Si alguna no cumple los límites del backend, el usuario recibe el motivo
+     * específico y el formulario sigue editable para eliminarla o reemplazarla.
+     * Así no se crea un incidente con evidencias que nunca podrán asociarse.
+     */
+    private fun validateEvidencePhotos(
+        photos: List<IncidentPhotoEvidence>
+    ): List<String> = photos.mapIndexedNotNull { index, photo ->
+        val issues = EvidenceUploadConstraints.issuesFor(
+            photo = photo,
+            fileAvailable = isEvidenceFileAvailable(photo.fileName)
+        )
+
+        issues.takeIf { it.isNotEmpty() }?.let {
+            EvidenceUploadErrors.compatibility(
+                position = index + 1,
+                photo = photo,
+                issues = it
+            )
+        }
+    }
 
     /**
      * Elimina el archivo de un resultado que ya no corresponde a la operación

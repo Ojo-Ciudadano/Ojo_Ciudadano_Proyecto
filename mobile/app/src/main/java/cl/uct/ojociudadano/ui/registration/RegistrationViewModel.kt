@@ -8,6 +8,7 @@ import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import java.io.IOException
 import java.util.concurrent.CancellationException
+import javax.net.ssl.SSLException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -47,10 +48,20 @@ class RegistrationViewModel(private val repository: AuthRepository) : ViewModel(
 }
 
 private fun Exception.toRegistrationError(): RegistrationUiState.Error = when (this) {
-    is ApiException.Network, is IOException -> RegistrationUiState.Error(
-        "No pudimos confirmar el registro por un problema de conexión. Si ya se creó tu cuenta, intenta iniciar sesión antes de volver a registrarte."
+    is ApiException.Network -> if (cause is SSLException) {
+        RegistrationUiState.Error("No se pudo establecer una conexión segura con el servidor. Intenta más tarde.")
+    } else {
+        connectionError()
+    }
+    is SSLException -> RegistrationUiState.Error(
+        "No se pudo establecer una conexión segura con el servidor. Intenta más tarde."
+    )
+    is IOException -> connectionError()
+    is ApiException.Unexpected -> RegistrationUiState.Error(
+        "El servidor devolvió una respuesta de registro inválida. Si tu cuenta ya fue creada, intenta iniciar sesión."
     )
     is ApiException.Http -> when (statusCode) {
+        404, 405 -> RegistrationUiState.Error("El servicio de registro no está disponible en el servidor. Intenta más tarde.")
         409 -> RegistrationUiState.Error(
             "Ya existe una cuenta con ese correo. Puedes iniciar sesión.",
             RegistrationFieldErrors(email = "Este correo ya está registrado")
@@ -70,6 +81,10 @@ private fun Exception.toRegistrationError(): RegistrationUiState.Error = when (t
     }
     else -> RegistrationUiState.Error("No pudimos confirmar el registro. Intenta iniciar sesión si tu cuenta ya fue creada.")
 }
+
+private fun connectionError() = RegistrationUiState.Error(
+    "No pudimos confirmar el registro por un problema de conexión. Si ya se creó tu cuenta, intenta iniciar sesión antes de volver a registrarte."
+)
 
 class RegistrationViewModelFactory(private val repository: AuthRepository) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")

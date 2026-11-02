@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-
+import { HttpModule } from '@nestjs/axios';
+import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 import { IncidentesController } from './incidentes.controller';
 import { IncidentesService } from './incidentes.service';
 import { CategoriasModule } from './categorias/categorias.module';
@@ -20,6 +21,10 @@ import { IncidentesNotificacionesClient } from './notificaciones/incidentes-noti
         secret: configService.getOrThrow<string>('JWT_SECRET'),
       }),
     }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 0,
+    }),
     PrismaModule,
     CategoriasModule,
     EvidenciasModule,
@@ -30,6 +35,7 @@ import { IncidentesNotificacionesClient } from './notificaciones/incidentes-noti
     IncidentesNotificacionesClient,
     JwtAuthGuard,
     RolesGuard,
+    AuthUsuariosClient,
   ],
 })
 export class IncidentesModule {}

@@ -6,10 +6,12 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
-import { isUUID } from 'class-validator';
 
+import { isUUID } from 'class-validator';
 import { PrismaService } from './prisma/prisma.service';
+import { Prisma } from './generated/prisma/client';
 import { CreateIncidenteDto } from './dto/create-incidente.dto';
+import { FindIncidentesQueryDto } from './dto/find-incidentes-query.dto';
 import { UpdateEstadoDto } from './dto/update-estado.dto';
 import { UpdatePrioridadDto } from './dto/update-prioridad.dto';
 import {
@@ -22,7 +24,11 @@ import {
   PRIORIDAD_MINIMA,
 } from './prioridad/prioridad.constants';
 import { evidenciaSelect } from './mappers/evidencia.mapper';
+import { toHistorialEstadoResponse } from './mappers/historial-estado.mapper';
 import { toIncidenteResponse } from './mappers/incidente.mapper';
+import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
+import { toAsignacionResponse } from './mappers/asignacion.mapper';
+import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 import { IncidentesNotificacionesClient } from './notificaciones/incidentes-notificaciones.client';
 
 const include = {
@@ -36,12 +42,34 @@ export class IncidentesService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional()
+    private readonly authUsuariosClient?: AuthUsuariosClient,
+    @Optional()
     private readonly notificacionesClient?: IncidentesNotificacionesClient,
   ) {}
 
-  async findAll(usuarioReportaId?: string) {
+  async findAll(filtros: FindIncidentesQueryDto = {}) {
+    const where: Prisma.IncidenteWhereInput = {};
+    const comuna = filtros.comuna?.trim();
+
+    if (filtros.usuarioReportaId) {
+      where.usuarioReportaId = filtros.usuarioReportaId;
+    }
+    if (filtros.estadoId) {
+      where.estadoId = filtros.estadoId;
+    }
+    if (filtros.categoriaId) {
+      where.categoriaId = filtros.categoriaId;
+    }
+    if (comuna) {
+      where.ubicacion = {
+        is: {
+          comuna: { equals: comuna, mode: 'insensitive' },
+        },
+      };
+    }
+
     const incidentes = await this.prisma.incidente.findMany({
-      where: usuarioReportaId ? { usuarioReportaId } : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       include,
       orderBy: { fechaCreacion: 'desc' },
     });
@@ -53,7 +81,26 @@ export class IncidentesService {
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
     return toIncidenteResponse(incidente);
   }
+  async findHistorial(id: string) {
+    if (!isUUID(id, 'all'))
+      throw new BadRequestException('El id del incidente debe ser un UUID valido');
+    // La existencia se verifica antes de consultar el historial para distinguir
+    // un incidente inexistente (404) de un incidente sin registros ([]).
+    const incidente = await this.prisma.incidente.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
+    const historial = await this.prisma.historialEstado.findMany({
+      where: { incidenteId: id },
+      include: { estado: true },
+      // Orden cronologico ascendente y desempate determinista por id.
+      orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
+    });
+
+    return historial.map(toHistorialEstadoResponse);
+  }
   async create(dto: CreateIncidenteDto) {
     if (!dto.titulo?.trim() || !dto.descripcion?.trim() || !dto.ubicacion)
       throw new BadRequestException('titulo, descripcion y ubicacion son obligatorios');
@@ -220,5 +267,107 @@ export class IncidentesService {
     }
 
     return toIncidenteResponse(actualizado);
+  }
+
+  async asignarResponsable(id: string, dto: AsignarResponsableDto, actorId: string, authHeader?: string) {
+    if (!isUUID(id, 'all'))
+      throw new BadRequestException('El id del incidente debe ser un UUID valido');
+    if (!isUUID(dto?.usuarioAsignadoId, 'all'))
+      throw new BadRequestException('El usuario asignado debe ser un UUID valido');
+    if (!isUUID(actorId, 'all'))
+      throw new UnauthorizedException('Usuario autenticado no identificado');
+
+    // Validar que el usuario propuesto exista y tenga rol ADMIN vigente
+    const usuarioAsignado = await this.authUsuariosClient!.obtenerUsuarioConRoles(
+      dto.usuarioAsignadoId,
+      authHeader,
+    );
+    const roles = Array.isArray(usuarioAsignado.roles) ? usuarioAsignado.roles : [];
+    if (!roles.includes('ADMIN')) {
+      throw new BadRequestException('El usuario propuesto debe tener rol ADMIN vigente');
+    }
+
+    // Asignación y reasignación atómicas, garantizando max 1 activa, trazabilidad y registro en historial
+    const { respuesta, debeNotificar, esReasignacion, titulo } =
+      await this.prisma.$transaction(async (tx) => {
+        // Bloquear incidente
+        const filas = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
+        `;
+        if (filas.length === 0) throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+        const incidente = await tx.incidente.findUnique({
+          where: { id },
+          select: { id: true, estadoId: true, titulo: true },
+        });
+        if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+        // Buscar asignación activa actual
+        const asignacionActiva = await tx.asignacion.findFirst({
+          where: { incidenteId: id, activa: true },
+          orderBy: { fechaAsignacion: 'desc' },
+        });
+
+        // Si ya está asignado al mismo usuario, comportamiento definido sin duplicar registros/eventos
+        if (asignacionActiva && asignacionActiva.usuarioAsignadoId === dto.usuarioAsignadoId) {
+          // No crear nueva asignación ni nuevo registro de historial; devolver asignación confirmada
+          return {
+            respuesta: toAsignacionResponse(asignacionActiva),
+            debeNotificar: false,
+            esReasignacion: false,
+            titulo: incidente.titulo,
+          };
+        }
+
+        // Desactivar asignación activa anterior si existe (conservar trazabilidad)
+        if (asignacionActiva) {
+          await tx.asignacion.update({
+            where: { id: asignacionActiva.id },
+            data: { activa: false },
+          });
+        }
+
+        // Crear nueva asignación activa
+        const nuevaAsignacion = await tx.asignacion.create({
+          data: {
+            incidenteId: id,
+            usuarioAsignadoId: dto.usuarioAsignadoId,
+            asignadoPorId: actorId,
+            activa: true,
+          },
+        });
+
+        // Registrar en historial con estado actual, actor y observación descriptiva
+        const observacion = asignacionActiva
+          ? `Reasignado de ${asignacionActiva.usuarioAsignadoId} a ${dto.usuarioAsignadoId}`
+          : `Asignado a ${dto.usuarioAsignadoId}`;
+        await tx.historialEstado.create({
+          data: {
+            incidenteId: id,
+            estadoId: incidente.estadoId,
+            usuarioId: actorId,
+            observacion,
+          },
+        });
+
+        return {
+          respuesta: toAsignacionResponse(nuevaAsignacion),
+          debeNotificar: true,
+          esReasignacion: Boolean(asignacionActiva),
+          titulo: incidente.titulo,
+        };
+      });
+
+    // Emitir notificacion al responsable asignado/reasignado una unica vez tras confirmar la transaccion (#113)
+    if (this.notificacionesClient && debeNotificar) {
+      await this.notificacionesClient.notificarAsignacion({
+        incidenteId: id,
+        titulo,
+        usuarioAsignadoId: dto.usuarioAsignadoId,
+        esReasignacion,
+      });
+    }
+
+    return respuesta;
   }
 }

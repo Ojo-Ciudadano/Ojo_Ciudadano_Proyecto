@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.registration
 
+import cl.uct.ojociudadano.ui.components.CitizenAuthProgress
 import cl.uct.ojociudadano.ui.components.CitizenAuthLayout
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import androidx.compose.animation.AnimatedVisibility
@@ -18,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -117,12 +117,14 @@ fun RegistrationScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() })
         )
-        if (loading) {
-            CircularProgressIndicator(Modifier.testTag("register_loading"))
-            Text("Creando cuenta…")
-        }
         Button(onClick = ::submit, enabled = !loading, modifier = Modifier.fillMaxWidth().animateContentSize().testTag("register_submit")) {
             Text("Registrarse")
+        }
+        if (loading) {
+            CitizenAuthProgress(
+                message = "Creando cuenta…",
+                indicatorModifier = Modifier.testTag("register_loading")
+            )
         }
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Volver al inicio de sesión") }
     }
