@@ -28,7 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
 import cl.uct.ojociudadano.ui.admin.AdminHomeScreen
-import cl.uct.ojociudadano.ui.admin.AdminIncidentsPendingScreen
+import cl.uct.ojociudadano.ui.admin.AdminIncidentsScreen
 import cl.uct.ojociudadano.ui.home.HomeScreen
 import cl.uct.ojociudadano.ui.login.LoginCredentials
 import cl.uct.ojociudadano.ui.login.LoginScreen
@@ -151,7 +151,7 @@ fun AppNavigation(
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN_INCIDENTS) {
-                AdminIncidentsPendingScreen(onBack = {
+                AdminIncidentsScreen(onBack = {
                     if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN) &&
                         !navController.popBackStack(AppRoutes.ADMIN, inclusive = false)
                     ) {
