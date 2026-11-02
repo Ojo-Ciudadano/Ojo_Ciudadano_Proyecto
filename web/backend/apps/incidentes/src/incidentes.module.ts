@@ -10,25 +10,32 @@ import { EvidenciasModule } from './evidencias/evidencias.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { IncidentesNotificacionesClient } from './notificaciones/incidentes-notificaciones.client';
 
 @Module({
   imports: [
-      ConfigModule.forRoot({ isGlobal: true }),
-      JwtModule.registerAsync({
-        inject: [ConfigService],
-        useFactory: (configService: ConfigService) => ({
-          secret: configService.getOrThrow<string>('JWT_SECRET'),
-        }),
+    ConfigModule.forRoot({ isGlobal: true }),
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
       }),
-      HttpModule.register({
-        timeout: 5000,
-        maxRedirects: 0,
-      }),
-      PrismaModule,
-      CategoriasModule,
-      EvidenciasModule,
-    ],
-    controllers: [IncidentesController],
-    providers: [IncidentesService, JwtAuthGuard, RolesGuard, AuthUsuariosClient],
+    }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 0,
+    }),
+    PrismaModule,
+    CategoriasModule,
+    EvidenciasModule,
+  ],
+  controllers: [IncidentesController],
+  providers: [
+    IncidentesService,
+    IncidentesNotificacionesClient,
+    JwtAuthGuard,
+    RolesGuard,
+    AuthUsuariosClient,
+  ],
 })
 export class IncidentesModule {}

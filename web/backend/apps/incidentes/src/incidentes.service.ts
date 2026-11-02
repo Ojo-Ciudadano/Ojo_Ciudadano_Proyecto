@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -28,7 +29,7 @@ import { toIncidenteResponse } from './mappers/incidente.mapper';
 import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
 import { toAsignacionResponse } from './mappers/asignacion.mapper';
 import { AuthUsuariosClient } from './auth/auth-usuarios.client';
-
+import { IncidentesNotificacionesClient } from './notificaciones/incidentes-notificaciones.client';
 
 const include = {
   categoria: true,
@@ -40,7 +41,10 @@ const include = {
 export class IncidentesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authUsuariosClient: AuthUsuariosClient,
+    @Optional()
+    private readonly authUsuariosClient?: AuthUsuariosClient,
+    @Optional()
+    private readonly notificacionesClient?: IncidentesNotificacionesClient,
   ) {}
 
   async findAll(filtros: FindIncidentesQueryDto = {}) {
@@ -85,7 +89,7 @@ export class IncidentesService {
     const incidente = await this.prisma.incidente.findUnique({
       where: { id },
       select: { id: true },
-    }); 
+    });
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
     const historial = await this.prisma.historialEstado.findMany({
@@ -182,51 +186,87 @@ export class IncidentesService {
     // La lectura del estado actual, la validacion de la transicion y las dos
     // escrituras ocurren en la misma transaccion. El bloqueo FOR UPDATE evita
     // que dos solicitudes concurrentes validen contra el mismo estado de origen.
-    return this.prisma.$transaction(async (tx) => {
-      const filas = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
-      `;
+    const { actualizado, estadoAnterior, usuarioReportaId, titulo } =
+      await this.prisma.$transaction(async (tx) => {
+        const filas = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
+        `;
 
-      if (filas.length === 0)
-        throw new NotFoundException(`Incidente ${id} no encontrado`);
+        if (filas.length === 0)
+          throw new NotFoundException(`Incidente ${id} no encontrado`);
 
-      const incidente = await tx.incidente.findUnique({
-        where: { id },
-        select: { id: true, estado: { select: { nombre: true } } },
+        const incidente = await tx.incidente.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            titulo: true,
+            usuarioReportaId: true,
+            estado: { select: { nombre: true } },
+          },
+        });
+        if (!incidente)
+          throw new NotFoundException(`Incidente ${id} no encontrado`);
+
+        const destino = await tx.estado.findUnique({
+          where: { nombre: dto.estado },
+        });
+        if (!destino)
+          throw new NotFoundException(`Estado ${dto.estado} no encontrado`);
+
+        const estadoActual = incidente.estado?.nombre;
+        if (!esTransicionPermitida(estadoActual, destino.nombre)) {
+          throw new ConflictException(
+            `Transicion no permitida de "${estadoActual ?? 'desconocido'}" a "${destino.nombre}"`,
+          );
+        }
+
+        const incidenteActualizado = await tx.incidente.update({
+          where: { id },
+          data: { estadoId: destino.id },
+          include,
+        });
+
+        await tx.historialEstado.create({
+          data: {
+            incidenteId: id,
+            estadoId: destino.id,
+            usuarioId,
+            observacion,
+          },
+        });
+
+        const propietarioReportaId =
+          incidente.usuarioReportaId ??
+          (incidenteActualizado as { usuarioReportaId?: string }).usuarioReportaId ??
+          '';
+        const tituloIncidente =
+          incidente.titulo ??
+          (incidenteActualizado as { titulo?: string }).titulo;
+
+        return {
+          actualizado: incidenteActualizado,
+          estadoAnterior: estadoActual,
+          usuarioReportaId: propietarioReportaId,
+          titulo: tituloIncidente,
+        };
       });
-      if (!incidente)
-        throw new NotFoundException(`Incidente ${id} no encontrado`);
 
-      const destino = await tx.estado.findUnique({
-        where: { nombre: dto.estado },
+    // La notificacion se emite una unica vez tras confirmar la transaccion de BD.
+    // Cualquier error de comunicacion o persistencia en el microservicio de
+    // notificaciones es gestionado de forma controlada por el cliente sin
+    // revertir el cambio de estado ya aplicado (#113).
+    if (this.notificacionesClient && usuarioReportaId) {
+      await this.notificacionesClient.notificarCambioEstado({
+        incidenteId: id,
+        titulo,
+        usuarioReportaId,
+        estadoAnterior,
+        estadoNuevo: dto.estado,
+        observacion,
       });
-      if (!destino)
-        throw new NotFoundException(`Estado ${dto.estado} no encontrado`);
+    }
 
-      const estadoActual = incidente.estado?.nombre;
-      if (!esTransicionPermitida(estadoActual, destino.nombre)) {
-        throw new ConflictException(
-          `Transicion no permitida de "${estadoActual ?? 'desconocido'}" a "${destino.nombre}"`,
-        );
-      }
-
-      const actualizado = await tx.incidente.update({
-        where: { id },
-        data: { estadoId: destino.id },
-        include,
-      });
-
-      await tx.historialEstado.create({
-        data: {
-          incidenteId: id,
-          estadoId: destino.id,
-          usuarioId,
-          observacion,
-        },
-      });
-
-      return toIncidenteResponse(actualizado);
-    });
+    return toIncidenteResponse(actualizado);
   }
 
   async asignarResponsable(id: string, dto: AsignarResponsableDto, actorId: string, authHeader?: string) {
@@ -238,7 +278,7 @@ export class IncidentesService {
       throw new UnauthorizedException('Usuario autenticado no identificado');
 
     // Validar que el usuario propuesto exista y tenga rol ADMIN vigente
-    const usuarioAsignado = await this.authUsuariosClient.obtenerUsuarioConRoles(
+    const usuarioAsignado = await this.authUsuariosClient!.obtenerUsuarioConRoles(
       dto.usuarioAsignadoId,
       authHeader,
     );
@@ -248,63 +288,86 @@ export class IncidentesService {
     }
 
     // Asignación y reasignación atómicas, garantizando max 1 activa, trazabilidad y registro en historial
-    return this.prisma.$transaction(async (tx) => {
-      // Bloquear incidente
-      const filas = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
-      `;
-      if (filas.length === 0) throw new NotFoundException(`Incidente ${id} no encontrado`);
+    const { respuesta, debeNotificar, esReasignacion, titulo } =
+      await this.prisma.$transaction(async (tx) => {
+        // Bloquear incidente
+        const filas = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM incidente WHERE id = ${id}::uuid FOR UPDATE
+        `;
+        if (filas.length === 0) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
-      const incidente = await tx.incidente.findUnique({
-        where: { id },
-        select: { id: true, estadoId: true },
-      });
-      if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
-
-      // Buscar asignación activa actual
-      const asignacionActiva = await tx.asignacion.findFirst({
-        where: { incidenteId: id, activa: true },
-        orderBy: { fechaAsignacion: 'desc' },
-      });
-
-      // Si ya está asignado al mismo usuario, comportamiento definido sin duplicar registros/eventos
-      if (asignacionActiva && asignacionActiva.usuarioAsignadoId === dto.usuarioAsignadoId) {
-        // No crear nueva asignación ni nuevo registro de historial; devolver asignación confirmada
-        return toAsignacionResponse(asignacionActiva);
-      }
-
-      // Desactivar asignación activa anterior si existe (conservar trazabilidad)
-      if (asignacionActiva) {
-        await tx.asignacion.update({
-          where: { id: asignacionActiva.id },
-          data: { activa: false },
+        const incidente = await tx.incidente.findUnique({
+          where: { id },
+          select: { id: true, estadoId: true, titulo: true },
         });
-      }
+        if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
-      // Crear nueva asignación activa
-      const nuevaAsignacion = await tx.asignacion.create({
-        data: {
-          incidenteId: id,
-          usuarioAsignadoId: dto.usuarioAsignadoId,
-          asignadoPorId: actorId,
-          activa: true,
-        },
+        // Buscar asignación activa actual
+        const asignacionActiva = await tx.asignacion.findFirst({
+          where: { incidenteId: id, activa: true },
+          orderBy: { fechaAsignacion: 'desc' },
+        });
+
+        // Si ya está asignado al mismo usuario, comportamiento definido sin duplicar registros/eventos
+        if (asignacionActiva && asignacionActiva.usuarioAsignadoId === dto.usuarioAsignadoId) {
+          // No crear nueva asignación ni nuevo registro de historial; devolver asignación confirmada
+          return {
+            respuesta: toAsignacionResponse(asignacionActiva),
+            debeNotificar: false,
+            esReasignacion: false,
+            titulo: incidente.titulo,
+          };
+        }
+
+        // Desactivar asignación activa anterior si existe (conservar trazabilidad)
+        if (asignacionActiva) {
+          await tx.asignacion.update({
+            where: { id: asignacionActiva.id },
+            data: { activa: false },
+          });
+        }
+
+        // Crear nueva asignación activa
+        const nuevaAsignacion = await tx.asignacion.create({
+          data: {
+            incidenteId: id,
+            usuarioAsignadoId: dto.usuarioAsignadoId,
+            asignadoPorId: actorId,
+            activa: true,
+          },
+        });
+
+        // Registrar en historial con estado actual, actor y observación descriptiva
+        const observacion = asignacionActiva
+          ? `Reasignado de ${asignacionActiva.usuarioAsignadoId} a ${dto.usuarioAsignadoId}`
+          : `Asignado a ${dto.usuarioAsignadoId}`;
+        await tx.historialEstado.create({
+          data: {
+            incidenteId: id,
+            estadoId: incidente.estadoId,
+            usuarioId: actorId,
+            observacion,
+          },
+        });
+
+        return {
+          respuesta: toAsignacionResponse(nuevaAsignacion),
+          debeNotificar: true,
+          esReasignacion: Boolean(asignacionActiva),
+          titulo: incidente.titulo,
+        };
       });
 
-      // Registrar en historial con estado actual, actor y observación descriptiva
-      const observacion = asignacionActiva
-        ? `Reasignado de ${asignacionActiva.usuarioAsignadoId} a ${dto.usuarioAsignadoId}`
-        : `Asignado a ${dto.usuarioAsignadoId}`;
-      await tx.historialEstado.create({
-        data: {
-          incidenteId: id,
-          estadoId: incidente.estadoId,
-          usuarioId: actorId,
-          observacion,
-        },
+    // Emitir notificacion al responsable asignado/reasignado una unica vez tras confirmar la transaccion (#113)
+    if (this.notificacionesClient && debeNotificar) {
+      await this.notificacionesClient.notificarAsignacion({
+        incidenteId: id,
+        titulo,
+        usuarioAsignadoId: dto.usuarioAsignadoId,
+        esReasignacion,
       });
+    }
 
-      return toAsignacionResponse(nuevaAsignacion);
-    });
+    return respuesta;
   }
 }
