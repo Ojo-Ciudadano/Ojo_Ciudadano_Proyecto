@@ -4,6 +4,8 @@ import { isUUID } from 'class-validator';
 
 import type { EstadoIncidente } from '../estado/transiciones-incidente.constants';
 
+export const NOTIFICACIONES_HTTP_TIMEOUT_MS = 5000;
+
 export interface CambioEstadoEvento {
   incidenteId: string;
   titulo?: string;
@@ -27,7 +29,7 @@ export interface CrearNotificacionPayload {
 }
 
 /**
- *Construye una descripción comprensible del cambio de estado de un incidente
+ * Construye una descripción comprensible del cambio de estado de un incidente
  * para ser consultada posteriormente por el ciudadano en la aplicación móvil.
  */
 export function construirMensajeCambioEstado(
@@ -137,6 +139,7 @@ export class IncidentesNotificacionesClient {
           'content-type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(NOTIFICACIONES_HTTP_TIMEOUT_MS),
       });
 
       if (!response.ok) {

@@ -1,4 +1,4 @@
-import { All, Controller, Patch, Req, Res, UseGuards } from '@nestjs/common';
+import { All, Controller, Get, Patch, Req, Res, UseGuards } from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
 import { Role, Roles } from './roles.decorator';
 import type { Request, Response } from 'express';
@@ -53,7 +53,10 @@ export class ProxyController {
     await this.proxyService.forward(req, res);
   }
 
-  @All(['notificaciones', 'notificaciones/*'])
+  // Solo se expone GET hacia el exterior con autenticacion JWT; la creacion
+  // (POST /notificaciones) queda reservada para comunicacion interna entre microservicios (#113).
+  @Get(['notificaciones', 'notificaciones/*'])
+  @UseGuards(JwtAuthGuard, RolesGuard)
   async handleNotificacionesProxy(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.proxyService.forward(req, res);
   }

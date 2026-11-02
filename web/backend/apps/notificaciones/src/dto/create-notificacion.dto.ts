@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateNotificacionDto {
   @IsNotEmpty({ message: 'El id de usuario es requerido' })
@@ -11,5 +11,6 @@ export class CreateNotificacionDto {
 
   @IsNotEmpty({ message: 'El mensaje de notificacion es requerido' })
   @IsString({ message: 'El mensaje debe ser una cadena de texto' })
+  @MaxLength(500, { message: 'El mensaje no puede superar los 500 caracteres' })
   mensaje!: string;
 }

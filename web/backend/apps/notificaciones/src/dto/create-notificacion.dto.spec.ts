@@ -40,4 +40,17 @@ describe('CreateNotificacionDto', () => {
     const msgError = errors.find((err) => err.property === 'mensaje');
     expect(msgError).toBeDefined();
   });
+
+  it('debe fallar si el mensaje supera los 500 caracteres', async () => {
+    const dto = plainToInstance(CreateNotificacionDto, {
+      usuarioId: userUUID,
+      incidenteId: incidentUUID,
+      mensaje: 'a'.repeat(501),
+    });
+
+    const errors = await validate(dto);
+    expect(errors.length).toBeGreaterThan(0);
+    const msgError = errors.find((err) => err.property === 'mensaje');
+    expect(msgError).toBeDefined();
+  });
 });

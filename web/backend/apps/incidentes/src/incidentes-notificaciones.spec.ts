@@ -71,7 +71,7 @@ describe('Generacion y persistencia de notificaciones de incidentes (#113)', () 
       global.fetch = fetchOriginal;
     });
 
-    it('envia POST /notificaciones al microservicio de Notificaciones con usuarioId, incidenteId y mensaje', async () => {
+    it('envia POST /notificaciones al microservicio de Notificaciones con usuarioId, incidenteId, mensaje y timeout signal', async () => {
       fetchMock.mockResolvedValue({ ok: true, status: 201 });
       const config = {
         get: jest.fn().mockReturnValue('http://notificaciones-svc:3003/'),
@@ -100,6 +100,7 @@ describe('Generacion y persistencia de notificaciones de incidentes (#113)', () 
             mensaje:
               'Tu incidente "Bache profundo" cambió de estado de "Nuevo" a "En revisión". Observación: Inspección programada',
           }),
+          signal: expect.any(AbortSignal),
         },
       );
     });
@@ -113,6 +114,21 @@ describe('Generacion y persistencia de notificaciones de incidentes (#113)', () 
           incidenteId: INCIDENTE_ID,
           usuarioReportaId: USUARIO_REPORTA_ID,
           estadoNuevo: 'En revisión',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('gestiona de forma controlada un timeout de conexion (AbortError/TimeoutError) sin colgar ni lanzar excepcion', async () => {
+      const timeoutError = new Error('The operation was aborted due to timeout');
+      timeoutError.name = 'TimeoutError';
+      fetchMock.mockRejectedValue(timeoutError);
+      const client = new IncidentesNotificacionesClient();
+
+      await expect(
+        client.notificarAsignacion({
+          incidenteId: INCIDENTE_ID,
+          usuarioAsignadoId: USUARIO_ASIGNADO_ID,
+          esReasignacion: false,
         }),
       ).resolves.toBe(false);
     });
