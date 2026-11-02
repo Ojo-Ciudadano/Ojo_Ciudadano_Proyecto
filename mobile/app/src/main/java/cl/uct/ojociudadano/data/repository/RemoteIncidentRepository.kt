@@ -17,6 +17,9 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.ResponseBody
 import java.io.File
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
+import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
 
 class RemoteIncidentRepository(
     private val apiService: ApiService,
@@ -105,5 +108,28 @@ class RemoteIncidentRepository(
         return withCurrentIdentity { identity ->
             apiService.downloadEvidenceFile(id, identity.token)
         }
+    }
+
+    override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> {
+        val response = executeApiCall {
+            apiService.getIncidentHistory(incidentId)
+        }
+        return response.map { it.toDomain() }
+    }
+
+    override suspend fun assignResponsible(incidentId: String, assignedUserId: String): Incident {
+        val request = AssignResponsibleRequestDto(usuarioAsignadoId = assignedUserId)
+        val response = executeApiCall {
+            apiService.assignResponsible(incidentId, request)
+        }
+        return response.toDomain()
+    }
+
+    override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
+        val request = UpdatePriorityRequestDto(nivelPrioridad = priorityLevel)
+        val response = executeApiCall {
+            apiService.updatePriority(incidentId, request)
+        }
+        return response.toDomain()
     }
 }
