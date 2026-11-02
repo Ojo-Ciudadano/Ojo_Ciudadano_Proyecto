@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   ValidationPipe,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -19,31 +20,55 @@ const INCIDENTE_ID = 'c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33';
 describe('NotificacionesService y Controller (#113)', () => {
   let app: INestApplication<App>;
   let service: NotificacionesService;
-  let prisma: { notificacion: { create: jest.Mock } };
+
+  let prisma: {
+    notificacion: {
+      create: jest.Mock;
+    };
+  };
 
   beforeEach(async () => {
     prisma = {
       notificacion: {
-        create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({
-          id: '30000000-0000-4000-8000-000000000099',
-          ...data,
-          leido: false,
-          fecha: new Date('2026-10-30T01:00:00.000Z'),
-        })),
+        create: jest.fn(
+          async ({ data }: { data: Record<string, unknown> }) => ({
+            id: '30000000-0000-4000-8000-000000000099',
+            ...data,
+            leido: false,
+            fecha: new Date('2026-10-30T01:00:00.000Z'),
+          }),
+        ),
       },
     };
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      controllers: [NotificacionesController],
-      providers: [
-        NotificacionesService,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
+    const moduleFixture: TestingModule =
+      await Test.createTestingModule({
+        controllers: [NotificacionesController],
+        providers: [
+          NotificacionesService,
+          {
+            provide: PrismaService,
+            useValue: prisma,
+          },
+          {
+            provide: JwtService,
+            useValue: {
+              verifyAsync: jest.fn().mockResolvedValue({
+                sub: USUARIO_ID,
+              }),
+            },
+          },
+        ],
+      }).compile();
 
-    service = moduleFixture.get<NotificacionesService>(NotificacionesService);
+    service = moduleFixture.get<NotificacionesService>(
+      NotificacionesService,
+    );
+
     app = moduleFixture.createNestApplication();
+
     app.useGlobalFilters(new HttpExceptionFilter());
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -51,11 +76,14 @@ describe('NotificacionesService y Controller (#113)', () => {
         transform: true,
       }),
     );
+
     await app.init();
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   it('POST /notificaciones persiste la notificacion en la base de datos con fecha, usuarioId e incidenteId', async () => {
@@ -70,6 +98,7 @@ describe('NotificacionesService y Controller (#113)', () => {
       .expect(201);
 
     expect(prisma.notificacion.create).toHaveBeenCalledTimes(1);
+
     expect(prisma.notificacion.create).toHaveBeenCalledWith({
       data: {
         usuarioId: USUARIO_ID,
@@ -78,12 +107,14 @@ describe('NotificacionesService y Controller (#113)', () => {
           'Tu incidente "Alumbrado caído" cambió de estado de "Nuevo" a "En revisión".',
       },
     });
+
     expect(respuesta.body).toMatchObject({
       id: '30000000-0000-4000-8000-000000000099',
       usuarioId: USUARIO_ID,
       incidenteId: INCIDENTE_ID,
       leido: false,
     });
+
     expect(respuesta.body.fecha).toBeDefined();
   });
 
