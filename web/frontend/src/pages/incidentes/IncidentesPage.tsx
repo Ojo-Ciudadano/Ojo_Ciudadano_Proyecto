@@ -25,9 +25,7 @@ function TablaIncidentes({ incidentes }: { incidentes: Incidente[] }) {
         <tbody>
           {incidentes.map((incidente) => (
             <tr key={incidente.id} data-incidente-id={incidente.id}>
-              <td className="incidente-folio">
-                {incidente.id}
-              </td>
+              <td className="incidente-folio">{incidente.id}</td>
 
               <td>{texto(incidente.categoria?.nombre)}</td>
 
@@ -59,36 +57,180 @@ function TablaIncidentes({ incidentes }: { incidentes: Incidente[] }) {
 }
 
 export function IncidentesPage() {
-  const { incidentes, cargando, error, reintentar } = useIncidentes()
+  const {
+    incidentesPagina,
+    cargando,
+    error,
+    reintentar,
+    filtros,
+    estados,
+    categorias,
+    comunas,
+    hayFiltros,
+    cambiarFiltro,
+    restablecerFiltros,
+    paginaActual,
+    totalPaginas,
+    totalResultados,
+    desde,
+    hasta,
+    puedeRetroceder,
+    puedeAvanzar,
+    paginaAnterior,
+    paginaSiguiente,
+  } = useIncidentes()
 
   return (
-    <section className="incidentes-pagina" aria-labelledby="incidentes-titulo">
+    <section
+      className="incidentes-pagina"
+      aria-labelledby="incidentes-titulo"
+    >
       <header className="incidentes-encabezado">
         <h1 id="incidentes-titulo">Gestión de incidentes</h1>
-        <p>Consulta los reportes ciudadanos, su prioridad y su estado actual.</p>
+        <p>
+          Consulta los reportes ciudadanos, su prioridad y su estado actual.
+        </p>
       </header>
 
-      {cargando ? (
-        <div className="incidentes-mensaje" role="status">
-          Cargando incidentes…
-        </div>
-      ) : error ? (
-        <div className="incidentes-mensaje incidentes-error" role="alert">
-          <p>{error.mensaje}</p>
+      <div
+        className="incidentes-filtros"
+        role="group"
+        aria-label="Filtros de incidentes"
+      >
+        <div className="incidentes-filtro">
+          <label htmlFor="filtro-estado">Estado</label>
 
-          {error.permiteReintentar && (
-            <button type="button" onClick={reintentar}>
-              Reintentar
-            </button>
-          )}
+          <select
+            id="filtro-estado"
+            value={filtros.estadoId}
+            onChange={(event) =>
+              cambiarFiltro('estadoId', event.target.value)
+            }
+          >
+            <option value="">Todos los estados</option>
+
+            {estados.map((estado) => (
+              <option key={estado.id} value={estado.id}>
+                {estado.nombre}
+              </option>
+            ))}
+          </select>
         </div>
-      ) : incidentes.length === 0 ? (
-        <div className="incidentes-mensaje" role="status">
-          No hay incidentes registrados.
+
+        <div className="incidentes-filtro">
+          <label htmlFor="filtro-comuna">Comuna</label>
+
+          <select
+            id="filtro-comuna"
+            value={filtros.comuna}
+            onChange={(event) =>
+              cambiarFiltro('comuna', event.target.value)
+            }
+          >
+            <option value="">Todas las comunas</option>
+
+            {comunas.map((comuna) => (
+              <option key={comuna} value={comuna}>
+                {comuna}
+              </option>
+            ))}
+          </select>
         </div>
-      ) : (
-        <TablaIncidentes incidentes={incidentes} />
-      )}
+
+        <div className="incidentes-filtro">
+          <label htmlFor="filtro-categoria">Categoría</label>
+
+          <select
+            id="filtro-categoria"
+            value={filtros.categoriaId}
+            onChange={(event) =>
+              cambiarFiltro('categoriaId', event.target.value)
+            }
+          >
+            <option value="">Todas las categorías</option>
+
+            {categorias.map((categoria) => (
+              <option key={categoria.id} value={categoria.id}>
+                {categoria.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          className="incidentes-restablecer"
+          onClick={restablecerFiltros}
+          disabled={!hayFiltros}
+        >
+          Restablecer filtros
+        </button>
+      </div>
+
+      <div aria-busy={cargando}>
+        {cargando ? (
+          <div className="incidentes-mensaje" role="status">
+            Cargando incidentes…
+          </div>
+        ) : error ? (
+          <div className="incidentes-mensaje incidentes-error" role="alert">
+            <p>{error.mensaje}</p>
+
+            {error.permiteReintentar && (
+              <button type="button" onClick={reintentar}>
+                Reintentar
+              </button>
+            )}
+          </div>
+        ) : totalResultados === 0 ? (
+          <div className="incidentes-mensaje" role="status">
+            {hayFiltros
+              ? 'No se encontraron incidentes con los filtros seleccionados.'
+              : 'No hay incidentes registrados.'}
+          </div>
+        ) : (
+          <TablaIncidentes incidentes={incidentesPagina} />
+        )}
+      </div>
+
+      <nav
+        className="incidentes-paginacion"
+        aria-label="Paginación de incidentes"
+      >
+        <p className="incidentes-resumen" role="status">
+          {cargando
+            ? 'Consultando resultados…'
+            : error
+              ? 'Resultados no disponibles.'
+              : totalResultados === 0
+                ? '0 resultados'
+                : `Mostrando ${desde}–${hasta} de ${totalResultados} incidentes`}
+        </p>
+
+        <div className="incidentes-paginacion-controles">
+          <button
+            type="button"
+            onClick={paginaAnterior}
+            disabled={!puedeRetroceder}
+          >
+            Anterior
+          </button>
+
+          <span>
+            {cargando || error || totalPaginas === 0
+              ? 'Página —'
+              : `Página ${paginaActual} de ${totalPaginas}`}
+          </span>
+
+          <button
+            type="button"
+            onClick={paginaSiguiente}
+            disabled={!puedeAvanzar}
+          >
+            Siguiente
+          </button>
+        </div>
+      </nav>
     </section>
   )
 }
