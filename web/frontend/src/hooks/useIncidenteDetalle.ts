@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { obtenerIncidenteDetalle } from '../services/incidentes.service'
 import type { Incidente } from '../types/incidente'
-import type { IncidenteDetalle } from '../types/incidenteDetalle'
+import type {
+  AsignacionActiva,
+  IncidenteDetalle,
+} from '../types/incidenteDetalle'
 
 interface ErrorDetalle {
   mensaje: string
@@ -171,6 +174,67 @@ export function useIncidenteDetalle(id: string | undefined) {
     })
   }
 
+  function actualizarAsignacionConfirmada(
+    asignacion: AsignacionActiva,
+  ) {
+    setResultado((actual) => {
+      if (
+        !actual ||
+        actual.clave !== claveConsulta ||
+        !actual.incidente ||
+        actual.incidente.id !== asignacion.incidenteId ||
+        !asignacion.activa
+      ) {
+        return actual
+      }
+
+      return {
+        ...actual,
+        incidente: {
+          ...actual.incidente,
+          asignacionActiva: asignacion,
+        },
+      }
+    })
+  }
+
+  function actualizarPrioridadConfirmada(confirmado: Incidente) {
+    const prioridad = confirmado.nivelPrioridad
+
+    if (
+      typeof prioridad !== 'number' ||
+      !Number.isInteger(prioridad) ||
+      prioridad < 1 ||
+      prioridad > 5
+    ) {
+      throw new Error(
+        'El servidor no devolvió una prioridad válida.',
+      )
+    }
+
+    setResultado((actual) => {
+      if (
+        !actual ||
+        actual.clave !== claveConsulta ||
+        !actual.incidente ||
+        actual.incidente.id !== confirmado.id
+      ) {
+        return actual
+      }
+
+      return {
+        ...actual,
+        incidente: {
+          ...actual.incidente,
+          nivelPrioridad: prioridad,
+          fechaActualizacion:
+            confirmado.fechaActualizacion ??
+            actual.incidente.fechaActualizacion,
+        },
+      }
+    })
+  }
+
   async function recargarDetalle(): Promise<void> {
     if (!id) {
       throw new Error('Falta el identificador del incidente.')
@@ -203,6 +267,8 @@ export function useIncidenteDetalle(id: string | undefined) {
     noEncontrado: resultadoActual?.noEncontrado ?? false,
     reintentar,
     actualizarEstadoConfirmado,
+    actualizarAsignacionConfirmada,
+    actualizarPrioridadConfirmada,
     recargarDetalle,
   }
 }

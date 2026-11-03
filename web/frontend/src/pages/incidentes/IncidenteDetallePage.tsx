@@ -1,6 +1,8 @@
 import { Link, useParams } from 'react-router-dom'
 import { useIncidenteDetalle } from '../../hooks/useIncidenteDetalle'
 import type { IncidenteDetalle } from '../../types/incidenteDetalle'
+import { AsignacionIncidente } from './AsignacionIncidente'
+import { CambioPrioridadIncidente } from './CambioPrioridadIncidente'
 import { CambioEstadoIncidente } from './CambioEstadoIncidente'
 import './IncidenteDetallePage.css'
 
@@ -193,6 +195,8 @@ export function IncidenteDetallePage() {
     noEncontrado,
     reintentar,
     actualizarEstadoConfirmado,
+    actualizarAsignacionConfirmada,
+    actualizarPrioridadConfirmada,
     recargarDetalle,
   } = useIncidenteDetalle(id)
 
@@ -234,6 +238,20 @@ export function IncidenteDetallePage() {
         ) : incidente ? (
           <>
             <DatosIncidente incidente={incidente} />
+
+            <div className="detalle-gestion-cuadricula">
+              <AsignacionIncidente
+                key={`asignacion-${incidente.id}`}
+                incidente={incidente}
+                alConfirmar={actualizarAsignacionConfirmada}
+              />
+
+              <CambioPrioridadIncidente
+                key={`prioridad-${incidente.id}`}
+                incidente={incidente}
+                alConfirmar={actualizarPrioridadConfirmada}
+              />
+            </div>
 
             <CambioEstadoIncidente
               key={incidente.id}

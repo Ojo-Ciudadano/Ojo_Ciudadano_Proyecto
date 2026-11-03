@@ -5,6 +5,7 @@ import type {
 } from '../types/incidente'
 import type { IncidenteDetalle } from '../types/incidenteDetalle'
 import type { EstadoIncidente } from '../config/transicionesIncidente'
+import type { AsignacionActiva } from '../types/incidenteDetalle'
 
 export async function obtenerIncidentes(
   signal?: AbortSignal,
@@ -100,6 +101,90 @@ export async function cambiarEstadoIncidente(
   ) {
     throw new Error(
       'No se pudo verificar el estado actualizado. Consulta nuevamente el incidente.',
+    )
+  }
+
+  return incidente
+}
+
+export const PRIORIDADES_INCIDENTE = [1, 2, 3, 4, 5] as const
+
+export type PrioridadIncidente =
+  (typeof PRIORIDADES_INCIDENTE)[number]
+
+export function esPrioridadIncidente(
+  valor: unknown,
+): valor is PrioridadIncidente {
+  return (
+    typeof valor === 'number' &&
+    (PRIORIDADES_INCIDENTE as readonly number[]).includes(valor)
+  )
+}
+
+export async function asignarResponsableIncidente(
+  incidenteId: string,
+  usuarioAsignadoId: string,
+): Promise<AsignacionActiva> {
+  if (!usuarioAsignadoId.trim()) {
+    throw new Error('Debes seleccionar un responsable.')
+  }
+
+  const response = await apiClient.patch<AsignacionActiva>(
+    `/incidentes/${encodeURIComponent(incidenteId)}/asignacion`,
+    {
+      usuarioAsignadoId,
+    },
+  )
+
+  const asignacion = response.data
+
+  if (
+    !asignacion ||
+    typeof asignacion !== 'object' ||
+    typeof asignacion.id !== 'string' ||
+    !asignacion.id.trim() ||
+    asignacion.incidenteId !== incidenteId ||
+    asignacion.usuarioAsignadoId !== usuarioAsignadoId ||
+    typeof asignacion.asignadoPorId !== 'string' ||
+    !asignacion.asignadoPorId.trim() ||
+    typeof asignacion.fechaAsignacion !== 'string' ||
+    Number.isNaN(Date.parse(asignacion.fechaAsignacion)) ||
+    asignacion.activa !== true
+  ) {
+    throw new Error(
+      'No se pudo verificar la asignación. Consulta nuevamente el incidente antes de reintentar.',
+    )
+  }
+
+  return asignacion
+}
+
+export async function cambiarPrioridadIncidente(
+  incidenteId: string,
+  nivelPrioridad: PrioridadIncidente,
+): Promise<Incidente> {
+  if (!esPrioridadIncidente(nivelPrioridad)) {
+    throw new Error('La prioridad debe ser un entero entre 1 y 5.')
+  }
+
+  const response = await apiClient.patch<Incidente>(
+    `/incidentes/${encodeURIComponent(incidenteId)}/prioridad`,
+    {
+      nivelPrioridad,
+    },
+  )
+
+  const incidente = response.data
+
+  if (
+    !incidente ||
+    typeof incidente !== 'object' ||
+    incidente.id !== incidenteId ||
+    !esPrioridadIncidente(incidente.nivelPrioridad) ||
+    incidente.nivelPrioridad !== nivelPrioridad
+  ) {
+    throw new Error(
+      'No se pudo verificar la prioridad. Consulta nuevamente el incidente antes de reintentar.',
     )
   }
 
