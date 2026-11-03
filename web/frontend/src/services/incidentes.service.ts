@@ -3,6 +3,7 @@ import type {
   FiltrosIncidentes,
   Incidente,
 } from '../types/incidente'
+import type { IncidenteDetalle } from '../types/incidenteDetalle'
 
 export async function obtenerIncidentes(
   signal?: AbortSignal,
@@ -36,4 +37,30 @@ export async function obtenerIncidentes(
   }
 
   return response.data
+}
+
+export async function obtenerIncidenteDetalle(
+  id: string,
+  signal?: AbortSignal,
+): Promise<IncidenteDetalle> {
+  const response = await apiClient.get<IncidenteDetalle>(
+    `/incidentes/${encodeURIComponent(id)}`,
+    { signal },
+  )
+
+  const incidente = response.data
+
+  if (
+    !incidente ||
+    typeof incidente !== 'object' ||
+    incidente.id !== id ||
+    typeof incidente.estadoId !== 'string' ||
+    !incidente.estadoId
+  ) {
+    throw new Error(
+      'El servidor devolvió un detalle de incidente inválido.',
+    )
+  }
+
+  return incidente
 }

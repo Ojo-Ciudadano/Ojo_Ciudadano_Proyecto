@@ -268,3 +268,20 @@
     padding: 14px 16px;
   }
 }
+
+/* Enlace al detalle del incidente */
+
+.incidente-folio a {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.incidente-folio a:hover {
+  color: #0b1f4d;
+}
+
+.incidente-folio a:focus-visible {
+  outline: 3px solid #f97316;
+  outline-offset: 4px;
+}
