@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useIncidentes } from '../../hooks/useIncidentes'
 import type { Incidente } from '../../types/incidente'
 import './IncidentesPage.css'
@@ -25,7 +26,14 @@ function TablaIncidentes({ incidentes }: { incidentes: Incidente[] }) {
         <tbody>
           {incidentes.map((incidente) => (
             <tr key={incidente.id} data-incidente-id={incidente.id}>
-              <td className="incidente-folio">{incidente.id}</td>
+              <td className="incidente-folio">
+                <Link
+                  to={`/incidentes/${encodeURIComponent(incidente.id)}`}
+                  aria-label={`Ver detalle del incidente ${incidente.id}`}
+                >
+                  {incidente.id}
+                </Link>
+              </td>
 
               <td>{texto(incidente.categoria?.nombre)}</td>
 

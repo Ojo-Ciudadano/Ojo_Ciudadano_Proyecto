@@ -5,6 +5,7 @@ import { LoginPage } from './pages/auth/LoginPage'
 import { HomePage } from './pages/home/HomePage'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { IncidentesPage } from './pages/incidentes/IncidentesPage'
+import { IncidenteDetallePage } from './pages/incidentes/IncidenteDetallePage'
 import { IncidentMapPage } from './pages/map/IncidentMapPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
@@ -67,6 +68,16 @@ function AppRoutes() {
           element={
             <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
               <IncidentesPage />
+            </RoleGuard>
+          }
+        />
+
+        {/* Detalle del incidente: exclusivo para ADMIN */}
+        <Route
+          path="incidentes/:id"
+          element={
+            <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
+              <IncidenteDetallePage />
             </RoleGuard>
           }
         />
