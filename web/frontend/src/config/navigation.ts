@@ -22,12 +22,15 @@ export function getInitialRouteForRoles(roles?: string[] | null): string {
   if (!Array.isArray(roles) || roles.length === 0) {
     return '/login'
   }
+
   if (roles.includes(ROLES.ADMIN)) {
     return '/dashboard'
   }
+
   if (roles.includes(ROLES.CIUDADANO)) {
     return '/'
   }
+
   return '/login'
 }
 
@@ -35,7 +38,10 @@ export function getInitialRouteForRoles(roles?: string[] | null): string {
  * Verifica si una lista de roles contiene al menos un rol válido del sistema.
  */
 export function hasKnownRole(roles?: string[] | null): boolean {
-  if (!Array.isArray(roles)) return false
+  if (!Array.isArray(roles)) {
+    return false
+  }
+
   return roles.includes(ROLES.ADMIN) || roles.includes(ROLES.CIUDADANO)
 }
 
@@ -49,11 +55,15 @@ export function isRoleAuthorized(
   if (!Array.isArray(userRoles) || userRoles.length === 0) {
     return false
   }
+
   return allowedRoles.some((allowed) => userRoles.includes(allowed))
 }
 
 /**
- * Reglas centralizadas de rutas y menú Web para Sprint 2 (Issue #130).
+ * Reglas centralizadas de rutas y menú Web.
+ *
+ * Issue #130: Protección y navegación según roles.
+ * Issue #147: Incorporar listado de usuarios para ADMIN.
  */
 export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
@@ -74,6 +84,18 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
     allowedRoles: [ROLES.ADMIN],
     section: 'main',
   },
+
+  /**
+   * Issue #147 - Listado de usuarios.
+   * Visible únicamente para administradores.
+   */
+  {
+    path: '/usuarios',
+    label: 'Usuarios',
+    allowedRoles: [ROLES.ADMIN],
+    section: 'main',
+  },
+
   {
     path: '/mapa',
     label: 'Mapa de incidentes',
@@ -98,8 +120,10 @@ export function getVisibleNavigation(
   if (!hasKnownRole(userRoles)) {
     return []
   }
+
   return NAVIGATION_RULES.filter((rule) => {
     const matchesSection = section ? rule.section === section : true
+
     return matchesSection && isRoleAuthorized(userRoles, rule.allowedRoles)
   })
 }

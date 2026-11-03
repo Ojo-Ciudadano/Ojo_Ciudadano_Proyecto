@@ -6,6 +6,7 @@ import { HomePage } from './pages/home/HomePage'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { IncidentesPage } from './pages/incidentes/IncidentesPage'
 import { IncidentMapPage } from './pages/map/IncidentMapPage'
+import { UsuariosPage } from './pages/usuarios/UsuariosPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
@@ -67,6 +68,16 @@ function AppRoutes() {
           element={
             <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
               <IncidentesPage />
+            </RoleGuard>
+          }
+        />
+
+        {/* Listado de usuarios: exclusivo para ADMIN - Issue #147 */}
+        <Route
+          path="usuarios"
+          element={
+            <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
+              <UsuariosPage />
             </RoleGuard>
           }
         />
