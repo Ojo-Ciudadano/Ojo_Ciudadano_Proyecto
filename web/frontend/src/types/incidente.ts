@@ -2,6 +2,7 @@ export interface Incidente {
   id: string
   categoriaId?: string | null
   estadoId?: string | null
+  fechaActualizacion?: string | null
   categoria?: {
     id?: string | null
     nombre?: string | null

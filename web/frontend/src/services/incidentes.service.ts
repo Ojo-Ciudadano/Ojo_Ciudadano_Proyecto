@@ -4,6 +4,7 @@ import type {
   Incidente,
 } from '../types/incidente'
 import type { IncidenteDetalle } from '../types/incidenteDetalle'
+import type { EstadoIncidente } from '../config/transicionesIncidente'
 
 export async function obtenerIncidentes(
   signal?: AbortSignal,
@@ -59,6 +60,46 @@ export async function obtenerIncidenteDetalle(
   ) {
     throw new Error(
       'El servidor devolvió un detalle de incidente inválido.',
+    )
+  }
+
+  return incidente
+}
+
+export interface CambioEstadoIncidente {
+  estado: EstadoIncidente
+  observacion: string
+}
+
+export async function cambiarEstadoIncidente(
+  id: string,
+  cambio: CambioEstadoIncidente,
+): Promise<Incidente> {
+  const observacion = cambio.observacion.trim()
+
+  if (!observacion) {
+    throw new Error('Debes ingresar una observación.')
+  }
+
+  const response = await apiClient.patch<Incidente>(
+    `/incidentes/${encodeURIComponent(id)}/estado`,
+    {
+      estado: cambio.estado,
+      observacion,
+    },
+  )
+
+  const incidente = response.data
+
+  if (
+    !incidente ||
+    typeof incidente !== 'object' ||
+    incidente.id !== id ||
+    typeof incidente.estadoId !== 'string' ||
+    !incidente.estadoId
+  ) {
+    throw new Error(
+      'No se pudo verificar el estado actualizado. Consulta nuevamente el incidente.',
     )
   }
 
