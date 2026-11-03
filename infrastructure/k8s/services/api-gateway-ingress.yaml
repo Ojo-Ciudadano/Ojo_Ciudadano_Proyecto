@@ -1,7 +1,7 @@
-# Ingress Single-Host (#129 / #158)
-# La Web y el API Gateway comparten el mismo host y origen para evitar
-# problemas de CORS/TLS y para que las llamadas /api/v1/* no las capture Nginx
-# del frontend (lo que provoca 405 Method Not Allowed en POST/PATCH/DELETE).
+# Ingress (Frontend Reverse Proxy)
+# Todo el trafico externo entra por path '/' hacia Nginx (web-frontend-svc).
+# Nginx se encarga internamente de redirigir /api/ al api-gateway-svc
+# para cumplir con la politica de seguridad (rke2-edu-ingress-hostname) de la UCT.
 #
 # Aprovisionamiento reproducible del Secret TLS (no versionado en Git):
 # 1. Generar par de claves autofirmado con CN y SAN para ojociudadano.dev.censei.cl:
@@ -36,16 +36,7 @@ spec:
   - host: ojociudadano.dev.censei.cl
     http:
       paths:
-      # Prefijo mas especifico: /api/v1/* y /api/docs se enrutan al API Gateway.
-      # No se reescribe la ruta: NestJS espera el prefijo /api/v1.
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: api-gateway-svc
-            port:
-              number: 3000
-      # Todo el resto (SPA React, /login, /assets/*) lo sirve Nginx del frontend.
+      # Todo el tráfico lo sirve Nginx del frontend (quien hará el proxy de /api internamente)
       - path: /
         pathType: Prefix
         backend:
