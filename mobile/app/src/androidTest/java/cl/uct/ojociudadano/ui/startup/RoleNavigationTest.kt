@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -167,39 +168,39 @@ class RoleNavigationTest {
         }
     }
 
-    @Test fun administratorOpensPendingManagementReturnsAndLogsOutWithoutProtectedHistory() {
+    @Test fun administratorOpensIncidentsReturnsAndLogsOutWithoutProtectedHistory() {
         val manager = DefaultSessionManager(Storage(session("ADMIN")))
         showGate(manager)
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
         compose.onNodeWithText("Panel de administración").assertIsDisplayed()
         compose.onNodeWithText("test@example.invalid").assertIsDisplayed()
         compose.onNodeWithText("Gestión de incidentes").performClick()
-        compose.onNodeWithText("Funcionalidad pendiente").assertIsDisplayed()
-        compose.onNodeWithText("Volver al panel").performClick()
+        compose.onNodeWithText("Listado de incidentes").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Volver").performClick()
         compose.onNodeWithText("Panel de administración").assertIsDisplayed()
         compose.onNodeWithText("Gestión de incidentes").performClick()
-        compose.onNodeWithText("Funcionalidad pendiente").assertIsDisplayed()
+        compose.onNodeWithText("Listado de incidentes").assertIsDisplayed()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("Panel de administración").assertIsDisplayed()
         compose.onNodeWithText("Cerrar sesión").performClick()
         compose.waitUntil(5_000) { manager.state.value == SessionState.Unauthenticated }
         compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
         compose.onNodeWithText("Panel de administración").assertDoesNotExist()
-        compose.onNodeWithText("Funcionalidad pendiente").assertDoesNotExist()
+        compose.onNodeWithText("Listado de incidentes").assertDoesNotExist()
         compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
     }
 
-    @Test fun invalidationWhileInPendingManagementRemovesAdministrativeNavigation() {
+    @Test fun invalidationWhileInIncidentsRemovesAdministrativeNavigation() {
         val manager = DefaultSessionManager(Storage(session("ADMIN")))
         showGate(manager)
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
         compose.onNodeWithText("Gestión de incidentes").performClick()
-        compose.onNodeWithText("Funcionalidad pendiente").assertIsDisplayed()
+        compose.onNodeWithText("Listado de incidentes").assertIsDisplayed()
         compose.runOnIdle {
             manager.invalidateIfCurrent(requireNotNull(manager.currentTokenSnapshot()))
         }
         compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
-        compose.onNodeWithText("Funcionalidad pendiente").assertDoesNotExist()
+        compose.onNodeWithText("Listado de incidentes").assertDoesNotExist()
         compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
     }
 
@@ -220,7 +221,7 @@ class RoleNavigationTest {
             }
             compose.waitForIdle()
             compose.onNodeWithText("Panel de administración").assertDoesNotExist()
-            compose.onNodeWithText("Funcionalidad pendiente").assertDoesNotExist()
+            compose.onNodeWithText("Listado de incidentes").assertDoesNotExist()
             compose.onNodeWithTag("citizen_home").assertIsDisplayed()
             compose.runOnIdle {
                 assertEquals(AppRoutes.HOME, controller.currentDestination?.route)
