@@ -15,7 +15,8 @@ class RoleAccessPolicyTest {
     private val citizenRoutes = listOf(AppRoutes.HOME, AppRoutes.REPORTS,
         AppRoutes.INCIDENT_DETAIL, "incident/test-id", "incident/id%2Fencoded",
         AppRoutes.CREATE_REPORT, AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE)
-    private val adminRoutes = listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS)
+    private val adminRoutes = listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS,
+        AppRoutes.ADMIN_INCIDENT_DETAIL, "admin/incidents/test-id", "admin/incidents/id%2Fencoded")
     private val routes = citizenRoutes + adminRoutes + listOf(AppRoutes.ROLE_UNAVAILABLE,
         AppRoutes.LOGIN, AppRoutes.REGISTER)
 
@@ -50,7 +51,8 @@ class RoleAccessPolicyTest {
 
     @Test fun `unknown and malformed routes are denied by default`() {
         for (route in listOf(null, "", "future_admin", "admin/anything", "incident/", "incident/a/b",
-            "incident/a?other=value", "incident/a#other")) {
+            "incident/a?other=value", "incident/a#other", "admin/incidents/", "admin/incidents/a/b",
+            "admin/incidents/a?other=value", "admin/incidents/a#other")) {
             assertFalse(RoleAccessPolicy.allows(state("CIUDADANO"), route))
             assertFalse(RoleAccessPolicy.allows(state("ADMIN"), route))
         }
