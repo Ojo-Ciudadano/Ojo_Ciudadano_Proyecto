@@ -6,6 +6,21 @@ import type {
 import type { IncidenteDetalle } from '../types/incidenteDetalle'
 import type { EstadoIncidente } from '../config/transicionesIncidente'
 
+/**
+ * Normaliza el payload de `GET /incidentes`.
+ *
+ * El contrato actual del backend entrega un arreglo plano de incidentes, por lo
+ * que no hay envelopes ni metadatos de paginación que interpretar. Devuelve
+ * `null` cuando el payload no es un listado válido.
+ */
+export function normalizarIncidentes(payload: unknown): Incidente[] | null {
+  if (!Array.isArray(payload)) {
+    return null
+  }
+
+  return payload as Incidente[]
+}
+
 export async function obtenerIncidentes(
   signal?: AbortSignal,
   filtros: Partial<FiltrosIncidentes> = {},
@@ -26,18 +41,33 @@ export async function obtenerIncidentes(
     params.comuna = comuna
   }
 
-  const response = await apiClient.get<Incidente[]>('/incidentes', {
+  const response = await apiClient.get<unknown>('/incidentes', {
     signal,
     params,
   })
 
-  if (!Array.isArray(response.data)) {
+  const incidentes = normalizarIncidentes(response.data)
+
+  if (!incidentes) {
     throw new Error(
       'El servidor devolvió una lista de incidentes inválida.',
     )
   }
 
-  return response.data
+  return incidentes
+}
+
+/**
+ * Obtiene los incidentes que alimentan los marcadores del mapa.
+ *
+ * Reutiliza `obtenerIncidentes` para compartir la normalización y respetar el
+ * cliente autenticado. La deduplicación por `id` ocurre al construir los
+ * marcadores, donde también se descartan las coordenadas inválidas.
+ */
+export function obtenerIncidentesParaMapa(
+  signal?: AbortSignal,
+): Promise<Incidente[]> {
+  return obtenerIncidentes(signal)
 }
 
 export async function obtenerIncidenteDetalle(
