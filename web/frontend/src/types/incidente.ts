@@ -16,6 +16,7 @@ export interface Incidente {
   categoriaId?: string | null
   estadoId?: string | null
   usuarioReportaId?: string | null
+  fechaActualizacion?: string | null
   categoria?: {
     id?: string | null
     nombre?: string | null

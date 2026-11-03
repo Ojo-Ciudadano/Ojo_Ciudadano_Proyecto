@@ -14,3 +14,20 @@ export class UpdateUsuarioRolDto {
   })
   rol!: Role;
 }
+
+export class UpdateUsuarioRolResponseDto {
+  @ApiProperty({
+    description: 'UUID del usuario actualizado',
+    format: 'uuid',
+    example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
+  })
+  id!: string;
+
+  @ApiProperty({
+    description: 'Lista actualizada con el nuevo rol vigente del usuario',
+    enum: Role,
+    isArray: true,
+    example: [Role.ADMIN],
+  })
+  roles!: Role[];
+}

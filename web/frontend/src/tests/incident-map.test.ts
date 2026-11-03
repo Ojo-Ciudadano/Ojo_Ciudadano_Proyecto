@@ -21,8 +21,7 @@ import {
   mapearIncidentesAMarcadores,
 } from '../components/map/incidentMarkers'
 import {
-  MAX_PAGINAS_MAPA,
-  extraerIncidentesDeRespuesta,
+  normalizarIncidentes,
   obtenerIncidentesParaMapa,
 } from '../services/incidentes.service'
 import { apiClient } from '../services/api'
@@ -266,78 +265,28 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
 
 describe('Normalización de respuestas de incidentes (#140)', () => {
   it('acepta el arreglo plano actual de la API', () => {
-    const pagina = extraerIncidentesDeRespuesta([incidenteBase])
-
-    assert.ok(pagina)
-    assert.deepEqual(pagina.incidentes, [incidenteBase])
-    assert.equal(pagina.totalPaginas, undefined)
+    assert.deepEqual(normalizarIncidentes([incidenteBase]), [incidenteBase])
   })
 
-  it('extrae listados y metadatos de envelopes paginados', () => {
-    const anidado = extraerIncidentesDeRespuesta({
-      data: {
-        items: [incidenteBase],
-        meta: { page: 2, totalPages: 3, total: 25 },
-      },
-    })
-
-    assert.ok(anidado)
-    assert.equal(anidado.incidentes.length, 1)
-    assert.equal(anidado.pagina, 2)
-    assert.equal(anidado.totalPaginas, 3)
-    assert.equal(anidado.total, 25)
-
-    const directo = extraerIncidentesDeRespuesta({
-      results: [incidenteBase],
-      totalPaginas: '4',
-    })
-
-    assert.ok(directo)
-    assert.equal(directo.totalPaginas, 4)
-
-    const dataArray = extraerIncidentesDeRespuesta({ data: [incidenteBase] })
-    assert.ok(dataArray)
-    assert.equal(dataArray.incidentes.length, 1)
-  })
-
-  it('rechaza respuestas sin un listado válido', () => {
-    assert.equal(extraerIncidentesDeRespuesta(null), null)
-    assert.equal(extraerIncidentesDeRespuesta(undefined), null)
-    assert.equal(extraerIncidentesDeRespuesta({ mensaje: 'sin datos' }), null)
-    assert.equal(extraerIncidentesDeRespuesta('texto'), null)
+  it('rechaza respuestas que no son un arreglo de incidentes', () => {
+    assert.equal(normalizarIncidentes(null), null)
+    assert.equal(normalizarIncidentes(undefined), null)
+    assert.equal(normalizarIncidentes({ mensaje: 'sin datos' }), null)
+    assert.equal(normalizarIncidentes({ data: [incidenteBase] }), null)
+    assert.equal(normalizarIncidentes('texto'), null)
   })
 })
 
 describe('Consulta de incidentes para el mapa (#140)', () => {
-  it('consolida varias páginas sin duplicados y refleja la actualización', async () => {
+  it('consulta el listado plano una sola vez y sin parámetros de paginación', async () => {
     const adapterOriginal = apiClient.defaults.adapter
-    const solicitadas: number[] = []
-
-    const paginas: Record<number, unknown> = {
-      1: {
-        data: {
-          items: [incidenteBase, { ...incidenteBase, id: 'INC-2' }],
-          meta: { page: 1, totalPages: 2 },
-        },
-      },
-      2: {
-        data: {
-          items: [
-            { ...incidenteBase, id: 'INC-2' },
-            { ...incidenteBase, id: 'INC-3', titulo: 'Corte de suministro' },
-          ],
-          meta: { page: 2, totalPages: 2 },
-        },
-      },
-    }
+    const solicitudes: unknown[] = []
 
     apiClient.defaults.adapter = async (config) => {
-      const params = (config.params ?? {}) as { page?: number }
-      const pagina = Number(params.page ?? 1)
-      solicitadas.push(pagina)
+      solicitudes.push(config.params)
 
       return {
-        data: paginas[pagina],
+        data: [incidenteBase, { ...incidenteBase, id: 'INC-2' }],
         status: 200,
         statusText: 'OK',
         headers: {},
@@ -350,16 +299,37 @@ describe('Consulta de incidentes para el mapa (#140)', () => {
 
       assert.deepEqual(
         incidentes.map((incidente) => incidente.id),
-        ['INC-1', 'INC-2', 'INC-3'],
+        ['INC-1', 'INC-2'],
       )
-      assert.deepEqual(solicitadas, [1, 2])
-      assert.ok(MAX_PAGINAS_MAPA >= 2)
+      assert.equal(solicitudes.length, 1)
+      assert.deepEqual(solicitudes[0], {})
 
       const marcadores = mapearIncidentesAMarcadores(incidentes)
-      assert.equal(marcadores.length, 3)
+      assert.equal(marcadores.length, 2)
       assert.deepEqual(
         marcadores.map((marcador) => marcador.id),
-        ['INC-1', 'INC-2', 'INC-3'],
+        ['INC-1', 'INC-2'],
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('rechaza respuestas que no son un arreglo de incidentes', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+
+    apiClient.defaults.adapter = async (config) => ({
+      data: { items: [incidenteBase] },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })
+
+    try {
+      await assert.rejects(
+        () => obtenerIncidentesParaMapa(),
+        /lista de incidentes inválida/i,
       )
     } finally {
       apiClient.defaults.adapter = adapterOriginal
