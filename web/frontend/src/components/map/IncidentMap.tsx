@@ -18,6 +18,11 @@ import './IncidentMap.css'
 
 const EMPTY_MARKERS: readonly IncidentMapMarker[] = []
 
+/** Marcador de Leaflet que conserva la identidad del incidente de origen. */
+interface IncidentCircleMarker extends L.CircleMarker {
+  incidentId?: string
+}
+
 interface IncidentMapProps {
   /**
    * Capa de marcadores. La pantalla puede pasar datos en el futuro sin
@@ -141,13 +146,20 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
     layer.clearLayers()
 
     for (const marcador of normalizarMarcadores(markers)) {
-      const circle = L.circleMarker([marcador.latitud, marcador.longitud], {
-        radius: 9,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: colorPorPrioridad(marcador.prioridad),
-        fillOpacity: 0.9,
-      })
+      const circle: IncidentCircleMarker = L.circleMarker(
+        [marcador.latitud, marcador.longitud],
+        {
+          radius: 9,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: colorPorPrioridad(marcador.prioridad),
+          fillOpacity: 0.9,
+        },
+      )
+
+      // La identidad queda disponible en la capa para futuras interacciones.
+      circle.incidentId = marcador.id
+      circle.bindTooltip(marcador.titulo, { direction: 'top', offset: [0, -8] })
 
       // Se construye el popup con nodos de texto para evitar inyección de HTML.
       const popup = document.createElement('div')

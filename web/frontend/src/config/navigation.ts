@@ -1,3 +1,4 @@
+
 import type { RoleName } from '../types'
 
 export interface NavigationRule {
@@ -12,13 +13,9 @@ export const ROLES: Record<RoleName, RoleName> = {
   CIUDADANO: 'CIUDADANO',
 }
 
-/**
- * Destino inicial por rol autenticado (Issue #130).
- * - ADMIN -> /dashboard (gestión administrativa)
- * - CIUDADANO -> / (inicio de reportes ciudadanos)
- * - Rol desconocido -> /login
- */
-export function getInitialRouteForRoles(roles?: string[] | null): string {
+export function getInitialRouteForRoles(
+  roles?: string[] | null,
+): string {
   if (!Array.isArray(roles) || roles.length === 0) {
     return '/login'
   }
@@ -34,9 +31,6 @@ export function getInitialRouteForRoles(roles?: string[] | null): string {
   return '/login'
 }
 
-/**
- * Verifica si una lista de roles contiene al menos un rol válido del sistema.
- */
 export function hasKnownRole(roles?: string[] | null): boolean {
   if (!Array.isArray(roles)) {
     return false
@@ -45,9 +39,6 @@ export function hasKnownRole(roles?: string[] | null): boolean {
   return roles.includes(ROLES.ADMIN) || roles.includes(ROLES.CIUDADANO)
 }
 
-/**
- * Verifica si los roles del usuario cumplen con los roles permitidos de una ruta.
- */
 export function isRoleAuthorized(
   userRoles: string[] | null | undefined,
   allowedRoles: readonly (RoleName | string)[],
@@ -69,12 +60,12 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
     path: '/',
     label: 'Inicio',
-    allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
+    allowedRoles: [ROLES.CIUDADANO],
     section: 'main',
   },
   {
     path: '/dashboard',
-    label: 'Dashboard',
+    label: 'Inicio',
     allowedRoles: [ROLES.ADMIN],
     section: 'main',
   },
@@ -84,18 +75,12 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
     allowedRoles: [ROLES.ADMIN],
     section: 'main',
   },
-
-  /**
-   * Issue #147 - Listado de usuarios.
-   * Visible únicamente para administradores.
-   */
   {
     path: '/usuarios',
     label: 'Usuarios',
     allowedRoles: [ROLES.ADMIN],
     section: 'main',
   },
-
   {
     path: '/mapa',
     label: 'Mapa de incidentes',
@@ -110,9 +95,6 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
   },
 ] as const
 
-/**
- * Filtra las opciones de menú visibles según los roles del usuario autenticado.
- */
 export function getVisibleNavigation(
   userRoles?: string[] | null,
   section?: 'main' | 'admin',
@@ -121,9 +103,18 @@ export function getVisibleNavigation(
     return []
   }
 
+  const esAdministrador = userRoles?.includes(ROLES.ADMIN) ?? false
+
   return NAVIGATION_RULES.filter((rule) => {
+    if (rule.path === '/' && esAdministrador) {
+      return false
+    }
+
     const matchesSection = section ? rule.section === section : true
 
-    return matchesSection && isRoleAuthorized(userRoles, rule.allowedRoles)
+    return (
+      matchesSection &&
+      isRoleAuthorized(userRoles, rule.allowedRoles)
+    )
   })
 }

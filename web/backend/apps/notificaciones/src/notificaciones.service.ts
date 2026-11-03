@@ -18,7 +18,37 @@ export class NotificacionesService {
   getHello(): string {
     return 'Hello World!';
   }
+  // Issue #114: obtener las notificaciones del usuario autenticado
+async obtenerMisNotificaciones(usuarioId: string) {
+  if (!isUUID(usuarioId, 'all')) {
+    throw new BadRequestException(
+      'El id de usuario debe ser un UUID valido',
+    );
+  }
 
+  try {
+    return await this.prisma.notificacion.findMany({
+      where: {
+        usuarioId,
+      },
+      orderBy: [
+        { fecha: 'desc' },
+        { id: 'desc' },
+      ],
+    });
+  } catch (error) {
+    const detalle =
+      error instanceof Error ? error.message : 'Error desconocido';
+
+    this.logger.error(
+      `Error al consultar notificaciones: ${detalle}`,
+    );
+
+    throw new InternalServerErrorException(
+      'No se pudieron obtener las notificaciones',
+    );
+  }
+}
   async create(dto: CreateNotificacionDto) {
     if (!isUUID(dto?.usuarioId, 'all')) {
       throw new BadRequestException(

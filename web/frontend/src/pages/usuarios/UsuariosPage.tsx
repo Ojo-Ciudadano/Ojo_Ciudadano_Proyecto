@@ -1,5 +1,21 @@
+
 import { useUsuarios } from '../../hooks/useUsuarios'
 import './UsuariosPage.css'
+
+
+function formatearFecha(fecha: string): string {
+  const valor = new Date(fecha)
+
+  if (Number.isNaN(valor.getTime())) {
+    return 'No disponible'
+  }
+
+  return valor.toLocaleDateString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
 
 export function UsuariosPage() {
   const {
@@ -12,20 +28,6 @@ export function UsuariosPage() {
     paginaAnterior,
     reintentar,
   } = useUsuarios()
-
-  function formatearFecha(fecha: string): string {
-    const valor = new Date(fecha)
-
-    if (Number.isNaN(valor.getTime())) {
-      return 'No disponible'
-    }
-
-    return valor.toLocaleDateString('es-CL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 
   return (
     <main className="usuarios-page">
@@ -96,8 +98,8 @@ export function UsuariosPage() {
                 <tbody>
                   {usuarios.map((usuario) => (
                     <tr
-                      key={usuario.id}
-                      data-usuario-id={usuario.id}
+                    key={usuario.id}
+                    data-usuario-id={usuario.id}
                     >
                       <td>{usuario.nombre}</td>
 
