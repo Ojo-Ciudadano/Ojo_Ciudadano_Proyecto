@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { obtenerIncidenteDetalle } from '../services/incidentes.service'
+import type { Incidente } from '../types/incidente'
 import type { IncidenteDetalle } from '../types/incidenteDetalle'
 
 interface ErrorDetalle {
@@ -134,11 +135,74 @@ export function useIncidenteDetalle(id: string | undefined) {
     setIntento((actual) => actual + 1)
   }
 
+  function actualizarEstadoConfirmado(confirmado: Incidente) {
+    const estadoIdConfirmado = confirmado.estadoId
+
+    if (
+      typeof estadoIdConfirmado !== 'string' ||
+      !estadoIdConfirmado.trim()
+    ) {
+      throw new Error(
+        'El servidor no devolvió un identificador de estado válido.',
+      )
+    }
+
+    setResultado((actual) => {
+      if (
+        !actual ||
+        actual.clave !== claveConsulta ||
+        !actual.incidente ||
+        actual.incidente.id !== confirmado.id
+      ) {
+        return actual
+      }
+
+      return {
+        ...actual,
+        incidente: {
+          ...actual.incidente,
+          estadoId: estadoIdConfirmado,
+          estado: confirmado.estado,
+          fechaActualizacion:
+            confirmado.fechaActualizacion ??
+            actual.incidente.fechaActualizacion,
+        },
+      }
+    })
+  }
+
+  async function recargarDetalle(): Promise<void> {
+    if (!id) {
+      throw new Error('Falta el identificador del incidente.')
+    }
+
+    const actualizado = await obtenerIncidenteDetalle(id)
+
+    setResultado((actual) => {
+      if (
+        !actual ||
+        actual.clave !== claveConsulta ||
+        actual.incidente?.id !== actualizado.id
+      ) {
+        return actual
+      }
+
+      return {
+        ...actual,
+        incidente: actualizado,
+        error: null,
+        noEncontrado: false,
+      }
+    })
+  }
+
   return {
     incidente: resultadoActual?.incidente ?? null,
     cargando: resultadoActual === null,
     error: resultadoActual?.error ?? null,
     noEncontrado: resultadoActual?.noEncontrado ?? false,
     reintentar,
+    actualizarEstadoConfirmado,
+    recargarDetalle,
   }
 }

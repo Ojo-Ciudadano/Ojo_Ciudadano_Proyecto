@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { useIncidenteDetalle } from '../../hooks/useIncidenteDetalle'
 import type { IncidenteDetalle } from '../../types/incidenteDetalle'
+import { CambioEstadoIncidente } from './CambioEstadoIncidente'
 import './IncidenteDetallePage.css'
 
 function texto(valor?: string | null): string {
@@ -45,7 +46,10 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
       </header>
 
       <div className="detalle-cuadricula">
-        <section className="detalle-tarjeta" aria-labelledby="detalle-datos">
+        <section
+          className="detalle-tarjeta"
+          aria-labelledby="detalle-datos"
+        >
           <h2 id="detalle-datos">Información general</h2>
 
           <dl className="detalle-datos">
@@ -53,10 +57,12 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
               <dt>Categoría</dt>
               <dd>{texto(incidente.categoria?.nombre)}</dd>
             </div>
+
             <div>
               <dt>Estado</dt>
               <dd>{texto(incidente.estado?.nombre)}</dd>
             </div>
+
             <div>
               <dt>Prioridad</dt>
               <dd>
@@ -65,10 +71,12 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
                   : `Nivel ${incidente.nivelPrioridad}`}
               </dd>
             </div>
+
             <div>
               <dt>Fecha de creación</dt>
               <dd>{fecha(incidente.fechaCreacion)}</dd>
             </div>
+
             <div>
               <dt>Última actualización</dt>
               <dd>{fecha(incidente.fechaActualizacion)}</dd>
@@ -76,7 +84,10 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
           </dl>
         </section>
 
-        <section className="detalle-tarjeta" aria-labelledby="detalle-ubicacion">
+        <section
+          className="detalle-tarjeta"
+          aria-labelledby="detalle-ubicacion"
+        >
           <h2 id="detalle-ubicacion">Ubicación</h2>
 
           <dl className="detalle-datos">
@@ -84,22 +95,27 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
               <dt>Región</dt>
               <dd>{texto(ubicacion?.region)}</dd>
             </div>
+
             <div>
               <dt>Comuna</dt>
               <dd>{texto(ubicacion?.comuna)}</dd>
             </div>
+
             <div>
               <dt>Sector</dt>
               <dd>{texto(ubicacion?.sector)}</dd>
             </div>
+
             <div>
               <dt>Dirección de referencia</dt>
               <dd>{texto(ubicacion?.direccionReferencia)}</dd>
             </div>
+
             <div>
               <dt>Latitud</dt>
               <dd>{coordenada(ubicacion?.latitud)}</dd>
             </div>
+
             <div>
               <dt>Longitud</dt>
               <dd>{coordenada(ubicacion?.longitud)}</dd>
@@ -117,7 +133,10 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
           </p>
         </section>
 
-        <section className="detalle-tarjeta" aria-labelledby="detalle-reportante">
+        <section
+          className="detalle-tarjeta"
+          aria-labelledby="detalle-reportante"
+        >
           <h2 id="detalle-reportante">Reportante</h2>
 
           <dl className="detalle-datos">
@@ -128,7 +147,10 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
           </dl>
         </section>
 
-        <section className="detalle-tarjeta" aria-labelledby="detalle-asignacion">
+        <section
+          className="detalle-tarjeta"
+          aria-labelledby="detalle-asignacion"
+        >
           <h2 id="detalle-asignacion">Asignación activa</h2>
 
           {asignacion?.activa ? (
@@ -137,10 +159,12 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
                 <dt>Identificador del responsable</dt>
                 <dd>{texto(asignacion.usuarioAsignadoId)}</dd>
               </div>
+
               <div>
                 <dt>Asignado por</dt>
                 <dd>{texto(asignacion.asignadoPorId)}</dd>
               </div>
+
               <div>
                 <dt>Fecha de asignación</dt>
                 <dd>{fecha(asignacion.fechaAsignacion)}</dd>
@@ -154,25 +178,29 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
         </section>
       </div>
 
-      {/* Las futuras acciones de gestión utilizarán el id y estadoId
-          confirmados del incidente. Evidencias e historial se integrarán
-          en sus respectivas secciones cuando se implementen esas issues. */}
+      {/* Evidencias e historial se integrarán en sus respectivas issues. */}
     </div>
   )
 }
 
 export function IncidenteDetallePage() {
   const { id } = useParams<{ id: string }>()
+
   const {
     incidente,
     cargando,
     error,
     noEncontrado,
     reintentar,
+    actualizarEstadoConfirmado,
+    recargarDetalle,
   } = useIncidenteDetalle(id)
 
   return (
-    <section className="detalle-pagina" aria-label="Detalle del incidente">
+    <section
+      className="detalle-pagina"
+      aria-label="Detalle del incidente"
+    >
       <Link className="detalle-volver" to="/incidentes">
         ← Volver a la tabla de incidentes
       </Link>
@@ -185,10 +213,15 @@ export function IncidenteDetallePage() {
         ) : noEncontrado ? (
           <div className="detalle-mensaje" role="status">
             <h1>Incidente no encontrado</h1>
-            <p>El incidente solicitado no existe o ya no está disponible.</p>
+            <p>
+              El incidente solicitado no existe o ya no está disponible.
+            </p>
           </div>
         ) : error ? (
-          <div className="detalle-mensaje detalle-error" role="alert">
+          <div
+            className="detalle-mensaje detalle-error"
+            role="alert"
+          >
             <h1>No se pudo consultar el incidente</h1>
             <p>{error.mensaje}</p>
 
@@ -199,7 +232,16 @@ export function IncidenteDetallePage() {
             )}
           </div>
         ) : incidente ? (
-          <DatosIncidente incidente={incidente} />
+          <>
+            <DatosIncidente incidente={incidente} />
+
+            <CambioEstadoIncidente
+              key={incidente.id}
+              incidente={incidente}
+              alConfirmar={actualizarEstadoConfirmado}
+              alConflicto={recargarDetalle}
+            />
+          </>
         ) : null}
       </div>
     </section>
