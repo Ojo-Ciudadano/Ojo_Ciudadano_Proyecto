@@ -1,3 +1,4 @@
+
 import type { RoleName } from '../types'
 
 export interface NavigationRule {
@@ -31,7 +32,9 @@ export function getInitialRouteForRoles(
 }
 
 export function hasKnownRole(roles?: string[] | null): boolean {
-  if (!Array.isArray(roles)) return false
+  if (!Array.isArray(roles)) {
+    return false
+  }
 
   return roles.includes(ROLES.ADMIN) || roles.includes(ROLES.CIUDADANO)
 }
@@ -47,6 +50,12 @@ export function isRoleAuthorized(
   return allowedRoles.some((allowed) => userRoles.includes(allowed))
 }
 
+/**
+ * Reglas centralizadas de rutas y menú Web.
+ *
+ * Issue #130: Protección y navegación según roles.
+ * Issue #147: Incorporar listado de usuarios para ADMIN.
+ */
 export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
     path: '/',
@@ -63,6 +72,12 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
     path: '/incidentes',
     label: 'Incidentes',
+    allowedRoles: [ROLES.ADMIN],
+    section: 'main',
+  },
+  {
+    path: '/usuarios',
+    label: 'Usuarios',
     allowedRoles: [ROLES.ADMIN],
     section: 'main',
   },

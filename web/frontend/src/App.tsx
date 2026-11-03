@@ -1,3 +1,4 @@
+
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { AppLayout } from './components/layout/AppLayout'
@@ -7,6 +8,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { IncidentesPage } from './pages/incidentes/IncidentesPage'
 import { IncidenteDetallePage } from './pages/incidentes/IncidenteDetallePage'
 import { IncidentMapPage } from './pages/map/IncidentMapPage'
+import { UsuariosPage } from './pages/usuarios/UsuariosPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
@@ -72,7 +74,17 @@ function AppRoutes() {
           }
         />
 
-        {/* Detalle del incidente: exclusivo para ADMIN */}
+        {/* Listado de usuarios: exclusivo para ADMIN - Issue #147 */}
+        <Route
+          path="usuarios"
+          element={
+            <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
+              <UsuariosPage />
+            </RoleGuard>
+          }
+        />
+
+        {/* Detalle del incidente: exclusivo para ADMIN - Issue #133 */}
         <Route
           path="incidentes/:id"
           element={
