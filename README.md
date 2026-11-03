@@ -96,7 +96,16 @@ npx prisma migrate status
 ```
 > El pipeline CI/CD **no** aplica migraciones automáticamente. Para la base de datos remota del clúster UCT se debe usar `kubectl port-forward` contra `postgres-incidentes-svc`. El procedimiento completo está en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md).
 
-### 7. Ejecución en Modo Desarrollo
+### 7. Cargar Seed de Ciudadanos Demo (#151)
+```bash
+cd web/backend/apps/auth-usuarios
+
+# Crea/actualiza el admin, los roles y los ciudadanos demo de forma idempotente
+npx prisma db seed
+```
+> Los usuarios demo, sus UUIDs fijos y la variable `DEMO_CITIZEN_PASSWORD` se detallan en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#5-seed-de-ciudadanos-demo-issue-151). Para poblar la base remota del clúster UCT se usa `kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez`.
+
+### 8. Ejecución en Modo Desarrollo
 Puedes iniciar cada servicio de forma individual según se requiera:
 
 ```bash
@@ -113,7 +122,7 @@ npm run start:dev incidentes
 npm run start:dev notificaciones
 ```
 
-### 8. Pruebas y Calidad de Código
+### 9. Pruebas y Calidad de Código
 ```bash
 # Ejecutar suite de pruebas unitarias
 npm test
