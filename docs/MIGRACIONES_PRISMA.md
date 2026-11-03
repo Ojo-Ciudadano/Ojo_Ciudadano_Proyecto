@@ -155,3 +155,71 @@ npx prisma migrate diff --from-config-datasource --to-schema ./prisma/schema.pri
 # Regeneración del cliente Prisma
 npx prisma generate
 ```
+
+---
+
+## 5. Seed de ciudadanos demo (Issue #151)
+
+El seed de Auth/Usuarios vive en `web/backend/apps/auth-usuarios/prisma/seed.ts` y está registrado en `prisma.config.ts`. Además del administrador y de los roles `ADMIN`/`CIUDADANO`, crea un conjunto acotado de ciudadanos ficticios con **UUID fijos y reproducibles**.
+
+### 5.1 Comando de ejecución local
+
+```bash
+cd web/backend/apps/auth-usuarios
+npx prisma db seed
+```
+
+El comando carga `web/backend/.env` (vía `prisma.config.ts`) y requiere `DATABASE_URL_AUTH`.
+
+### 5.2 Usuarios demo
+
+| Nombre | Correo | UUID fijo |
+| :--- | :--- | :--- |
+| Ciudadano Demo Uno | `ciudadano.demo1@ojociudadano.cl` | `a1b2c3d4-0001-4000-8000-000000000001` |
+| Ciudadana Demo Dos | `ciudadano.demo2@ojociudadano.cl` | `a1b2c3d4-0002-4000-8000-000000000002` |
+| Ciudadano Demo Tres | `ciudadano.demo3@ojociudadano.cl` | `a1b2c3d4-0003-4000-8000-000000000003` |
+
+Todos reciben el rol `CIUDADANO` mediante `UsuarioRol`. Los hashes se generan con `bcryptjs` y salt `10`, el mismo algoritmo usado por `auth.service.ts`.
+
+### 5.3 Contraseña de los usuarios demo
+
+La contraseña compartida se lee de la variable `DEMO_CITIZEN_PASSWORD` (definida en `web/backend/.env`):
+
+```bash
+# web/backend/.env
+DEMO_CITIZEN_PASSWORD=<contraseña-demo>
+```
+
+Si la variable no está definida o está vacía, el seed usa el fallback exclusivo de desarrollo local `CiudadanoDemo123!` y emite una advertencia. En entornos compartidos o remotos se debe definir un valor propio; no se versionan credenciales reales.
+
+### 5.4 Idempotencia
+
+El seed se puede ejecutar cualquier cantidad de veces:
+
+* Crea o actualiza los ciudadanos demo por su UUID fijo.
+* Reutiliza el hash existente cuando la contraseña configurada ya es válida, evitando escrituras innecesarias.
+* Asegura la relación `UsuarioRol` con `upsert`.
+* Si un correo demo ya existe asociado a **otro** UUID, no lo modifica: lo informa por consola y continúa. Así nunca sobrescribe usuarios ajenos al conjunto demo.
+
+Una segunda ejecución debe reportar `sin-cambios` para los tres ciudadanos y no debe aumentar el número de filas.
+
+### 5.5 Poblar la base remota en UCT
+
+El Service `postgres-auth-svc` es `ClusterIP`; para alcanzarlo desde fuera del clúster se abre un túnel:
+
+```bash
+# Terminal 1: mantener el túnel abierto
+kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez
+```
+
+```bash
+# Terminal 2: ejecutar el seed contra la base remota
+PG_PASS=$(kubectl -n student-daalvarez get secret backend-secrets -o jsonpath="{.data.postgres-auth}" | base64 -d)
+
+cd web/backend/apps/auth-usuarios
+DATABASE_URL_AUTH="postgresql://auth_user:${PG_PASS}@localhost:5432/auth_usuarios?schema=public" \
+DEMO_CITIZEN_PASSWORD="<contraseña-demo>" \
+npx prisma db seed
+```
+
+> Si el puerto `5432` local ya está ocupado por otra instancia de PostgreSQL, se puede mapear otro puerto (por ejemplo `55432:5432`) y ajustar la URL a `localhost:55432`. Las migraciones pendientes se aplican antes del seed con `npx prisma migrate deploy` usando la misma `DATABASE_URL_AUTH`.
