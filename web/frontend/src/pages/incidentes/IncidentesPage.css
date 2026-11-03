@@ -1,6 +1,7 @@
 .incidentes-pagina {
   width: 100%;
-  color: #121212;
+  min-width: 0;
+  color: #0b1f4d;
 }
 
 .incidentes-encabezado {
@@ -8,10 +9,10 @@
 }
 
 .incidentes-encabezado h1 {
-  margin: 0 0 10px;
-  color: #0b1f4d;
-  font-size: clamp(24px, 3vw, 32px);
+  margin: 0 0 12px;
+  font-size: clamp(26px, 3vw, 34px);
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .incidentes-encabezado p {
@@ -20,7 +21,91 @@
   line-height: 1.6;
 }
 
+/* Filtros */
+
+.incidentes-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+}
+
+.incidentes-filtro {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.incidentes-filtro label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0b1f4d;
+}
+
+.incidentes-filtro select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbd2dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #121212;
+  font: inherit;
+  font-size: 14px;
+}
+
+/* Botones */
+
+.incidentes-restablecer,
+.incidentes-paginacion button,
+.incidentes-error button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #0b1f4d;
+  border-radius: 8px;
+  background: #0b1f4d;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.incidentes-restablecer:hover:not(:disabled),
+.incidentes-paginacion button:hover:not(:disabled),
+.incidentes-error button:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.incidentes-restablecer:disabled,
+.incidentes-paginacion button:disabled {
+  background: #eef0f3;
+  border-color: #d8dde5;
+  color: #727985;
+  cursor: not-allowed;
+}
+
+.incidentes-filtro select:focus-visible,
+.incidentes-restablecer:focus-visible,
+.incidentes-paginacion button:focus-visible,
+.incidentes-error button:focus-visible {
+  outline: 3px solid #f97316;
+  outline-offset: 3px;
+}
+
+/* Tabla */
+
 .incidentes-tabla-contenedor {
+  width: 100%;
   overflow-x: auto;
   background: #fff;
   border: 1px solid #e3e5e8;
@@ -29,47 +114,58 @@
 
 .incidentes-tabla {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   text-align: left;
-  font-size: 14px;
 }
 
 .incidentes-tabla caption {
-  padding: 18px 20px;
-  text-align: left;
-  font-weight: 600;
+  padding: 20px;
   color: #0b1f4d;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  caption-side: top;
+}
+
+.incidentes-tabla thead {
+  background: #f4f5f7;
 }
 
 .incidentes-tabla th {
   padding: 16px 20px;
-  background: #f5f6f8;
-  color: #616875;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   border-bottom: 1px solid #e3e5e8;
+  color: #60646c;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .incidentes-tabla td {
   padding: 18px 20px;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid #e3e5e8;
+  color: #121212;
+  font-size: 14px;
+  line-height: 1.5;
+  vertical-align: middle;
 }
 
 .incidentes-tabla tbody tr:last-child td {
-  border-bottom: none;
+  border-bottom: 0;
 }
 
 .incidentes-tabla tbody tr:hover {
-  background: #fafbfe;
+  background: #f8fafc;
 }
 
-.incidente-folio {
+.incidentes-tabla td.incidente-folio {
+  min-width: 190px;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+  color: #1d4ed8;
   font-family: monospace;
   font-weight: 600;
-  color: #1d4ed8;
-  overflow-wrap: anywhere;
-  min-width: 180px;
 }
 
 .incidente-prioridad {
@@ -80,11 +176,11 @@
 }
 
 .incidente-prioridad-punto {
+  flex-shrink: 0;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #0b1f4d;
-  flex-shrink: 0;
 }
 
 .incidente-estado {
@@ -95,15 +191,23 @@
   color: #1d4ed8;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
+
+/* Carga, error y ausencia de resultados */
 
 .incidentes-mensaje {
   padding: 36px 24px;
-  background: #fff;
   border: 1px solid #e3e5e8;
   border-radius: 12px;
-  text-align: center;
+  background: #fff;
   color: #60646c;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.incidentes-mensaje p {
+  margin: 0;
 }
 
 .incidentes-error {
@@ -112,26 +216,55 @@
   color: #b91c1c;
 }
 
-.incidentes-error p {
-  margin: 0 0 16px;
-}
-
 .incidentes-error button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  background: #0b1f4d;
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
+  margin-top: 16px;
 }
 
-.incidentes-error button:hover {
-  background: #1d4ed8;
+/* Paginación */
+
+.incidentes-paginacion {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
 }
 
-.incidentes-error button:focus-visible {
-  outline: 3px solid #f97316;
-  outline-offset: 3px;
+.incidentes-resumen {
+  margin: 0;
+  color: #60646c;
+  font-size: 14px;
+}
+
+.incidentes-paginacion-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.incidentes-paginacion-controles span {
+  color: #0b1f4d;
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .incidentes-filtro {
+    flex-basis: 100%;
+  }
+
+  .incidentes-restablecer {
+    width: 100%;
+  }
+
+  .incidentes-paginacion {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .incidentes-tabla th,
+  .incidentes-tabla td {
+    padding: 14px 16px;
+  }
 }
