@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ApiGatewayModule } from './api-gateway.module';
 import { HttpExceptionFilter } from './filters/http-exception.filter';
 import { buildCorsOptions, parseCorsOrigins } from './config/cors.config';
+import { setupSwagger, SWAGGER_DOCS_PATH } from './config/swagger.config';
 
 export const GATEWAY_BODY_PARSER_LIMIT = '12mb';
 
@@ -23,8 +24,11 @@ async function bootstrap() {
   // Habilitar CORS restringido a la lista explícita de orígenes permitidos por entorno (#127)
   app.enableCors(buildCorsOptions(configService));
 
-  // Prefijo global de la API pública v1 (MM-06)
+  // Prefijo global de la API pública v1 (MM-06 / ADR #126)
   app.setGlobalPrefix('api/v1');
+
+  // Publicar documentación OpenAPI en /api/docs (#156)
+  setupSwagger(app);
 
   // Filtro global para formato uniforme de errores (MM-03)
   app.useGlobalFilters(new HttpExceptionFilter());
@@ -48,7 +52,7 @@ async function bootstrap() {
 
   await app.listen(port);
   logger.log(
-    `API Gateway corriendo en ${publicApiUrl}/api/v1 (CORS permitido para: ${allowedOrigins.join(', ')})`,
+    `API Gateway corriendo en ${publicApiUrl}/api/v1 | Swagger en ${publicApiUrl}/${SWAGGER_DOCS_PATH} (CORS permitido para: ${allowedOrigins.join(', ')})`,
   );
 }
 bootstrap();

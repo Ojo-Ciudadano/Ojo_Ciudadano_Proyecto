@@ -8,16 +8,27 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiExcludeEndpoint,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import type { Request } from 'express';
 
 import { NotificacionesService } from './notificaciones.service';
-import { CreateNotificacionDto } from './dto/create-notificacion.dto';
+import {
+  CreateNotificacionDto,
+  NotificacionResponseDto,
+} from './dto/create-notificacion.dto';
 import {
   JwtAuthGuard,
   UsuarioAutenticado,
 } from './auth/jwt-auth.guard';
 
+@ApiTags('Notificaciones')
 @Controller()
 export class NotificacionesController {
   constructor(
@@ -25,6 +36,7 @@ export class NotificacionesController {
   ) {}
 
   @Get()
+  @ApiExcludeEndpoint()
   getHello(): string {
     return this.notificacionesService.getHello();
   }
@@ -32,6 +44,21 @@ export class NotificacionesController {
   // Issue #114: consultar las notificaciones del usuario autenticado
   @Get('notificaciones')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Consultar las notificaciones del usuario autenticado',
+    description:
+      'Obtiene la lista de notificaciones pertenecientes exclusivamente al usuario autenticado (extraído del claim sub del token JWT), ordenadas por fecha descendente (#114). Acceso permitido para roles ADMIN y CIUDADANO.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Listado de notificaciones del usuario autenticado.',
+    type: [NotificacionResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Token Bearer JWT ausente, inválido o expirado.',
+  })
   async obtenerMisNotificaciones(
     @Req() req: Request & { user?: UsuarioAutenticado },
   ) {
@@ -43,6 +70,20 @@ export class NotificacionesController {
   // Issue #113: crear una notificacion
   @Post('notificaciones')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Registrar una nueva notificación para un usuario',
+    description:
+      'Crea y persiste una notificación vinculada a un usuario e incidente específico (#113).',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Notificación creada exitosamente.',
+    type: NotificacionResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'UUID de usuario/incidente inválido o mensaje vacío.',
+  })
   create(@Body() dto: CreateNotificacionDto) {
     return this.notificacionesService.create(dto);
   }
