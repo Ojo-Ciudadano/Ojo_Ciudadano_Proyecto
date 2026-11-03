@@ -51,7 +51,16 @@ export class IncidentesController {
   }
   
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          new BadRequestException('El id del incidente debe ser un UUID valido'),
+      }),
+    )
+    id: string,
+  ) {
     return this.incidentesService.findOne(id);
   }
 

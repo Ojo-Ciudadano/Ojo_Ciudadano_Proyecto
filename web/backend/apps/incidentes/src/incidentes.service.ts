@@ -6,7 +6,7 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
-
+import { toIncidenteDetalleResponse } from './mappers/incidente-detalle.mapper';
 import { isUUID } from 'class-validator';
 import { PrismaService } from './prisma/prisma.service';
 import { Prisma } from './generated/prisma/client';
@@ -77,10 +77,32 @@ export class IncidentesService {
   }
 
   async findOne(id: string) {
-    const incidente = await this.prisma.incidente.findUnique({ where: { id }, include });
+    if (!isUUID(id, 'all'))
+      throw new BadRequestException('El id del incidente debe ser un UUID valido');
+
+    const incidente = await this.prisma.incidente.findUnique({
+      where: { id },
+      include,
+    });
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
-    return toIncidenteResponse(incidente);
+
+    // El detalle reutiliza la misma logica de consulta del historial de #120,
+    // pero sin realizar una llamada HTTP interna al endpoint de historial.
+    const [historial, asignacionActiva] = await Promise.all([
+      this.obtenerHistorial(id),
+      this.prisma.asignacion.findFirst({
+        where: { incidenteId: id, activa: true },
+        orderBy: { fechaAsignacion: 'desc' },
+      }),
+    ]);
+
+    return toIncidenteDetalleResponse(
+      incidente,
+      historial,
+      asignacionActiva ? toAsignacionResponse(asignacionActiva) : null,
+    );
   }
+
   async findHistorial(id: string) {
     if (!isUUID(id, 'all'))
       throw new BadRequestException('El id del incidente debe ser un UUID valido');
@@ -92,8 +114,12 @@ export class IncidentesService {
     });
     if (!incidente) throw new NotFoundException(`Incidente ${id} no encontrado`);
 
+    return this.obtenerHistorial(id);
+  }
+
+  private async obtenerHistorial(incidenteId: string) {
     const historial = await this.prisma.historialEstado.findMany({
-      where: { incidenteId: id },
+      where: { incidenteId },
       include: { estado: true },
       // Orden cronologico ascendente y desempate determinista por id.
       orderBy: [{ fecha: 'asc' }, { id: 'asc' }],

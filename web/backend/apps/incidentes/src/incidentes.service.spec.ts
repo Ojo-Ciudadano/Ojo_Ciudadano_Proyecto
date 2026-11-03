@@ -31,7 +31,7 @@ const crearDto = (
 
 const evidencia = {
   id: 'evi-1',
-  incidenteId: 'inc-1',
+  incidenteId: INCIDENTE_ID,
   tipoMime: 'image/png',
   tamanoArchivo: 100,
   fechaCreacion: new Date('2026-10-22T12:00:00.000Z'),
@@ -52,6 +52,12 @@ describe('IncidentesService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    historialEstado: {
+      findMany: jest.fn(),
+    },
+    asignacion: {
+      findFirst: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -71,6 +77,8 @@ describe('IncidentesService', () => {
       id: ESTADO_ID,
       nombre: 'Nuevo',
     });
+    prisma.historialEstado.findMany.mockResolvedValue([]);
+    prisma.asignacion.findFirst.mockResolvedValue(null);
     prisma.$transaction.mockImplementation(
       async (callback: (tx: unknown) => unknown) => callback(tx),
     );
@@ -253,17 +261,19 @@ describe('IncidentesService', () => {
 
     it('findOne incluye evidencias asociadas', async () => {
       prisma.incidente.findUnique.mockResolvedValue({
-        id: 'inc-1',
+        id: INCIDENTE_ID,
         evidencias: [evidencia],
       });
-      const res = await service.findOne('inc-1');
+      const res = await service.findOne(INCIDENTE_ID);
       expect(res.evidencias).toHaveLength(1);
-      expect(res.evidencias[0].incidenteId).toBe('inc-1');
+      expect(res.evidencias[0].incidenteId).toBe(INCIDENTE_ID);
     });
 
     it('findOne mantiene el 404 cuando no existe', async () => {
       prisma.incidente.findUnique.mockResolvedValue(null);
-      await expect(service.findOne('x')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(INCIDENTE_ID)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
     describe('findAll con filtros', () => {

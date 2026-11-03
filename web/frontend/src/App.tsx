@@ -5,6 +5,7 @@ import { LoginPage } from './pages/auth/LoginPage'
 import { HomePage } from './pages/home/HomePage'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { IncidentesPage } from './pages/incidentes/IncidentesPage'
+import { IncidentMapPage } from './pages/map/IncidentMapPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
@@ -70,12 +71,12 @@ function AppRoutes() {
           }
         />
 
-        {/* Mapa territorial: disponible para ambos roles */}
+        {/* Mapa de incidentes: disponible para ambos roles */}
         <Route
           path="mapa"
           element={
             <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
-              <HomePage />
+              <IncidentMapPage />
             </RoleGuard>
           }
         />
