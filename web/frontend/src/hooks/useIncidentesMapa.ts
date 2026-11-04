@@ -40,12 +40,163 @@ export interface IncidentesMapaState {
   totalOmitidos: number
 }
 
+export interface EstadoDatosMapa {
+  incidentes: Incidente[]
+  coleccionOpciones: Incidente[]
+  incidenteSeleccionadoId: string | null
+}
+
+export interface EstadoDatosMapa {
+  incidentes: Incidente[]
+  coleccionOpciones: Incidente[]
+  incidenteSeleccionadoId: string | null
+}
+
+/**
+ * Procesa el resultado de una consulta vigente (#143).
+ *
+ * Si el incidente con popup abierto (`incidenteSeleccionadoId`) deja de estar
+ * representado en los marcadores válidos devueltos, limpia el estado
+ * dejándolo en `null` para que no se reabra al restablecer filtros.
+ */
+export function aplicarResultadoConsultaMapa(
+  estadoActual: EstadoDatosMapa,
+  datos: readonly Incidente[],
+  filtros: Partial<FiltrosMapaIncidentes>,
+): EstadoDatosMapa {
+  const { estadoId, categoriaId } = normalizarFiltrosMapa(filtros)
+  const sinFiltrosActivos = !estadoId && !categoriaId
+  const nuevosMarcadores = mapearIncidentesAMarcadores(datos)
+
+  return {
+    incidentes: [...datos],
+    coleccionOpciones: actualizarColeccionCatalogoMapa(
+      estadoActual.coleccionOpciones,
+      datos,
+      sinFiltrosActivos,
+    ),
+    incidenteSeleccionadoId: sincronizarIncidenteSeleccionado(
+      estadoActual.incidenteSeleccionadoId,
+      nuevosMarcadores,
+    ),
+  }
+}
+
+/**
+ * Controlador de estado del hook `useIncidentesMapa` que ejecuta las mismas
+ * transiciones de filtrado, restablecimiento y limpieza de `incidenteSeleccionadoId`.
+ */
+export function crearControladorIncidentesMapa() {
+  const coordinador = crearCoordinadorConsultasMapa()
+  let filtros: FiltrosMapaIncidentes = { ...FILTROS_MAPA_INICIALES }
+  let incidentes: Incidente[] = []
+  let coleccionOpciones: Incidente[] = []
+  let incidenteSeleccionadoId: string | null = null
+  let cargando = true
+  let error: ErrorMapa | null = null
+
+  async function ejecutarConsulta(): Promise<void> {
+    const consulta = coordinador.iniciarConsulta()
+    const { estadoId, categoriaId } = normalizarFiltrosMapa(filtros)
+
+    cargando = true
+    error = null
+
+    try {
+      const datos = await obtenerIncidentesParaMapa(consulta.signal, {
+        estadoId,
+        categoriaId,
+      })
+
+      if (!consulta.esVigente()) {
+        return
+      }
+
+      const siguienteEstado = aplicarResultadoConsultaMapa(
+        {
+          incidentes,
+          coleccionOpciones,
+          incidenteSeleccionadoId,
+        },
+        datos,
+        { estadoId, categoriaId },
+      )
+
+      incidentes = siguienteEstado.incidentes
+      coleccionOpciones = siguienteEstado.coleccionOpciones
+      incidenteSeleccionadoId = siguienteEstado.incidenteSeleccionadoId
+    } catch (err: unknown) {
+      if (!consulta.esVigente()) {
+        return
+      }
+
+      incidentes = []
+      incidenteSeleccionadoId = null
+      error = interpretarErrorMapa(err)
+    } finally {
+      if (consulta.esVigente()) {
+        cargando = false
+      }
+    }
+  }
+
+  return {
+    cargarInicial(): Promise<void> {
+      return ejecutarConsulta()
+    },
+    cambiarFiltro(
+      campo: keyof FiltrosMapaIncidentes,
+      valor: string,
+    ): Promise<void> {
+      filtros = {
+        ...filtros,
+        [campo]: valor,
+      }
+      return ejecutarConsulta()
+    },
+    restablecerFiltros(): Promise<void> {
+      filtros = restablecerFiltrosMapa()
+      return ejecutarConsulta()
+    },
+    seleccionarIncidente(id: string | null): void {
+      const marcadoresActuales = error
+        ? []
+        : mapearIncidentesAMarcadores(incidentes)
+      incidenteSeleccionadoId = sincronizarIncidenteSeleccionado(
+        id,
+        marcadoresActuales,
+      )
+    },
+    obtenerEstado() {
+      const marcadores = error ? [] : mapearIncidentesAMarcadores(incidentes)
+      const totalIncidentes = error ? 0 : incidentes.length
+      const totalGeorreferenciados = marcadores.length
+
+      return {
+        filtros: { ...filtros },
+        marcadores,
+        estados: obtenerOpcionesFiltroMapa(coleccionOpciones, 'estado'),
+        categorias: obtenerOpcionesFiltroMapa(coleccionOpciones, 'categoria'),
+        hayFiltros: tieneFiltrosMapaActivos(filtros),
+        cargando,
+        error,
+        incidenteSeleccionadoId,
+        totalIncidentes,
+        totalGeorreferenciados,
+        totalOmitidos: Math.max(0, totalIncidentes - totalGeorreferenciados),
+      }
+    },
+  }
+}
+
 /**
  * Consulta los incidentes con filtros opcionales por estado y categoría (#140, #143)
  * y los transforma en marcadores para el mapa.
  *
  * Cancela solicitudes en vuelo cuando el usuario modifica los filtros para
- * evitar que respuestas desactualizadas sobrescriban la selección más reciente.
+ * evitar que respuestas desactualizadas sobrescriban la selección más reciente
+ * y limpia `incidenteSeleccionadoId` cuando su incidente deja de estar
+ * representado en los resultados vigentes.
  */
 export function useIncidentesMapa(): IncidentesMapaState {
   const [filtros, setFiltros] = useState<FiltrosMapaIncidentes>(
@@ -88,12 +239,20 @@ export function useIncidentesMapa(): IncidentesMapaState {
           return
         }
 
+        const nuevosMarcadores = mapearIncidentesAMarcadores(datos)
+
         setIncidentes(datos)
         setColeccionOpciones((actual) =>
           actualizarColeccionCatalogoMapa(
             actual,
             datos,
             !estadoId && !categoriaId,
+          ),
+        )
+        setIncidenteSeleccionadoId((seleccionActual) =>
+          sincronizarIncidenteSeleccionado(
+            seleccionActual,
+            nuevosMarcadores,
           ),
         )
       } catch (err: unknown) {

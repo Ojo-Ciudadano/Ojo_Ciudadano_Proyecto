@@ -29,6 +29,9 @@ import {
   tieneFiltrosMapaActivos,
 } from '../components/map/incidentMarkers'
 import {
+  crearControladorIncidentesMapa,
+} from '../hooks/useIncidentesMapa'
+import {
   normalizarFiltrosMapa,
   normalizarIncidentes,
   obtenerIncidentesParaMapa,
@@ -687,5 +690,71 @@ describe('Filtros por estado y categoría en el mapa Web (#143)', () => {
       sincronizarIncidenteSeleccionado('INC-2', marcadoresFiltrados),
       'INC-2',
     )
+  })
+
+  it('limpia incidenteSeleccionadoId en el estado del hook al excluir el incidente y no reabre el popup al restablecer los filtros', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const catalogoCompleto: Incidente[] = [incidenteBase, incidenteSecundario]
+
+    apiClient.defaults.adapter = async (config) => {
+      const params = (config.params ?? {}) as Record<string, string>
+      const filtrados = catalogoCompleto.filter((inc) => {
+        const cumpleEstado = !params.estadoId || inc.estadoId === params.estadoId
+        const cumpleCategoria =
+          !params.categoriaId || inc.categoriaId === params.categoriaId
+        return cumpleEstado && cumpleCategoria
+      })
+
+      return {
+        data: filtrados,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      const controlador = crearControladorIncidentesMapa()
+
+      // 1. Carga inicial con INC-1 e INC-2 disponibles y se abre el popup de INC-1
+      await controlador.cargarInicial()
+      controlador.seleccionarIncidente('INC-1')
+      assert.equal(controlador.obtenerEstado().incidenteSeleccionadoId, 'INC-1')
+
+      // 2. Se aplica un filtro que excluye a INC-1 (solo queda INC-2):
+      // el popup se cierra y la selección almacenada queda en null
+      await controlador.cambiarFiltro('estadoId', ESTADO_ATENCION_ID)
+      let estado = controlador.obtenerEstado()
+      assert.deepEqual(
+        estado.marcadores.map((m) => m.id),
+        ['INC-2'],
+      )
+      assert.equal(estado.incidenteSeleccionadoId, null)
+
+      // 3. Se restablecen los filtros: INC-1 vuelve al mapa pero su popup permanece cerrado (null)
+      await controlador.restablecerFiltros()
+      estado = controlador.obtenerEstado()
+      assert.deepEqual(
+        estado.marcadores.map((m) => m.id),
+        ['INC-1', 'INC-2'],
+      )
+      assert.equal(estado.incidenteSeleccionadoId, null)
+
+      // 4. Si se abre nuevamente el popup de INC-1 y se aplica un filtro que lo mantiene visible,
+      // su selección y popup permanecen abiertos
+      controlador.seleccionarIncidente('INC-1')
+      assert.equal(controlador.obtenerEstado().incidenteSeleccionadoId, 'INC-1')
+
+      await controlador.cambiarFiltro('estadoId', ESTADO_NUEVO_ID)
+      estado = controlador.obtenerEstado()
+      assert.deepEqual(
+        estado.marcadores.map((m) => m.id),
+        ['INC-1'],
+      )
+      assert.equal(estado.incidenteSeleccionadoId, 'INC-1')
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
   })
 })

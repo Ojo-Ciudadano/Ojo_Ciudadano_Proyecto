@@ -166,26 +166,32 @@ export function IncidentMap({
     }
 
     const marcadoresNormalizados = normalizarMarcadores(markers)
+    const idPopupAbiertoEnMapa = openPopupIncidentIdRef.current
     const idPopupActivo =
       selectedMarkerId !== undefined
         ? selectedMarkerId
-        : openPopupIncidentIdRef.current
+        : idPopupAbiertoEnMapa
 
-    const cerrarPopupActual = debeCerrarPopupMapa(
-      idPopupActivo,
-      marcadoresNormalizados,
-    )
     const idPopupVigente = sincronizarIncidenteSeleccionado(
       idPopupActivo,
       marcadoresNormalizados,
     )
+
+    const cerrarPopupActual =
+      debeCerrarPopupMapa(
+        idPopupAbiertoEnMapa ?? idPopupActivo,
+        marcadoresNormalizados,
+      ) ||
+      (idPopupAbiertoEnMapa !== null && idPopupVigente === null)
 
     isSyncingLayersRef.current = true
 
     if (cerrarPopupActual) {
       map?.closePopup()
       openPopupIncidentIdRef.current = null
-      onSelectMarkerRef.current?.(null)
+      if (selectedMarkerId !== null) {
+        onSelectMarkerRef.current?.(null)
+      }
     } else {
       openPopupIncidentIdRef.current = idPopupVigente
     }
