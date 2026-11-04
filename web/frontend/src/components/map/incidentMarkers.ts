@@ -3,11 +3,28 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from './mapConfig'
-import type { Incidente } from '../../types/incidente'
+import { normalizarFiltrosMapa } from '../../services/incidentes.service'
+import type {
+  FiltrosMapaIncidentes,
+  Incidente,
+  OpcionCatalogoMapa,
+} from '../../types/incidente'
 
 export interface ErrorMapa {
   mensaje: string
   permiteReintentar: boolean
+}
+
+export const FILTROS_MAPA_INICIALES: FiltrosMapaIncidentes = {
+  estadoId: '',
+  categoriaId: '',
+}
+
+export interface ConsultaMapaActiva {
+  readonly id: number
+  readonly signal: AbortSignal
+  esVigente: () => boolean
+  cancelar: () => void
 }
 
 function textoOpcional(valor: unknown): string | undefined {
@@ -103,6 +120,155 @@ export function mapearIncidentesAMarcadores(
   }
 
   return normalizarMarcadores(marcadores)
+}
+
+/**
+ * Extrae las opciones únicas y válidas de un catálogo (`estado` o `categoria`)
+ * a partir de los incidentes cargados (#143).
+ */
+export function obtenerOpcionesFiltroMapa(
+  incidentes: readonly Incidente[] | null | undefined,
+  campo: 'estado' | 'categoria',
+): OpcionCatalogoMapa[] {
+  if (!Array.isArray(incidentes)) {
+    return []
+  }
+
+  const opciones = new Map<string, string>()
+
+  for (const incidente of incidentes) {
+    if (!incidente) {
+      continue
+    }
+
+    const relacion = incidente[campo]
+    const idCrudo =
+      relacion?.id ??
+      (campo === 'estado' ? incidente.estadoId : incidente.categoriaId)
+
+    const id = textoOpcional(idCrudo)
+    const nombre = textoOpcional(relacion?.nombre)
+
+    if (id && nombre) {
+      opciones.set(id, nombre)
+    }
+  }
+
+  return Array.from(opciones, ([id, nombre]) => ({ id, nombre })).sort((a, b) =>
+    a.nombre.localeCompare(b.nombre, 'es'),
+  )
+}
+
+/**
+ * Conserva la colección de referencia para los selectores de estado y categoría
+ * aunque una consulta filtrada devuelva un subconjunto o cero resultados (#143).
+ */
+export function actualizarColeccionCatalogoMapa(
+  catalogoActual: readonly Incidente[],
+  nuevosIncidentes: readonly Incidente[],
+  sinFiltrosActivos: boolean,
+): Incidente[] {
+  if (sinFiltrosActivos) {
+    return [...nuevosIncidentes]
+  }
+
+  if (catalogoActual.length === 0) {
+    return [...nuevosIncidentes]
+  }
+
+  const idsExistentes = new Set(catalogoActual.map((item) => item.id))
+  const combinados = [...catalogoActual]
+
+  for (const incidente of nuevosIncidentes) {
+    if (incidente?.id && !idsExistentes.has(incidente.id)) {
+      idsExistentes.add(incidente.id)
+      combinados.push(incidente)
+    }
+  }
+
+  return combinados
+}
+
+/** Indica si existe al menos un filtro de estado o categoría activo. */
+export function tieneFiltrosMapaActivos(
+  filtros?: Partial<FiltrosMapaIncidentes> | null,
+): boolean {
+  const { estadoId, categoriaId } = normalizarFiltrosMapa(filtros)
+  return Boolean(estadoId || categoriaId)
+}
+
+/** Devuelve una copia limpia de los filtros iniciales del mapa. */
+export function restablecerFiltrosMapa(): FiltrosMapaIncidentes {
+  return { ...FILTROS_MAPA_INICIALES }
+}
+
+/**
+ * Conserva el identificador del incidente con popup abierto únicamente si su
+ * marcador continúa presente tras actualizar los resultados filtrados (#143).
+ */
+export function sincronizarIncidenteSeleccionado(
+  incidenteSeleccionadoId: string | null | undefined,
+  marcadores: readonly IncidentMapMarker[] | null | undefined,
+): string | null {
+  const id = textoOpcional(incidenteSeleccionadoId)
+  if (!id) {
+    return null
+  }
+
+  const visibles = normalizarMarcadores(marcadores)
+  const sigueVisible = visibles.some((marcador) => marcador.id === id)
+
+  return sigueVisible ? id : null
+}
+
+/**
+ * Determina si debe cerrarse el popup actual porque su incidente dejó de estar
+ * representado en los marcadores visibles (#143).
+ */
+export function debeCerrarPopupMapa(
+  incidenteSeleccionadoId: string | null | undefined,
+  marcadores: readonly IncidentMapMarker[] | null | undefined,
+): boolean {
+  const id = textoOpcional(incidenteSeleccionadoId)
+  if (!id) {
+    return false
+  }
+
+  return sincronizarIncidenteSeleccionado(id, marcadores) === null
+}
+
+/**
+ * Coordina solicitudes concurrentes de filtrado en el mapa para cancelar
+ * consultas previas e impedir que respuestas tardías sobrescriban una selección
+ * más reciente (#143).
+ */
+export function crearCoordinadorConsultasMapa() {
+  let secuencia = 0
+  let controladorActual: AbortController | null = null
+
+  return {
+    iniciarConsulta(): ConsultaMapaActiva {
+      controladorActual?.abort()
+
+      secuencia += 1
+      const id = secuencia
+      const controller = new AbortController()
+      controladorActual = controller
+
+      return {
+        id,
+        signal: controller.signal,
+        esVigente: () => !controller.signal.aborted && secuencia === id,
+        cancelar: () => {
+          controller.abort()
+        },
+      }
+    },
+    cancelarActual(): void {
+      controladorActual?.abort()
+      controladorActual = null
+    },
+  }
 }
 
 function extraerStatus(error: unknown): number | undefined {

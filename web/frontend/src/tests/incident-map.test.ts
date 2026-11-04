@@ -16,11 +16,20 @@ import {
   type IncidentMapMarker,
 } from '../components/map/mapConfig'
 import {
+  FILTROS_MAPA_INICIALES,
+  actualizarColeccionCatalogoMapa,
+  crearCoordinadorConsultasMapa,
+  debeCerrarPopupMapa,
   interpretarErrorMapa,
   mapearIncidenteAMarcador,
   mapearIncidentesAMarcadores,
+  obtenerOpcionesFiltroMapa,
+  restablecerFiltrosMapa,
+  sincronizarIncidenteSeleccionado,
+  tieneFiltrosMapaActivos,
 } from '../components/map/incidentMarkers'
 import {
+  normalizarFiltrosMapa,
   normalizarIncidentes,
   obtenerIncidentesParaMapa,
 } from '../services/incidentes.service'
@@ -54,14 +63,52 @@ if (typeof globalThis.localStorage === 'undefined') {
   })
 }
 
+const ESTADO_NUEVO_ID = 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14'
+const ESTADO_ATENCION_ID = 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15'
+const CATEGORIA_INCENDIO_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+const CATEGORIA_ALUMBRADO_ID = 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16'
+
 const incidenteBase: Incidente = {
   id: 'INC-1',
   titulo: 'Incendio forestal',
   descripcion: 'Humo visible en el cerro',
   nivelPrioridad: 1,
+  estadoId: ESTADO_NUEVO_ID,
+  categoriaId: CATEGORIA_INCENDIO_ID,
+  estado: {
+    id: ESTADO_NUEVO_ID,
+    nombre: 'Nuevo',
+  },
+  categoria: {
+    id: CATEGORIA_INCENDIO_ID,
+    nombre: 'Incendio forestal',
+  },
   ubicacion: {
     latitud: -38.7359,
     longitud: -72.5904,
+    comuna: 'Temuco',
+    region: 'La Araucanía',
+  },
+}
+
+const incidenteSecundario: Incidente = {
+  id: 'INC-2',
+  titulo: 'Luminaria apagada en Av. Alemania',
+  descripcion: 'Poste sin suministro eléctrico',
+  nivelPrioridad: 3,
+  estadoId: ESTADO_ATENCION_ID,
+  categoriaId: CATEGORIA_ALUMBRADO_ID,
+  estado: {
+    id: ESTADO_ATENCION_ID,
+    nombre: 'En atención',
+  },
+  categoria: {
+    id: CATEGORIA_ALUMBRADO_ID,
+    nombre: 'Alumbrado público',
+  },
+  ubicacion: {
+    latitud: -38.74,
+    longitud: -72.6,
     comuna: 'Temuco',
     region: 'La Araucanía',
   },
@@ -366,5 +413,279 @@ describe('Consulta de incidentes para el mapa (#140)', () => {
     } finally {
       apiClient.defaults.adapter = adapterOriginal
     }
+  })
+})
+
+describe('Filtros por estado y categoría en el mapa Web (#143)', () => {
+  it('extrae valores e identificadores válidos de los catálogos existentes sin duplicados', () => {
+    const listado: Incidente[] = [
+      incidenteBase,
+      incidenteSecundario,
+      { ...incidenteBase, id: 'INC-DUPLICADO' },
+      {
+        ...incidenteBase,
+        id: 'INC-SIN-CATALOGO',
+        estadoId: '',
+        categoriaId: '',
+        estado: { id: '   ', nombre: '   ' },
+        categoria: null,
+      },
+    ]
+
+    const estados = obtenerOpcionesFiltroMapa(listado, 'estado')
+    const categorias = obtenerOpcionesFiltroMapa(listado, 'categoria')
+
+    assert.deepEqual(estados, [
+      { id: ESTADO_ATENCION_ID, nombre: 'En atención' },
+      { id: ESTADO_NUEVO_ID, nombre: 'Nuevo' },
+    ])
+
+    assert.deepEqual(categorias, [
+      { id: CATEGORIA_ALUMBRADO_ID, nombre: 'Alumbrado público' },
+      { id: CATEGORIA_INCENDIO_ID, nombre: 'Incendio forestal' },
+    ])
+  })
+
+  it('conserva las opciones del catálogo inicial cuando una consulta filtrada retorna menos o ningún resultado', () => {
+    const catalogoInicial = actualizarColeccionCatalogoMapa(
+      [],
+      [incidenteBase, incidenteSecundario],
+      true,
+    )
+    const trasFiltroVacio = actualizarColeccionCatalogoMapa(
+      catalogoInicial,
+      [],
+      false,
+    )
+
+    assert.equal(
+      obtenerOpcionesFiltroMapa(trasFiltroVacio, 'estado').length,
+      2,
+    )
+    assert.equal(
+      obtenerOpcionesFiltroMapa(trasFiltroVacio, 'categoria').length,
+      2,
+    )
+  })
+
+  it('normaliza, detecta y restablece los filtros de estado y categoría', () => {
+    assert.equal(tieneFiltrosMapaActivos(FILTROS_MAPA_INICIALES), false)
+    assert.equal(
+      tieneFiltrosMapaActivos({ estadoId: '  ', categoriaId: '' }),
+      false,
+    )
+
+    const normalizados = normalizarFiltrosMapa({
+      estadoId: `  ${ESTADO_NUEVO_ID}  `,
+      categoriaId: ` ${CATEGORIA_INCENDIO_ID} `,
+    })
+
+    assert.deepEqual(normalizados, {
+      estadoId: ESTADO_NUEVO_ID,
+      categoriaId: CATEGORIA_INCENDIO_ID,
+    })
+    assert.equal(tieneFiltrosMapaActivos(normalizados), true)
+    assert.deepEqual(restablecerFiltrosMapa(), FILTROS_MAPA_INICIALES)
+  })
+
+  it('consulta GET /incidentes con filtro individual por estado, por categoría, combinados y al restablecer', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const parametrosRecibidos: Record<string, string>[] = []
+
+    const catalogoCompleto: Incidente[] = [
+      incidenteBase,
+      incidenteSecundario,
+      {
+        ...incidenteBase,
+        id: 'INC-COORD-INVALIDA',
+        ubicacion: { latitud: 150, longitud: -72.59 },
+      },
+    ]
+
+    apiClient.defaults.adapter = async (config) => {
+      const params = (config.params ?? {}) as Record<string, string>
+      parametrosRecibidos.push({ ...params })
+
+      const filtrados = catalogoCompleto.filter((inc) => {
+        const cumpleEstado = !params.estadoId || inc.estadoId === params.estadoId
+        const cumpleCategoria =
+          !params.categoriaId || inc.categoriaId === params.categoriaId
+        return cumpleEstado && cumpleCategoria
+      })
+
+      return {
+        data: filtrados,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      // 1. Filtro individual por estado (excluye coordenadas inválidas)
+      const porEstado = await obtenerIncidentesParaMapa(undefined, {
+        estadoId: ESTADO_NUEVO_ID,
+      })
+      assert.deepEqual(parametrosRecibidos[0], { estadoId: ESTADO_NUEVO_ID })
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(porEstado).map((m) => m.id),
+        ['INC-1'],
+      )
+
+      // 2. Filtro individual por categoría
+      const porCategoria = await obtenerIncidentesParaMapa(undefined, {
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(parametrosRecibidos[1], {
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(porCategoria).map((m) => m.id),
+        ['INC-2'],
+      )
+
+      // 3. Filtros combinados simultáneos (estado + categoría)
+      const combinados = await obtenerIncidentesParaMapa(undefined, {
+        estadoId: ESTADO_ATENCION_ID,
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(parametrosRecibidos[2], {
+        estadoId: ESTADO_ATENCION_ID,
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(combinados).map((m) => m.id),
+        ['INC-2'],
+      )
+
+      // 4. Restablecer filtros recupera todos los incidentes georreferenciados válidos
+      const restablecidos = await obtenerIncidentesParaMapa(
+        undefined,
+        restablecerFiltrosMapa(),
+      )
+      assert.deepEqual(parametrosRecibidos[3], {})
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(restablecidos).map((m) => m.id),
+        ['INC-1', 'INC-2'],
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('evita que una respuesta desactualizada sobrescriba los resultados de una selección más reciente', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const coordinador = crearCoordinadorConsultasMapa()
+
+    let resolverPrimeraConsulta!: (datos: Incidente[]) => void
+    let notificarPrimeraEnVuelo!: () => void
+
+    const primeraSolicitudEnVuelo = new Promise<void>((resolve) => {
+      notificarPrimeraEnVuelo = resolve
+    })
+
+    apiClient.defaults.adapter = (config) => {
+      const params = (config.params ?? {}) as Record<string, string>
+
+      if (params.estadoId === ESTADO_NUEVO_ID) {
+        notificarPrimeraEnVuelo()
+        return new Promise((resolve) => {
+          resolverPrimeraConsulta = (datos) => {
+            resolve({
+              data: datos,
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              config,
+            })
+          }
+        })
+      }
+
+      return Promise.resolve({
+        data: [incidenteSecundario],
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      })
+    }
+
+    try {
+      let marcadoresEnPantalla: IncidentMapMarker[] = []
+
+      // 1. Inicia una primera consulta lenta (Estado = Nuevo) y espera a que esté en vuelo
+      const consultaAnterior = coordinador.iniciarConsulta()
+      const promesaAnterior = obtenerIncidentesParaMapa(consultaAnterior.signal, {
+        estadoId: ESTADO_NUEVO_ID,
+      })
+        .then((datos) => {
+          if (consultaAnterior.esVigente()) {
+            marcadoresEnPantalla = mapearIncidentesAMarcadores(datos)
+          }
+        })
+        .catch(() => {
+          // Si el adaptador rechaza por aborto, se ignora sin tocar el estado
+        })
+
+      await primeraSolicitudEnVuelo
+
+      // 2. El usuario cambia el filtro antes de que responda la primera solicitud
+      const consultaReciente = coordinador.iniciarConsulta()
+      assert.equal(consultaAnterior.signal.aborted, true)
+      assert.equal(consultaAnterior.esVigente(), false)
+      assert.equal(consultaReciente.esVigente(), true)
+
+      const datosRecientes = await obtenerIncidentesParaMapa(
+        consultaReciente.signal,
+        { estadoId: ESTADO_ATENCION_ID },
+      )
+      if (consultaReciente.esVigente()) {
+        marcadoresEnPantalla = mapearIncidentesAMarcadores(datosRecientes)
+      }
+
+      // 3. La primera consulta responde tardíamente, pero no reemplaza la selección reciente
+      resolverPrimeraConsulta([incidenteBase])
+      await promesaAnterior
+
+      assert.deepEqual(
+        marcadoresEnPantalla.map((m) => m.id),
+        ['INC-2'],
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('cierra el popup seleccionado si su marcador desaparece por los filtros y lo conserva si permanece visible', () => {
+    const marcadoresIniciales = mapearIncidentesAMarcadores([
+      incidenteBase,
+      incidenteSecundario,
+    ])
+    const marcadoresFiltrados = mapearIncidentesAMarcadores([
+      incidenteSecundario,
+    ])
+
+    // Inicialmente INC-1 tiene el popup abierto y está presente
+    assert.equal(debeCerrarPopupMapa('INC-1', marcadoresIniciales), false)
+    assert.equal(
+      sincronizarIncidenteSeleccionado('INC-1', marcadoresIniciales),
+      'INC-1',
+    )
+
+    // Al filtrar, INC-1 desaparece: debe cerrarse el popup
+    assert.equal(debeCerrarPopupMapa('INC-1', marcadoresFiltrados), true)
+    assert.equal(
+      sincronizarIncidenteSeleccionado('INC-1', marcadoresFiltrados),
+      null,
+    )
+
+    // Si el popup abierto era INC-2 y sigue en los resultados filtrados, se conserva
+    assert.equal(debeCerrarPopupMapa('INC-2', marcadoresFiltrados), false)
+    assert.equal(
+      sincronizarIncidenteSeleccionado('INC-2', marcadoresFiltrados),
+      'INC-2',
+    )
   })
 })
