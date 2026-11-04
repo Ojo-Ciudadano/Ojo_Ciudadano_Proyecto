@@ -8,6 +8,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
 class ApiServiceContractTest {
 
@@ -77,5 +78,17 @@ class ApiServiceContractTest {
             .any { it is Body }
 
         assertTrue(hasBody)
+    }
+
+    @Test
+    fun `getNotifications uses notifications endpoint with session tag`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "getNotifications" }
+
+        val get = requireNotNull(method.getAnnotation(GET::class.java))
+
+        assertEquals("api/v1/notificaciones", get.value)
+
+        assertTrue(method.parameterAnnotations[0].any { it is Tag })
     }
 }
