@@ -68,7 +68,6 @@ android {
 }
 
 dependencies {
-    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -93,7 +92,10 @@ dependencies {
     implementation(libs.coil.compose)
     testImplementation(libs.okhttp.mockwebserver)
 
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 }
