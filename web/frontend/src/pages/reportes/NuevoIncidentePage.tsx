@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import { REGIONES_COMUNAS } from '../../config/regionesComunas'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCategoriasReporte } from '../../hooks/useCategoriasReporte'
+import { useFotografiasReporte } from '../../hooks/useFotografiasReporte'
 import { useUbicacionReporte } from '../../hooks/useUbicacionReporte'
 import { crearIncidente } from '../../services/nuevoIncidente.service'
 import {
   sonCoordenadasValidas,
   type IncidenteCreado,
 } from '../../types/nuevoIncidente'
+import { FotografiasReporte } from './FotografiasReporte'
 import './NuevoIncidentePage.css'
 
 const REGION_REPORTE = 'La Araucanía'
@@ -57,6 +59,18 @@ export function NuevoIncidentePage() {
     solicitarUbicacion,
   } = useUbicacionReporte()
 
+  const {
+    fotografias,
+    erroresSeleccion,
+    subiendo,
+    agregarFotografias,
+    quitarFotografia,
+    bloquearSeleccion,
+    desbloquearSeleccion,
+    subirPendientes,
+    limpiarFotografias,
+  } = useFotografiasReporte()
+
   const [titulo, setTitulo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
@@ -70,6 +84,11 @@ export function NuevoIncidentePage() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [creado, setCreado] = useState<IncidenteCreado | null>(null)
+
+  // null indica que el flujo de fotografías aún no está completo.
+  const [totalFotografiasConfirmadas, setTotalFotografiasConfirmadas] =
+    useState<number | null>(null)
+
   const bloqueoEnvio = useRef(false)
 
   const categoriaValida = categorias.some(
@@ -91,13 +110,35 @@ export function NuevoIncidentePage() {
     ) &&
     sonCoordenadasValidas(coordenadas)
 
+  const ocupado = enviando || subiendo
+
   const puedeEnviar =
     formularioCompleto &&
-    !enviando &&
+    !ocupado &&
     !obteniendoUbicacion &&
     !cargandoCategorias &&
     !errorCategorias &&
     creado === null
+
+  async function completarFotografias(incidenteId: string) {
+    try {
+      const resultado = await subirPendientes(incidenteId)
+
+      if (!resultado) return
+
+      if (
+        resultado.fallidas === 0 &&
+        resultado.confirmadas === resultado.total
+      ) {
+        setTotalFotografiasConfirmadas(resultado.confirmadas)
+        limpiarFotografias()
+      }
+    } catch {
+      setError(
+        'El incidente ya está creado, pero no se pudo completar la subida de fotografías. Conservamos los archivos pendientes.',
+      )
+    }
+  }
 
   async function manejarEnvio(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -127,25 +168,56 @@ export function NuevoIncidentePage() {
     }
 
     bloqueoEnvio.current = true
+    bloquearSeleccion()
     setEnviando(true)
 
     try {
-      const incidente = await crearIncidente({
-        titulo,
-        descripcion,
-        categoriaId,
-        usuarioReportaId: user.id,
-        ubicacion: {
-          ...ubicacionDescriptiva,
-          region: REGION_REPORTE,
-          latitud: coordenadas.latitud,
-          longitud: coordenadas.longitud,
-        },
-      })
+      let incidente: IncidenteCreado
 
+      try {
+        incidente = await crearIncidente({
+          titulo,
+          descripcion,
+          categoriaId,
+          usuarioReportaId: user.id,
+          ubicacion: {
+            ...ubicacionDescriptiva,
+            region: REGION_REPORTE,
+            latitud: coordenadas.latitud,
+            longitud: coordenadas.longitud,
+          },
+        })
+      } catch (fallo: unknown) {
+        setError(mensajeErrorEnvio(fallo))
+        desbloquearSeleccion()
+        return
+      }
+
+      // Desde aquí no se vuelve a ejecutar la creación del incidente.
       setCreado(incidente)
-    } catch (fallo: unknown) {
-      setError(mensajeErrorEnvio(fallo))
+      await completarFotografias(incidente.id)
+    } finally {
+      bloqueoEnvio.current = false
+      setEnviando(false)
+    }
+  }
+
+  async function reintentarFotografias() {
+    if (
+      bloqueoEnvio.current ||
+      ocupado ||
+      !creado ||
+      totalFotografiasConfirmadas !== null
+    ) {
+      return
+    }
+
+    bloqueoEnvio.current = true
+    setEnviando(true)
+    setError(null)
+
+    try {
+      await completarFotografias(creado.id)
     } finally {
       bloqueoEnvio.current = false
       setEnviando(false)
@@ -157,36 +229,90 @@ export function NuevoIncidentePage() {
       className="nuevo-reporte-pagina"
       aria-labelledby="nuevo-reporte-titulo"
     >
-      <Link className="nuevo-reporte-volver" to="/">
-        ← Volver al inicio
-      </Link>
+      {!ocupado && (
+        <Link className="nuevo-reporte-volver" to="/">
+          ← Volver al inicio
+        </Link>
+      )}
 
       <header className="nuevo-reporte-encabezado">
         <h1 id="nuevo-reporte-titulo">Nuevo reporte</h1>
         <p>
           Reporta un incidente de la Región de La Araucanía.
-          Todos los campos del formulario son obligatorios.
+          Los datos del incidente y su ubicación son obligatorios.
+          Las fotografías son opcionales.
         </p>
       </header>
 
       {creado ? (
         <div
-          className="nuevo-reporte-exito"
-          role="status"
-          data-incidente-creado-id={creado.id}
+          className="nuevo-reporte-formulario"
+          aria-busy={ocupado}
         >
-          <h2>Reporte creado correctamente</h2>
-          <p>{titulo.trim()}</p>
-          <p>
-            Identificador: <strong>{creado.id}</strong>
-          </p>
-          <Link to="/">Volver al inicio</Link>
+          <div
+            className="nuevo-reporte-exito"
+            role="status"
+            data-incidente-creado-id={creado.id}
+          >
+            <h2>Reporte creado correctamente</h2>
+            <p>{titulo.trim()}</p>
+            <p>
+              Identificador: <strong>{creado.id}</strong>
+            </p>
+
+            {totalFotografiasConfirmadas !== null ? (
+              <p>
+                {totalFotografiasConfirmadas > 0
+                  ? `Se confirmó la subida de ${totalFotografiasConfirmadas} fotografía(s).`
+                  : 'El reporte se creó sin fotografías.'}
+              </p>
+            ) : (
+              <p>
+                El incidente está guardado. Estamos gestionando
+                sus fotografías.
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <p className="nuevo-reporte-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          {totalFotografiasConfirmadas === null && (
+            <FotografiasReporte
+              fotografias={fotografias}
+              erroresSeleccion={erroresSeleccion}
+              bloqueado={ocupado}
+              incidenteCreado
+              subiendo={subiendo}
+              alSeleccionar={agregarFotografias}
+              alQuitar={quitarFotografia}
+              alReintentar={() => {
+                void reintentarFotografias()
+              }}
+            />
+          )}
+
+          {!ocupado && (
+            <>
+              {totalFotografiasConfirmadas === null && (
+                <p>
+                  Si sales de esta página o la recargas, los archivos
+                  pendientes dejarán de estar disponibles para reintentar.
+                  El incidente creado se conservará.
+                </p>
+              )}
+              <Link to="/">Volver al inicio</Link>
+            </>
+          )}
         </div>
       ) : (
         <form
           className="nuevo-reporte-formulario"
           onSubmit={manejarEnvio}
-          aria-busy={enviando}
+          aria-busy={ocupado}
         >
           {error && (
             <p className="nuevo-reporte-error" role="alert">
@@ -194,7 +320,7 @@ export function NuevoIncidentePage() {
             </p>
           )}
 
-          <fieldset disabled={enviando}>
+          <fieldset disabled={ocupado}>
             <legend>Datos del incidente</legend>
 
             <div className="nuevo-reporte-campo">
@@ -271,7 +397,7 @@ export function NuevoIncidentePage() {
             </div>
           </fieldset>
 
-          <fieldset disabled={enviando}>
+          <fieldset disabled={ocupado}>
             <legend>Ubicación del incidente</legend>
 
             <p>
@@ -377,8 +503,21 @@ export function NuevoIncidentePage() {
             </div>
           </fieldset>
 
+          <FotografiasReporte
+            fotografias={fotografias}
+            erroresSeleccion={erroresSeleccion}
+            bloqueado={ocupado}
+            incidenteCreado={false}
+            subiendo={subiendo}
+            alSeleccionar={agregarFotografias}
+            alQuitar={quitarFotografia}
+            alReintentar={() => {
+              void reintentarFotografias()
+            }}
+          />
+
           <button type="submit" disabled={!puedeEnviar}>
-            {enviando ? 'Enviando reporte…' : 'Crear reporte'}
+            {ocupado ? 'Creando reporte…' : 'Crear reporte'}
           </button>
         </form>
       )}
