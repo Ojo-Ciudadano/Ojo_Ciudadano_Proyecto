@@ -6,6 +6,7 @@ import type {
 import type {
   AsignacionActiva,
   IncidenteDetalle,
+  RegistroHistorialIncidente,
 } from '../types/incidenteDetalle'
 import type { EstadoIncidente } from '../config/transicionesIncidente'
 
@@ -221,4 +222,53 @@ export async function cambiarPrioridadIncidente(
   }
 
   return incidente
+}
+
+export function normalizarHistorialIncidente(
+  payload: unknown,
+  incidenteId?: string,
+): RegistroHistorialIncidente[] | null {
+  if (!Array.isArray(payload)) {
+    return null
+  }
+
+  for (const item of payload) {
+    if (!item || typeof item !== 'object') {
+      return null
+    }
+
+    const registro = item as Partial<RegistroHistorialIncidente>
+
+    if (
+      typeof registro.id !== 'string' ||
+      !registro.id.trim() ||
+      typeof registro.incidenteId !== 'string' ||
+      !registro.incidenteId.trim() ||
+      (incidenteId && registro.incidenteId !== incidenteId)
+    ) {
+      return null
+    }
+  }
+
+  return payload as RegistroHistorialIncidente[]
+}
+
+export async function obtenerHistorialIncidente(
+  id: string,
+  signal?: AbortSignal,
+): Promise<RegistroHistorialIncidente[]> {
+  const response = await apiClient.get<unknown>(
+    `/incidentes/${encodeURIComponent(id)}/historial`,
+    { signal },
+  )
+
+  const historial = normalizarHistorialIncidente(response.data, id)
+
+  if (!historial) {
+    throw new Error(
+      'El servidor devolvió un historial de incidente inválido.',
+    )
+  }
+
+  return historial
 }

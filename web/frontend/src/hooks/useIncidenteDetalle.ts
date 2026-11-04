@@ -169,6 +169,7 @@ export function useIncidenteDetalle(id: string | undefined) {
           fechaActualizacion:
             confirmado.fechaActualizacion ??
             actual.incidente.fechaActualizacion,
+          historial: null,
         },
       }
     })
@@ -193,6 +194,7 @@ export function useIncidenteDetalle(id: string | undefined) {
         incidente: {
           ...actual.incidente,
           asignacionActiva: asignacion,
+          historial: null,
         },
       }
     })

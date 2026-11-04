@@ -7,6 +7,23 @@ export interface AsignacionActiva {
   activa: boolean
 }
 
+export interface EstadoHistorialIncidente {
+  id?: string | null
+  nombre?: string | null
+  orden?: number | null
+}
+
+export interface RegistroHistorialIncidente {
+  id: string
+  incidenteId: string
+  estado?: EstadoHistorialIncidente | null
+  usuarioId?: string | null
+  observacion?: string | null
+  fecha?: string | null
+  tipo?: string | null
+  tipoEvento?: string | null
+}
+
 export interface IncidenteDetalle {
   id: string
   titulo?: string | null
@@ -39,4 +56,5 @@ export interface IncidenteDetalle {
   } | null
 
   asignacionActiva?: AsignacionActiva | null
+  historial?: RegistroHistorialIncidente[] | null
 }
