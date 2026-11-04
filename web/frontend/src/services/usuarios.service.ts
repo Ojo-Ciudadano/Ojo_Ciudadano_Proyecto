@@ -1,6 +1,11 @@
 
 import { apiClient } from './api'
-import type { UsuariosListadoResponse } from '../types/usuario'
+import type {
+  UsuariosListadoResponse,
+  RolUsuario,
+  ActualizarRolUsuarioRequest,
+  ActualizarRolUsuarioResponse,
+} from '../types/usuario'
 
 // Issue #147: listado paginado de usuarios
 export async function obtenerUsuarios(
@@ -107,6 +112,38 @@ export async function obtenerCandidatosResponsables(
   if (!candidatosValidos) {
     throw new Error(
       'El servidor devolvió candidatos sin los datos o el rol requeridos.',
+    )
+  }
+
+  return resultado
+}
+
+// Issue #148: actualizar el rol de un usuario
+export async function actualizarRolUsuario(
+  usuarioId: string,
+  nuevoRol: RolUsuario,
+): Promise<ActualizarRolUsuarioResponse> {
+  const datos: ActualizarRolUsuarioRequest = {
+    rol: nuevoRol,
+  }
+
+  const response = await apiClient.patch<ActualizarRolUsuarioResponse>(
+    `/usuarios/${encodeURIComponent(usuarioId)}/rol`,
+    datos,
+  )
+
+  const resultado = response.data
+
+  // Validar que el backend confirmó el cambio solicitado
+  if (
+    !resultado ||
+    resultado.id !== usuarioId ||
+    !Array.isArray(resultado.roles) ||
+    resultado.roles.length !== 1 ||
+    resultado.roles[0] !== nuevoRol
+  ) {
+    throw new Error(
+      'El servidor no confirmó correctamente el cambio de rol.',
     )
   }
 
