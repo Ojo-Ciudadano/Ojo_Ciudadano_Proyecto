@@ -111,6 +111,55 @@ describe('Normalización y servicio de historial de incidentes (#149)', () => {
 })
 
 describe('Componente HistorialIncidente (#149)', () => {
+  it('vuelve a consultar el historial cuando cambia la versión tras una mutación', async () => {
+    const getOriginal = apiClient.get
+    let consultas = 0
+
+    apiClient.get = (async () => {
+      consultas += 1
+      return { data: REGISTROS_BASE }
+    }) as typeof apiClient.get
+
+    try {
+      let renderer!: TestRenderer.ReactTestRenderer
+
+      await act(async () => {
+        renderer = TestRenderer.create(
+          <HistorialIncidente
+            incidenteId={INCIDENTE_A}
+            historialIncluido={null}
+            versionHistorial={1}
+          />,
+        )
+      })
+      assert.equal(consultas, 1)
+
+      await act(async () => {
+        renderer.update(
+          <HistorialIncidente
+            incidenteId={INCIDENTE_A}
+            historialIncluido={null}
+            versionHistorial={2}
+          />,
+        )
+      })
+      assert.equal(consultas, 2)
+
+      await act(async () => {
+        renderer.update(
+          <HistorialIncidente
+            incidenteId={INCIDENTE_A}
+            historialIncluido={null}
+            versionHistorial={2}
+          />,
+        )
+      })
+      assert.equal(consultas, 2)
+    } finally {
+      apiClient.get = getOriginal
+    }
+  })
+
   it('reutiliza el historial incluido en el detalle (#125) sin hacer otra petición HTTP', async () => {
     const getOriginal = apiClient.get
     let llamadasHttp = 0

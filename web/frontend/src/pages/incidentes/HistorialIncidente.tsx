@@ -9,6 +9,7 @@ import type { RegistroHistorialIncidente } from '../../types/incidenteDetalle'
 interface HistorialIncidenteProps {
   incidenteId: string
   historialIncluido?: RegistroHistorialIncidente[] | null
+  versionHistorial?: number
 }
 
 interface ErrorHistorial {
@@ -150,6 +151,7 @@ export function interpretarErrorHistorial(error: unknown): ErrorHistorial {
 export function HistorialIncidente({
   incidenteId,
   historialIncluido,
+  versionHistorial = 0,
 }: HistorialIncidenteProps) {
   const [intento, setIntento] = useState(0)
   const [consultaIndependiente, setConsultaIndependiente] =
@@ -163,7 +165,11 @@ export function HistorialIncidente({
   const requiereConsultaIndependiente =
     historialDelDetalleValido === null
 
-  const claveConsulta = JSON.stringify([incidenteId, intento])
+  const claveConsulta = JSON.stringify([
+    incidenteId,
+    versionHistorial,
+    intento,
+  ])
 
   useEffect(() => {
     if (!requiereConsultaIndependiente) {

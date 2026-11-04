@@ -57,4 +57,5 @@ export interface IncidenteDetalle {
 
   asignacionActiva?: AsignacionActiva | null
   historial?: RegistroHistorialIncidente[] | null
+  historialVersion?: number
 }

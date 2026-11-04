@@ -185,6 +185,7 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
         key={`historial-${incidente.id}`}
         incidenteId={incidente.id}
         historialIncluido={incidente.historial}
+        versionHistorial={incidente.historialVersion}
       />
     </div>
   )

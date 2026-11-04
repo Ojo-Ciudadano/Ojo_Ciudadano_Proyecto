@@ -170,6 +170,7 @@ export function useIncidenteDetalle(id: string | undefined) {
             confirmado.fechaActualizacion ??
             actual.incidente.fechaActualizacion,
           historial: null,
+          historialVersion: (actual.incidente.historialVersion ?? 0) + 1,
         },
       }
     })
@@ -195,6 +196,7 @@ export function useIncidenteDetalle(id: string | undefined) {
           ...actual.incidente,
           asignacionActiva: asignacion,
           historial: null,
+          historialVersion: (actual.incidente.historialVersion ?? 0) + 1,
         },
       }
     })
