@@ -72,7 +72,7 @@ class AdminIncidentsScreenTest {
         compose.onNodeWithText("Ver detalle").assertDoesNotExist()
     }
 
-    @Test fun futureSelectionPassesRealIdWithoutCreatingADestination() {
+    @Test fun selectionPassesRealIdToDetailCallback() {
         var selected: String? = null
         compose.setContent {
             OjoCiudadanoTheme {
