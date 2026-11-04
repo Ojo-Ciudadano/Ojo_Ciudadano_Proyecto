@@ -11,6 +11,7 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
 import { ROLES, getInitialRouteForRoles } from './config/navigation'
+import { NuevoIncidentePage } from './pages/reportes/NuevoIncidentePage'
 
 /**
  * Destino inicial según el rol:
@@ -48,6 +49,15 @@ function AppRoutes() {
           element={
             <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
               <RoleHomeRedirect />
+            </RoleGuard>
+          }
+        />
+                {/* Nuevo reporte: exclusivo para CIUDADANO */}
+        <Route
+          path="reportes/nuevo"
+          element={
+            <RoleGuard allowedRoles={[ROLES.CIUDADANO]} redirectTo="/">
+              <NuevoIncidentePage />
             </RoleGuard>
           }
         />
