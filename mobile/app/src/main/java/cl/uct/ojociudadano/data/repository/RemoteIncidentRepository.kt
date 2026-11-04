@@ -1,5 +1,10 @@
 package cl.uct.ojociudadano.data.repository
 
+import cl.uct.ojociudadano.data.model.IncidentStatusTransitions
+import cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto
+import cl.uct.ojociudadano.data.remote.error.ApiException
+import cl.uct.ojociudadano.data.session.SessionState
+import cl.uct.ojociudadano.data.session.SessionRoles
 import cl.uct.ojociudadano.data.mapper.toCandidatePage
 import cl.uct.ojociudadano.data.mapper.toDomain
 import cl.uct.ojociudadano.data.mapper.toRequestDto
@@ -30,6 +35,19 @@ class RemoteIncidentRepository(
     private val apiService: ApiService,
     private val sessionManager: SessionManager
 ) : IncidentRepository {
+
+    override suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident {
+        require(IncidentStatusTransitions.isCanonical(status))
+        require(observation.isNotBlank())
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
+            apiService.updateIncidentStatus(
+                incidentId,
+                UpdateIncidentStatusRequestDto(status, observation.trim()),
+                identity.token
+            )
+        }
+        return response.toDomain()
+    }
 
     override suspend fun getIncidents(): List<Incident> {
         val response = withCurrentIdentity { identity ->
@@ -63,8 +81,19 @@ class RemoteIncidentRepository(
         return response.toDomain()
     }
 
-    private suspend fun <T> withCurrentIdentity(block: suspend (SessionIdentity) -> T): T {
+    private suspend fun <T> withCurrentIdentity(
+        requiredRole: UserRole? = null,
+        block: suspend (SessionIdentity) -> T
+    ): T {
         val identity = sessionManager.requireIdentity()
+        if (requiredRole != null) {
+            val session = (sessionManager.state.value as? SessionState.Authenticated)?.session
+            val roles = session?.roleState as? SessionRoles.Known
+            if (roles?.values?.contains(requiredRole) != true) {
+                throw ApiException.Http(403, emptyList(), null, null)
+            }
+            if (sessionManager.requireIdentity() != identity) throw SessionRequiredException()
+        }
         val result = executeApiCall { block(identity) }
         // A late response must not be published into another user's session.
         if (runCatching { sessionManager.requireIdentity() }.getOrNull() != identity) {

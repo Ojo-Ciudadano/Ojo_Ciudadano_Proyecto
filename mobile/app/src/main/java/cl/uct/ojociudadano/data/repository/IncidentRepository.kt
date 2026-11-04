@@ -12,6 +12,8 @@ import java.io.File
 
 interface IncidentRepository {
 
+    suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident
+
     suspend fun getIncidents(): List<Incident>
 
     suspend fun getCurrentUserIncidents(): List<Incident>
