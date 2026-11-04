@@ -251,25 +251,31 @@ class RemoteRepositoryTest {
         override suspend fun getUsuarios(
             page: Int?,
             limit: Int?,
-            rol: String?
+            rol: String?,
+            expectedSession: TokenSnapshot?
         ): PaginatedResponseDto<UsuarioDto> {
             throw NotImplementedError()
         }
 
-        override suspend fun getIncidentHistory(incidentId: String): List<HistorialEstadoDto> {
+        override suspend fun getIncidentHistory(
+            incidentId: String,
+            expectedSession: TokenSnapshot?
+        ): List<HistorialEstadoDto> {
             throw NotImplementedError()
         }
 
         override suspend fun assignResponsible(
             incidentId: String,
-            request: AssignResponsibleRequestDto
-        ): IncidentDto {
+            request: AssignResponsibleRequestDto,
+            expectedSession: TokenSnapshot?
+        ): AsignacionDto {
             throw NotImplementedError()
         }
 
         override suspend fun updatePriority(
             incidentId: String,
-            request: UpdatePriorityRequestDto
+            request: UpdatePriorityRequestDto,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             throw NotImplementedError()
         }

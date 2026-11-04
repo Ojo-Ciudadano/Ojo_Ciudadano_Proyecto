@@ -1,15 +1,23 @@
 package cl.uct.ojociudadano.data.repository
 
+import cl.uct.ojociudadano.data.mapper.toCandidatePage
 import cl.uct.ojociudadano.data.mapper.toDomain
 import cl.uct.ojociudadano.data.mapper.toRequestDto
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.ApiService
+import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
 import cl.uct.ojociudadano.data.remote.error.executeApiCall
 import cl.uct.ojociudadano.data.session.SessionIdentity
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionRequiredException
+import cl.uct.ojociudadano.data.session.UserRole
 import cl.uct.ojociudadano.data.session.requireIdentity
 import cl.uct.ojociudadano.domain.model.Evidence
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -17,9 +25,6 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.ResponseBody
 import java.io.File
-import cl.uct.ojociudadano.data.model.IncidentStateHistory
-import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
-import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
 
 class RemoteIncidentRepository(
     private val apiService: ApiService,
@@ -111,25 +116,40 @@ class RemoteIncidentRepository(
     }
 
     override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> {
-        val response = executeApiCall {
-            apiService.getIncidentHistory(incidentId)
+        val response = withCurrentIdentity { identity ->
+            apiService.getIncidentHistory(incidentId, identity.token)
         }
         return response.map { it.toDomain() }
     }
 
-    override suspend fun assignResponsible(incidentId: String, assignedUserId: String): Incident {
+    override suspend fun assignResponsible(
+        incidentId: String,
+        assignedUserId: String
+    ): IncidentAssignment {
         val request = AssignResponsibleRequestDto(usuarioAsignadoId = assignedUserId)
-        val response = executeApiCall {
-            apiService.assignResponsible(incidentId, request)
+        val response = withCurrentIdentity { identity ->
+            apiService.assignResponsible(incidentId, request, identity.token)
         }
         return response.toDomain()
     }
 
     override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
         val request = UpdatePriorityRequestDto(nivelPrioridad = priorityLevel)
-        val response = executeApiCall {
-            apiService.updatePriority(incidentId, request)
+        val response = withCurrentIdentity { identity ->
+            apiService.updatePriority(incidentId, request, identity.token)
         }
         return response.toDomain()
+    }
+
+    override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {
+        val response = withCurrentIdentity { identity ->
+            apiService.getUsuarios(
+                page = page,
+                limit = limit,
+                rol = UserRole.ADMIN.backendValue,
+                expectedSession = identity.token
+            )
+        }
+        return response.toCandidatePage()
     }
 }

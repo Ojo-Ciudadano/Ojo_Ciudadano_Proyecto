@@ -4,10 +4,13 @@ import cl.uct.ojociudadano.ui.home.HomeViewModel
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.data.model.IncidentStateHistory
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
@@ -174,11 +177,18 @@ class ReportsViewModelTest {
             throw NotImplementedError()
         }
 
-        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): Incident {
+        override suspend fun assignResponsible(
+            incidentId: String,
+            assignedUserId: String
+        ): IncidentAssignment {
             throw NotImplementedError()
         }
 
         override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
+            throw NotImplementedError()
+        }
+
+        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {
             throw NotImplementedError()
         }
     }
