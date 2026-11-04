@@ -64,6 +64,12 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
     section: 'main',
   },
   {
+    path: '/reportes/nuevo',
+    label: 'Nuevo reporte',
+    allowedRoles: [ROLES.CIUDADANO],
+    section: 'main',
+  },
+  {
     path: '/dashboard',
     label: 'Inicio',
     allowedRoles: [ROLES.ADMIN],
