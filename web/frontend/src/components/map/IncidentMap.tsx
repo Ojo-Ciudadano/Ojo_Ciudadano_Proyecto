@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -14,6 +14,12 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from './mapConfig'
+import {
+  ESTADO_SELECCION_INICIAL,
+  crearContenidoPopup,
+  crearContenidoTooltip,
+  reducirSeleccionPopup,
+} from './incidentPopup'
 import './IncidentMap.css'
 
 const EMPTY_MARKERS: readonly IncidentMapMarker[] = []
@@ -36,6 +42,11 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersLayerRef = useRef<L.LayerGroup | null>(null)
+  const selectedMarkerRef = useRef<IncidentCircleMarker | null>(null)
+  const [seleccion, despacharSeleccion] = useReducer(
+    reducirSeleccionPopup,
+    ESTADO_SELECCION_INICIAL,
+  )
   const [tileError, setTileError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
 
@@ -143,6 +154,9 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
       return
     }
 
+    // Al refrescar la capa se descarta cualquier popup seleccionado.
+    selectedMarkerRef.current = null
+    despacharSeleccion({ tipo: 'limpiar' })
     layer.clearLayers()
 
     for (const marcador of normalizarMarcadores(markers)) {
@@ -159,23 +173,37 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
 
       // La identidad queda disponible en la capa para futuras interacciones.
       circle.incidentId = marcador.id
-      circle.bindTooltip(marcador.titulo, { direction: 'top', offset: [0, -8] })
 
-      // Se construye el popup con nodos de texto para evitar inyección de HTML.
-      const popup = document.createElement('div')
-      popup.className = 'incident-map__popup'
+      // El tooltip recibe un nodo con `textContent` para que un título con
+      // etiquetas HTML se muestre como texto y no pueda inyectar marcado.
+      const tooltipNode = crearContenidoTooltip(marcador.titulo, document)
+      circle.bindTooltip(tooltipNode, { direction: 'top', offset: [0, -8] })
 
-      const titulo = document.createElement('strong')
-      titulo.textContent = marcador.titulo
-      popup.appendChild(titulo)
+      // El popup usa `textContent` en todos sus campos (sin `innerHTML`).
+      circle.bindPopup(crearContenidoPopup(marcador, document))
 
-      if (marcador.descripcion) {
-        const descripcion = document.createElement('p')
-        descripcion.textContent = marcador.descripcion
-        popup.appendChild(descripcion)
-      }
+      circle.on('popupopen', () => {
+        // Garantiza un único popup abierto al cambiar de marcador.
+        const anterior = selectedMarkerRef.current
+        if (anterior && anterior !== circle) {
+          anterior.closePopup()
+        }
 
-      circle.bindPopup(popup)
+        selectedMarkerRef.current = circle
+        despacharSeleccion({
+          tipo: 'seleccionar',
+          incidenteId: marcador.id,
+        })
+      })
+
+      circle.on('popupclose', () => {
+        if (selectedMarkerRef.current === circle) {
+          selectedMarkerRef.current = null
+        }
+
+        despacharSeleccion({ tipo: 'cerrar', incidenteId: marcador.id })
+      })
+
       circle.addTo(layer)
     }
   }, [markers, retryKey])
@@ -183,7 +211,10 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
   const rootClassName = ['incident-map', className].filter(Boolean).join(' ')
 
   return (
-    <div className={rootClassName}>
+    <div
+      className={rootClassName}
+      data-selected-incident-id={seleccion.incidenteSeleccionadoId ?? undefined}
+    >
       <div
         ref={containerRef}
         className="incident-map__canvas"
