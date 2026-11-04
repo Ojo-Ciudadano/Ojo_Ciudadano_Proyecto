@@ -9,4 +9,9 @@ export class ApiGatewayController {
   getHello(): string {
     return this.apiGatewayService.getHello();
   }
+
+  @Get('health')
+  health(): { status: 'ok' } {
+    return { status: 'ok' };
+  }
 }

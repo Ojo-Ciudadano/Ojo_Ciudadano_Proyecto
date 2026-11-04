@@ -9,4 +9,9 @@ export class AuthUsuariosController {
   getHello(): string {
     return this.authUsuariosService.getHello();
   }
+
+  @Get('health')
+  health(): { status: 'ok' } {
+    return { status: 'ok' };
+  }
 }

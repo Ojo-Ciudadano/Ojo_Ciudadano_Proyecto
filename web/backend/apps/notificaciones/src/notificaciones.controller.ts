@@ -41,6 +41,12 @@ export class NotificacionesController {
     return this.notificacionesService.getHello();
   }
 
+  @Get('health')
+  @ApiExcludeEndpoint()
+  health(): { status: 'ok' } {
+    return { status: 'ok' };
+  }
+
   // Issue #114: consultar las notificaciones del usuario autenticado
   @Get('notificaciones')
   @UseGuards(JwtAuthGuard)
