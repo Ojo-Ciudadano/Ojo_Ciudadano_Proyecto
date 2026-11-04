@@ -1,0 +1,46 @@
+$kind: http-request
+url: "{{baseUrl}}/incidentes"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "titulo": "Luminaria apagada en Av. Alemania",
+      "descripcion": "El poste de alumbrado público ubicado frente al campus se encuentra apagado desde hace dos noches.",
+      "categoriaId": "{{categoriaId}}",
+      "usuarioReportaId": "{{ciudadanoId}}",
+      "ubicacion": {
+        "latitud": -38.7359,
+        "longitud": -72.5904,
+        "direccionReferencia": "Av. Alemania 0422",
+        "comuna": "Temuco",
+        "region": "La Araucanía",
+        "sector": "Poniente"
+      }
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{ciudadanoToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 201 Created', function () {
+          pm.response.to.have.status(201);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Incidente creado en estado Nuevo con campos esenciales', function () {
+          pm.expect(jsonData).to.have.property('id').that.is.a('string');
+          pm.expect(jsonData).to.have.property('titulo', 'Luminaria apagada en Av. Alemania');
+          pm.expect(jsonData).to.have.property('categoriaId', pm.environment.get('categoriaId'));
+          pm.expect(jsonData).to.have.property('usuarioReportaId', pm.environment.get('ciudadanoId'));
+          pm.expect(jsonData).to.have.property('nivelPrioridad').that.is.a('number');
+          pm.expect(jsonData).to.have.property('estado').that.is.an('object');
+          pm.expect(jsonData.estado).to.have.property('nombre', 'Nuevo');
+          pm.expect(jsonData).to.have.property('evidencias').that.is.an('array');
+      });
+      pm.environment.set('incidenteId', jsonData.id);
+    language: text/javascript
+order: 2000

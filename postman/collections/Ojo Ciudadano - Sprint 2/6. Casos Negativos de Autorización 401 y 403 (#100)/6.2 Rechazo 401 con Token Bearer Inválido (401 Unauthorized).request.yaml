@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/incidentes"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{auth_secret_0m70}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 401 Unauthorized', function () {
+          pm.response.to.have.status(401);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Respuesta contiene ErrorResponseFormat para token inválido', function () {
+          pm.expect(jsonData).to.have.property('statusCode', 401);
+          pm.expect(jsonData).to.have.property('error', 'Unauthorized');
+      });
+    language: text/javascript
+order: 2000

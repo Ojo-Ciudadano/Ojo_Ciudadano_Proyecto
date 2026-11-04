@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/incidentes/{{incidenteId}}/evidencias"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: archivo
+      src:
+        - /C:/Users/sando/OneDrive/Imágenes/Capturas de pantalla/Prueba.png
+      description: Seleccionar una imagen local (JPEG, PNG o WebP <= 10 MB) antes de ejecutar
+      disabled: false
+auth:
+  type: bearer
+  credentials:
+    token: "{{ciudadanoToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 201 Created', function () {
+          pm.response.to.have.status(201);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Metadata de evidencia incluye campos esenciales sin exponer claveArchivo', function () {
+          pm.expect(jsonData).to.have.property('id').that.is.a('string');
+          pm.expect(jsonData).to.have.property('incidenteId', pm.environment.get('incidenteId'));
+          pm.expect(jsonData).to.have.property('tipoMime').that.is.oneOf(['image/jpeg', 'image/png', 'image/webp']);
+          pm.expect(jsonData).to.have.property('tamanoArchivo').that.is.a('number').and.is.above(0);
+          pm.expect(jsonData).to.have.property('fechaCreacion').that.is.a('string');
+          pm.expect(jsonData).to.have.property('url', `/evidencias/${jsonData.id}/archivo`);
+          pm.expect(jsonData).to.not.have.property('claveArchivo');
+      });
+      pm.environment.set('evidenciaId', jsonData.id);
+    language: text/javascript
+order: 1000

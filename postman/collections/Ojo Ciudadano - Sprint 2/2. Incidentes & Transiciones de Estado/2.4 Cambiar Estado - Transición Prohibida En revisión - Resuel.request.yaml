@@ -1,0 +1,32 @@
+$kind: http-request
+name: 2.4 Cambiar Estado - Transición Prohibida En revisión -> Resuelto (409 Conflict)
+url: "{{baseUrl}}/incidentes/{{incidenteId}}/estado"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "estado": "Resuelto",
+      "observacion": "Intento de transición prohibida saltando En atención"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 409 Conflict', function () {
+          pm.response.to.have.status(409);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Respuesta de error cumple ErrorResponseFormat (#116)', function () {
+          pm.expect(jsonData).to.have.property('statusCode', 409);
+          pm.expect(jsonData).to.have.property('error', 'Conflict');
+          pm.expect(jsonData).to.have.property('message');
+          pm.expect(jsonData).to.have.property('path');
+      });
+    language: text/javascript
+order: 4000
