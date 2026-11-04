@@ -77,29 +77,14 @@
   line-height: 1.5;
 }
 
-.incident-map__popup-titulo {
+.incident-map__popup strong {
   color: #0b1f4d;
   font-size: 14px;
-  overflow-wrap: anywhere;
 }
 
-.incident-map__popup-datos {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 10px;
+.incident-map__popup p {
   margin: 0;
-}
-
-.incident-map__popup-datos dt {
-  margin: 0;
-  color: #60646c;
-  font-weight: 600;
-}
-
-.incident-map__popup-datos dd {
-  margin: 0;
-  color: #121212;
-  overflow-wrap: anywhere;
+  color: #4b5563;
 }
 
 /* Ajustes visuales de los controles de Leaflet al tema del proyecto. */
