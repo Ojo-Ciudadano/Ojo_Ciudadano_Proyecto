@@ -14,6 +14,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
 import { ROLES, getInitialRouteForRoles } from './config/navigation'
 import { NuevoIncidentePage } from './pages/reportes/NuevoIncidentePage'
+import { NotificacionesPage } from './pages/notificaciones/NotificacionesPage'
 
 /**
  * Destino inicial según el rol:
@@ -110,6 +111,16 @@ function AppRoutes() {
           element={
             <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
               <IncidentMapPage />
+            </RoleGuard>
+          }
+        />
+
+        {/* Notificaciones: disponibles para ambos roles - Issue #145 */}
+        <Route
+          path="notificaciones"
+          element={
+            <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
+              <NotificacionesPage />
             </RoleGuard>
           }
         />

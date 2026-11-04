@@ -93,6 +93,12 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
     allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
     section: 'main',
   },
+    {
+    path: '/notificaciones',
+    label: 'Notificaciones',
+    allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
+    section: 'main',
+  },
   {
     path: '/admin',
     label: 'Usuarios y reglas',
