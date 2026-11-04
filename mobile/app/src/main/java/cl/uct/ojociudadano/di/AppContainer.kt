@@ -11,9 +11,11 @@ import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.data.repository.NotificationRepository
 import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
+import cl.uct.ojociudadano.data.repository.RemoteNotificationRepository
 import cl.uct.ojociudadano.data.session.DefaultSessionManager
 import cl.uct.ojociudadano.data.session.EncryptedSharedPreferencesSessionStorage
 import cl.uct.ojociudadano.data.session.SessionManager
@@ -61,6 +63,10 @@ class AppContainer(
 
     val incidentRepository: IncidentRepository by lazy {
         RemoteIncidentRepository(apiService, sessionManager)
+    }
+
+    val notificationRepository: NotificationRepository by lazy {
+        RemoteNotificationRepository(apiService, sessionManager)
     }
 
     /**
