@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/categorias"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{ciudadanoToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Catálogo de categorías no está vacío y contiene campos esenciales', function () {
+          pm.expect(jsonData).to.be.an('array').that.is.not.empty;
+          pm.expect(jsonData[0]).to.have.property('id').that.is.a('string');
+          pm.expect(jsonData[0]).to.have.property('nombre').that.is.a('string');
+          pm.expect(jsonData[0]).to.have.property('prioridadBase').that.is.a('number');
+      });
+      if (jsonData.length > 0) {
+          pm.environment.set('categoriaId', jsonData[0].id);
+      }
+    language: text/javascript
+order: 1000
