@@ -2,13 +2,14 @@ package cl.uct.ojociudadano.data.repository
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.domain.model.Evidence
 import okhttp3.ResponseBody
 import java.io.File
 
 interface IncidentRepository {
 
-    suspend fun getIncidents(): List<Incident>
+    suspend fun getIncidents(filters: IncidentFilters = IncidentFilters()): List<Incident>
 
     suspend fun getCurrentUserIncidents(): List<Incident>
 

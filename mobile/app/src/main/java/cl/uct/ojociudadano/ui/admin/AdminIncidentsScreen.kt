@@ -37,10 +37,21 @@ import cl.uct.ojociudadano.ui.reports.incidentDate
 fun AdminIncidentsScreen(onBack: () -> Unit) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: AdminIncidentsViewModel = viewModel(factory = remember(application) {
-        AdminIncidentsViewModelFactory(application.container.incidentRepository)
+        AdminIncidentsViewModelFactory(
+            incidentRepository = application.container.incidentRepository,
+            categoryRepository = application.container.categoryRepository
+        )
     })
     val state by model.state.collectAsState()
-    AdminIncidentsContent(state, onBack, model::loadIncidents)
+    AdminIncidentsContent(
+        state = state,
+        onBack = onBack,
+        onRetry = model::loadIncidents,
+        onEstadoSelected = model::selectEstado,
+        onComunaSelected = model::selectComuna,
+        onCategoriaSelected = model::selectCategoria,
+        onClearFilters = model::clearFilters
+    )
 }
 
 /** #104 can supply selection by real ID once its protected administrative destination exists. */
@@ -50,7 +61,11 @@ fun AdminIncidentsContent(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    onIncidentSelected: ((String) -> Unit)? = null
+    onIncidentSelected: ((String) -> Unit)? = null,
+    onEstadoSelected: (String?) -> Unit = {},
+    onComunaSelected: (String?) -> Unit = {},
+    onCategoriaSelected: (String?) -> Unit = {},
+    onClearFilters: () -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Incidentes", subtitle = "Administrador", onBack = onBack)
@@ -74,6 +89,15 @@ fun AdminIncidentsContent(
                     )
                 }
             }
+            item {
+                AdminIncidentFilterBar(
+                    state = state,
+                    onEstadoSelected = onEstadoSelected,
+                    onComunaSelected = onComunaSelected,
+                    onCategoriaSelected = onCategoriaSelected,
+                    onClearFilters = onClearFilters
+                )
+            }
             if (state.status == IncidentsUiState.Success) {
                 items(state.incidents, key = { it.id }) { incident ->
                     AdminIncidentCard(incident, onIncidentSelected)
@@ -83,7 +107,11 @@ fun AdminIncidentsContent(
                     IncidentLoadState(
                         state.status,
                         onRetry,
-                        emptyMessage = "Aún no hay incidentes para mostrar."
+                        emptyMessage = if (state.filters.isEmpty) {
+                            "Aún no hay incidentes para mostrar."
+                        } else {
+                            "No hay incidentes que coincidan con los filtros seleccionados."
+                        }
                     )
                 }
             }

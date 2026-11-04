@@ -36,6 +36,9 @@ interface ApiService {
     @GET("api/v1/incidentes")
     suspend fun getIncidents(
         @Query("usuarioReportaId") usuarioReportaId: String? = null,
+        @Query("estadoId") estadoId: String? = null,
+        @Query("categoriaId") categoriaId: String? = null,
+        @Query("comuna") comuna: String? = null,
         @Tag expectedSession: TokenSnapshot? = null
     ): List<IncidentDto>
 
