@@ -24,7 +24,7 @@ class ApiServiceContractTest {
     }
 
     @Test
-    fun `getIncidents uses incidents endpoint and optional user query`() {
+    fun `getIncidents uses incidents endpoint and optional filter queries`() {
         val method = ApiService::class.java.declaredMethods
             .single { it.name == "getIncidents" }
 
@@ -32,11 +32,13 @@ class ApiServiceContractTest {
 
         assertEquals("api/v1/incidentes", get.value)
 
-        val query = method.parameterAnnotations[0]
-            .filterIsInstance<Query>()
-            .single()
+        val queryValues = method.parameterAnnotations
+            .mapNotNull { params -> params.filterIsInstance<Query>().singleOrNull()?.value }
 
-        assertEquals("usuarioReportaId", query.value)
+        assertEquals(
+            listOf("usuarioReportaId", "estadoId", "categoriaId", "comuna"),
+            queryValues
+        )
     }
 
     @Test

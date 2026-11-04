@@ -7,6 +7,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.IncidentStatus
@@ -161,7 +162,7 @@ class AdminIncidentDetailViewModelTest {
                 throw exception
             }
         }
-        override suspend fun getIncidents(): List<Incident> = error("Must not query list")
+        override suspend fun getIncidents(filters: IncidentFilters): List<Incident> = error("Must not query list")
         override suspend fun getCurrentUserIncidents(): List<Incident> = error("Must not query own incidents")
         override suspend fun createIncident(input: CreateIncidentInput): Incident = error("Unused")
         override suspend fun uploadEvidence(incidenteId: String, file: File, mimeType: String): Evidence = error("Unused")

@@ -4,6 +4,7 @@ import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.error.ApiException
@@ -158,7 +159,7 @@ class EvidenceImageFetcherTest {
         var requestedId: String? = null
             private set
 
-        override suspend fun getIncidents(): List<Incident> = error("No usado")
+        override suspend fun getIncidents(filters: IncidentFilters): List<Incident> = error("No usado")
 
         override suspend fun getCurrentUserIncidents(): List<Incident> = error("No usado")
 

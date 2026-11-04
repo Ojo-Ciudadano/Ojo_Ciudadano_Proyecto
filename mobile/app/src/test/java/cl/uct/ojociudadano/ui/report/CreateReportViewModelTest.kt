@@ -11,6 +11,7 @@ import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.IncidentStatus
@@ -1871,7 +1872,7 @@ private class FakeIncidentRepository(
     val createInputs = mutableListOf<CreateIncidentInput>()
     val uploadAttempts = mutableListOf<UploadedEvidence>()
 
-    override suspend fun getIncidents(): List<Incident> = emptyList()
+    override suspend fun getIncidents(filters: IncidentFilters): List<Incident> = emptyList()
 
     override suspend fun getCurrentUserIncidents(): List<Incident> = emptyList()
 

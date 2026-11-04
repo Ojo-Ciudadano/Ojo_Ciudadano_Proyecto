@@ -1,6 +1,7 @@
 package cl.uct.ojociudadano.integration
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.mapper.toRequestDto
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.RetrofitClient
@@ -139,13 +140,13 @@ class AuthenticatedIncidentsFlowTest {
         val api = api()
         manager.establish(userB)
 
-        assertSessionFailure { api.getIncidents(userA.userId, oldToken) }
+        assertSessionFailure { api.getIncidents(usuarioReportaId = userA.userId, expectedSession = oldToken) }
         assertSessionFailure { api.createIncident(input.toRequestDto(userA.userId), oldToken) }
         // Even a new login returning the same JWT must reject queued old work.
         manager.establish(userA)
         assertSessionFailure { api.getIncidentById("incident-id", oldToken) }
         manager.logout()
-        assertSessionFailure { api.getIncidents(userA.userId, oldToken) }
+        assertSessionFailure { api.getIncidents(usuarioReportaId = userA.userId, expectedSession = oldToken) }
 
         assertEquals(0, server.requestCount)
     }
@@ -194,7 +195,7 @@ class AuthenticatedIncidentsFlowTest {
         manager.establish(userA)
         server.enqueue(MockResponse().setBody("[]"))
 
-        assertTrue(repository().getIncidents().isEmpty())
+        assertTrue(repository().getIncidents(IncidentFilters()).isEmpty())
 
         val request = takeRequest()
         assertEquals("/api/v1/incidentes", request.path)
@@ -207,7 +208,7 @@ class AuthenticatedIncidentsFlowTest {
         manager.establish(admin)
         server.enqueue(MockResponse().setBody("[${incidentJson(userB)}]"))
 
-        val incident = repository().getIncidents().single()
+        val incident = repository().getIncidents(IncidentFilters()).single()
 
         assertEquals("d0000000-0000-4000-8000-000000000004", incident.id)
         assertEquals(userB.userId, incident.reporterUserId)
@@ -263,7 +264,7 @@ class AuthenticatedIncidentsFlowTest {
         for (code in listOf(403, 503)) {
             server.enqueue(MockResponse().setResponseCode(code))
 
-            val failure = runCatching { repository().getIncidents() }.exceptionOrNull()
+            val failure = runCatching { repository().getIncidents(IncidentFilters()) }.exceptionOrNull()
 
             assertTrue(failure is ApiException.Http)
             assertEquals(code, (failure as ApiException.Http).statusCode)
@@ -337,7 +338,7 @@ class AuthenticatedIncidentsFlowTest {
     private suspend fun assertAllOperationsBlocked(repository: RemoteIncidentRepository) {
         assertSessionFailure { repository.getCurrentUserIncidents() }
         assertSessionFailure { repository.createIncident(input) }
-        assertSessionFailure { repository.getIncidents() }
+        assertSessionFailure { repository.getIncidents(IncidentFilters()) }
         assertSessionFailure { repository.getIncidentById("incident-id") }
     }
 

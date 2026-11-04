@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.data.repository
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.dto.CategoryDto
@@ -52,7 +53,7 @@ class RemoteRepositoryTest {
         )
         val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
-        val incidents = repository.getIncidents()
+        val incidents = repository.getIncidents(IncidentFilters())
 
         assertNull(apiService.lastReporterUserId)
         assertEquals(1, incidents.size)
@@ -67,6 +68,32 @@ class RemoteRepositoryTest {
         assertEquals("image/jpeg", evidence.mimeType)
         assertEquals(2048L, evidence.size)
         assertEquals("/evidencias/evidencia-1/archivo", evidence.fileUrl)
+    }
+
+    @Test
+    fun `getIncidents forwards selected filters and omits unselected criteria`() = runTest {
+        val apiService = FakeApiService(incidents = listOf(sampleIncidentDto()))
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+
+        repository.getIncidents(IncidentFilters(estadoId = "estado-1", categoriaId = "cat-1", comuna = "Temuco"))
+
+        assertNull(apiService.lastReporterUserId)
+        assertEquals("estado-1", apiService.lastEstadoId)
+        assertEquals("cat-1", apiService.lastCategoriaId)
+        assertEquals("Temuco", apiService.lastComuna)
+    }
+
+    @Test
+    fun `getIncidents with empty filters sends null criteria`() = runTest {
+        val apiService = FakeApiService(incidents = listOf(sampleIncidentDto()))
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+
+        repository.getIncidents(IncidentFilters())
+
+        assertNull(apiService.lastReporterUserId)
+        assertNull(apiService.lastEstadoId)
+        assertNull(apiService.lastCategoriaId)
+        assertNull(apiService.lastComuna)
     }
 
     @Test
@@ -87,7 +114,7 @@ class RemoteRepositoryTest {
         val api = FakeApiService(incidents = listOf(mine, other))
         val repository = RemoteIncidentRepository(api, testSessionManager())
         assertEquals(listOf(mine.id), repository.getCurrentUserIncidents().map { it.id })
-        assertEquals(2, repository.getIncidents().size)
+        assertEquals(2, repository.getIncidents(IncidentFilters()).size)
     }
 
     @Test
@@ -257,6 +284,15 @@ class RemoteRepositoryTest {
         var lastReporterUserId: String? = null
             private set
 
+        var lastEstadoId: String? = null
+            private set
+
+        var lastCategoriaId: String? = null
+            private set
+
+        var lastComuna: String? = null
+            private set
+
         var lastIncidentId: String? = null
             private set
 
@@ -265,9 +301,15 @@ class RemoteRepositoryTest {
 
         override suspend fun getIncidents(
             usuarioReportaId: String?,
+            estadoId: String?,
+            categoriaId: String?,
+            comuna: String?,
             expectedSession: TokenSnapshot?
         ): List<IncidentDto> {
             lastReporterUserId = usuarioReportaId
+            lastEstadoId = estadoId
+            lastCategoriaId = categoriaId
+            lastComuna = comuna
             return incidents
         }
 

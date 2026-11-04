@@ -8,6 +8,7 @@ import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.ApiService
@@ -31,9 +32,14 @@ class RemoteIncidentRepository(
     private val sessionManager: SessionManager
 ) : IncidentRepository {
 
-    override suspend fun getIncidents(): List<Incident> {
+    override suspend fun getIncidents(filters: IncidentFilters): List<Incident> {
         val response = withCurrentIdentity { identity ->
-            apiService.getIncidents(expectedSession = identity.token)
+            apiService.getIncidents(
+                estadoId = filters.estadoId,
+                categoriaId = filters.categoriaId,
+                comuna = filters.comuna,
+                expectedSession = identity.token
+            )
         }
         return response.map { it.toDomain() }
     }
@@ -41,7 +47,10 @@ class RemoteIncidentRepository(
     override suspend fun getCurrentUserIncidents(): List<Incident> {
         return withCurrentIdentity { identity ->
             // Defense in depth: never trust a server that accidentally ignores the query filter.
-            apiService.getIncidents(identity.userId, identity.token)
+            apiService.getIncidents(
+                usuarioReportaId = identity.userId,
+                expectedSession = identity.token
+            )
                 .map { it.toDomain() }
                 .filter { it.reporterUserId == identity.userId }
         }
