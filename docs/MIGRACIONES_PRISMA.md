@@ -230,11 +230,14 @@ npx prisma db seed
 
 El seed de Incidentes vive en `web/backend/apps/incidentes/prisma/seed.ts` y está registrado en `web/backend/apps/incidentes/prisma.config.ts` (`seed: "npx tsx prisma/seed.ts"`). Crea un conjunto acotado de incidentes georreferenciados en La Araucanía usando los ciudadanos demo de la Issue #151.
 
+> **Importante (entorno remoto/UCE/UCT):** La ejecución del seed contra el entorno remoto de producción/Kubernetes (UCT) **DEBE realizarse desde la máquina local** abriendo túneles mediante `kubectl port-forward` (`postgres-incidentes-svc` y `postgres-auth-svc`), debido a la **ausencia intencional de herramientas de desarrollo** (`prisma`, `node`, `ts-node`) dentro del contenedor de producción. **No** se ejecuta desde dentro del contenedor de la aplicación.
+
 ### 6.1 Requisitos previos
 
 1. La base de Incidentes debe tener las migraciones aplicadas.
-2. La base de Auth/Usuarios debe tener el seed de #151 ejecutado: los incidentes demo referencian los UUID fijos de `ciudadano.demo1`, `ciudadano.demo2` y `ciudadano.demo3`.
-3. `web/backend/.env` debe definir `DATABASE_URL_INCIDENTES` y `DATABASE_URL_AUTH`. El seed valida los ciudadanos en Auth/Usuarios antes de escribir en Incidentes; si no existen, aborta con un mensaje claro y no modifica la base de Incidentes.
+2. Los **catálogos son SOLO LECTURA**: deben existir previamente los **5 estados canónicos** (`Nuevo`, `En revisión`, `En atención`, `Resuelto`, `Cerrado`) y las **8 categorías requeridas** con su `prioridadBase` válido (1-5). Si faltan, el seed **abortará inmediatamente con código de salida 1** y **sin escribir ni alterar ningún registro** en la base de incidentes.
+3. La base de Auth/Usuarios debe tener el seed de #151 ejecutado: los incidentes demo referencian los UUID fijos de `ciudadano.demo1`, `ciudadano.demo2` y `ciudadano.demo3`.
+4. `web/backend/.env` debe definir `DATABASE_URL_INCIDENTES` y `DATABASE_URL_AUTH`. El seed valida los ciudadanos en Auth/Usuarios antes de cualquier escritura en Incidentes; si no existen o no tienen el rol `CIUDADANO`, aborta con un mensaje claro y no modifica la base de Incidentes.
 
 ### 6.2 Comando de ejecución local
 
@@ -243,18 +246,18 @@ cd web/backend/apps/incidentes
 npx prisma db seed
 ```
 
-Salida esperada en la primera ejecución:
+Salida esperada en la primera ejecución (catálogos ya existentes):
 
 ```text
 Seed de incidentes demo (#152) completado
-  Estados:     creados=5, actualizados=0, sin cambios=0
-  Categorías:  creados=8, actualizados=0, sin cambios=0
+  Estados vigentes (solo lectura): 5
+  Categorías vigentes (solo lectura): 8
   Ubicaciones: creados=10, actualizados=0, sin cambios=0
   Incidentes:  creados=10, actualizados=0, sin cambios=0
   Ciudadanos demo validados en auth-usuarios: 3
 ```
 
-En una segunda ejecución los contadores deben quedar en `sin cambios` para catálogos, ubicaciones e incidentes, sin aumentar el número de filas.
+En una segunda ejecución los contadores deben quedar en `sin cambios` para ubicaciones e incidentes, sin aumentar el número de filas. Los catálogos **no se crean ni modifican**.
 
 ### 6.3 Incidentes demo
 
@@ -275,14 +278,16 @@ La prioridad inicial se deriva siempre de `categoria.prioridadBase`, igual que e
 
 ### 6.4 Idempotencia y validaciones
 
-* Los estados se aseguran por su nombre canónico (`Nuevo`, `En revisión`, `En atención`, `Resuelto`, `Cerrado`).
-* Las categorías se reutilizan por nombre y se actualizan si su descripción, prioridad o canal oficial cambian.
-* Las 10 ubicaciones y los 10 incidentes usan UUID fijos (`d1520000-...` y `e1520000-...`). Antes de escribir se comparan campo a campo; solo se crea lo ausente y solo se actualiza lo que difiere.
-* Las definiciones locales se validan antes de conectar: UUID, estados canónicos, prioridades 1–5, coordenadas dentro de La Araucanía y referencias a ubicaciones/ciudadanos demo.
-* Los ciudadanos demo se validan en la base de Auth/Usuarios (existencia y rol `CIUDADANO`) antes de abrir la transacción de Incidentes.
-* Toda la escritura de catálogos, ubicaciones e incidentes ocurre en una sola transacción: si una validación o escritura falla, no queda un seed parcial.
+* **Catálogos SOLO LECTURA:** No se crean ni modifican estados ni categorías. Se consultan previamente en la base de datos; deben existir los 5 estados canónicos (`Nuevo`, `En revisión`, `En atención`, `Resuelto`, `Cerrado`) y las 8 categorías requeridas con `prioridadBase` válido (1-5). Si falta alguno, el seed **aborta inmediatamente con exit code 1** sin escribir ni alterar ningún registro.
+* Las 10 ubicaciones y los 10 incidentes usan UUID fijos (`d1520000-...` y `e1520000-...`). Antes de escribir se comparan campo a campo; solo se crea lo ausente y solo se actualiza lo que difiere (garantizando 0 escrituras/duplicados en ejecuciones sucesivas).
+* Las definiciones locales se validan antes de conectar: UUID, estados/categorías requeridos, **coordenadas geográficamente reales y coherentes dentro de La Araucanía** (comunas válidas: Temuco, Padre Las Casas, Villarrica, Angol, Nueva Imperial), referencias a ubicaciones/ciudadanos demo.
+* **Prioridad derivada:** `nivelPrioridad` se calcula leyendo directamente el `prioridadBase` de la categoría vigente existente en la BD (igual que `IncidentesService.create`).
+* Los ciudadanos demo se validan en la base de Auth/Usuarios (existencia y rol `CIUDADANO`) antes de cualquier escritura en Incidentes.
+* Toda la escritura de ubicaciones e incidentes ocurre en una sola transacción: si una validación o escritura falla, no queda un seed parcial.
 
 ### 6.5 Poblar la base remota en UCT
+
+> **Obligatorio:** La ejecución del seed contra el entorno remoto de producción/Kubernetes (UCT) **DEBE realizarse desde la máquina local**, abriendo túneles mediante `kubectl port-forward` (`postgres-incidentes-svc` y `postgres-auth-svc`), debido a la **ausencia intencional de herramientas de desarrollo** (`prisma`, `node`, `ts-node`) dentro del contenedor de producción.
 
 El seed necesita alcanzar **dos** Services `ClusterIP`: `postgres-incidentes-svc` (escritura) y `postgres-auth-svc` (validación de ciudadanos). Mantén dos túneles abiertos:
 

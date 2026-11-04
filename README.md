@@ -103,7 +103,7 @@ cd web/backend/apps/auth-usuarios
 # Crea/actualiza el admin, los roles y los ciudadanos demo de forma idempotente
 npx prisma db seed
 ```
-> Los usuarios demo, sus UUIDs fijos y la variable `DEMO_CITIZEN_PASSWORD` se detallan en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#5-seed-de-ciudadanos-demo-issue-151). Para poblar la base remota del clúster UCT se usa `kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez`.
+> Los usuarios demo, sus UUIDs fijos y la variable `DEMO_CITIZEN_PASSWORD` se detallan en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#5-seed-de-ciudadanos-demo-issue-151). **Para ejecutar el seed contra el entorno remoto de producción/Kubernetes (UCT), DEBE realizarse desde la máquina local** abriendo un túnel con `kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez` (debido a la ausencia intencional de herramientas de desarrollo como `prisma`, `node` o `ts-node` dentro del contenedor de producción).
 
 ### 8. Cargar Seed de Incidentes Demo (#152)
 ```bash
@@ -112,7 +112,7 @@ cd web/backend/apps/incidentes
 # Requiere que el seed de ciudadanos demo (#151) ya se haya ejecutado
 npx prisma db seed
 ```
-> Crea 10 incidentes georreferenciados en Temuco, Padre Las Casas, Villarrica, Angol y Nueva Imperial, asociados a los ciudadanos demo de #151. Es idempotente y valida los usuarios en `DATABASE_URL_AUTH` antes de escribir. El detalle y el procedimiento remoto con `kubectl port-forward` están en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#6-seed-de-incidentes-demo-issue-152).
+> Crea 10 incidentes georreferenciados en Temuco, Padre Las Casas, Villarrica, Angol y Nueva Imperial, asociados a los ciudadanos demo de #151. Es idempotente, trata los catálogos como solo lectura (valida que existan los 5 estados y las 8 categorías, abortando sin escribir si faltan) y valida los usuarios en `DATABASE_URL_AUTH` antes de escribir, derivando la prioridad desde `prioridadBase` de la categoría vigente. **Para ejecutar el seed contra el entorno remoto de producción/Kubernetes (UCT), DEBE realizarse desde la máquina local** abriendo túneles con `kubectl port-forward` (`postgres-incidentes-svc` y `postgres-auth-svc`), debido a la ausencia intencional de herramientas de desarrollo como `prisma`, `node` o `ts-node` dentro del contenedor de producción. El detalle completo está en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#6-seed-de-incidentes-demo-issue-152).
 
 ### 9. Ejecución en Modo Desarrollo
 Puedes iniciar cada servicio de forma individual según se requiera:

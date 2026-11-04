@@ -5,22 +5,22 @@ import {
   ESTADOS_INCIDENTE,
   type EstadoIncidente,
 } from '../src/estado/transiciones-incidente.constants';
-import {
-  esPrioridadValida,
-  PRIORIDAD_MAXIMA,
-  PRIORIDAD_MINIMA,
-} from '../src/prioridad/prioridad.constants';
+import { esPrioridadValida } from '../src/prioridad/prioridad.constants';
 
 /**
  * Seed idempotente de incidentes demo georreferenciados en La Araucanía
  * (Issue #152).
  *
- * - Reutiliza los catálogos de estados y categorías del microservicio.
+ * - Los catálogos de estados y categorías son SOLO LECTURA. No se crean ni
+ *   modifican.
+ * - Se valida que existan los 5 estados canónicos y las 8 categorías requeridas
+ *   antes de cualquier escritura.
+ * - La prioridad se deriva del `prioridadBase` de la categoría vigente en BD.
  * - Asocia los incidentes a los UUID fijos de los ciudadanos demo de #151.
  * - Usa UUID fijos y comparación campo a campo para no duplicar ni reescribir
  *   ubicaciones e incidentes en reejecuciones.
- * - Valida los ciudadanos demo en la base de auth-usuarios antes de abrir la
- *   transacción de escritura. Si faltan, aborta sin modificar incidentes.
+ * - Si faltan requisitos (catálogos o ciudadanos demo), aborta con exit code 1
+ *   sin escribir ni alterar ningún registro.
  */
 
 const REGION = 'La Araucanía';
@@ -40,6 +40,15 @@ const ARAUCANIA_BOUNDS = {
   longitudMaxima: -71.0,
 } as const;
 
+/** Comunas reales y coherentes dentro de La Araucanía para las ubicaciones demo. */
+const COMUNAS_VALIDAS = new Set([
+  'Temuco',
+  'Padre Las Casas',
+  'Villarrica',
+  'Angol',
+  'Nueva Imperial',
+]);
+
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -50,10 +59,6 @@ interface EstadoDemo {
 
 interface CategoriaDemo {
   nombre: string;
-  descripcion: string;
-  prioridadBase: number;
-  esEmergenciaCritica: boolean;
-  canalOficialContacto: string | null;
 }
 
 interface UbicacionDemo {
@@ -77,13 +82,13 @@ interface IncidenteDemo {
   fechaCreacion: string;
 }
 
-interface EstadoAsegurado {
+interface EstadoExistente {
   id: string;
   nombre: string;
   orden: number;
 }
 
-interface CategoriaAsegurada {
+interface CategoriaExistente {
   id: string;
   nombre: string;
   prioridadBase: number;
@@ -113,62 +118,14 @@ const ESTADOS_DEMO: readonly EstadoDemo[] = [
 ];
 
 const CATEGORIAS_DEMO: readonly CategoriaDemo[] = [
-  {
-    nombre: 'Alumbrado público',
-    descripcion: 'Fallas de alumbrado en calles y espacios públicos',
-    prioridadBase: 2,
-    esEmergenciaCritica: false,
-    canalOficialContacto: null,
-  },
-  {
-    nombre: 'Baches y vialidad',
-    descripcion: 'Baches, calzada y señalización en mal estado',
-    prioridadBase: 2,
-    esEmergenciaCritica: false,
-    canalOficialContacto: null,
-  },
-  {
-    nombre: 'Aseo y basura',
-    descripcion: 'Microbasurales y recolección pendiente',
-    prioridadBase: 1,
-    esEmergenciaCritica: false,
-    canalOficialContacto: null,
-  },
-  {
-    nombre: 'Agua y alcantarillado',
-    descripcion: 'Fugas, cortes de agua y alcantarillado colapsado',
-    prioridadBase: 3,
-    esEmergenciaCritica: false,
-    canalOficialContacto: null,
-  },
-  {
-    nombre: 'Áreas verdes y arbolado',
-    descripcion: 'Plazas, poda y arbolado en riesgo',
-    prioridadBase: 1,
-    esEmergenciaCritica: false,
-    canalOficialContacto: null,
-  },
-  {
-    nombre: 'Seguridad ciudadana',
-    descripcion: 'Hechos delictuales o situaciones de riesgo',
-    prioridadBase: 4,
-    esEmergenciaCritica: false,
-    canalOficialContacto: 'Carabineros 133',
-  },
-  {
-    nombre: 'Accidente de tránsito',
-    descripcion: 'Choques y atropellos con personas afectadas',
-    prioridadBase: 5,
-    esEmergenciaCritica: true,
-    canalOficialContacto: 'SAMU 131',
-  },
-  {
-    nombre: 'Incendio',
-    descripcion: 'Incendios estructurales, forestales o pastizales',
-    prioridadBase: 5,
-    esEmergenciaCritica: true,
-    canalOficialContacto: 'Bomberos 132',
-  },
+  { nombre: 'Alumbrado público' },
+  { nombre: 'Baches y vialidad' },
+  { nombre: 'Aseo y basura' },
+  { nombre: 'Agua y alcantarillado' },
+  { nombre: 'Áreas verdes y arbolado' },
+  { nombre: 'Seguridad ciudadana' },
+  { nombre: 'Accidente de tránsito' },
+  { nombre: 'Incendio' },
 ];
 
 const UBICACIONES_DEMO: readonly UbicacionDemo[] = [
@@ -408,10 +365,6 @@ function validarUuid(valor: string, contexto: string): void {
   }
 }
 
-/**
- * Valida las definiciones locales antes de abrir cualquier conexión. Así un
- * error de datos del propio seed nunca deja escrituras parciales.
- */
 function validarDefinicionesDemo(): void {
   const estados = new Set<string>();
   for (const estado of ESTADOS_DEMO) {
@@ -441,16 +394,6 @@ function validarDefinicionesDemo(): void {
   for (const categoria of CATEGORIAS_DEMO) {
     if (categorias.has(categoria.nombre)) {
       throw new SeedError(`Categoría demo duplicada: "${categoria.nombre}".`);
-    }
-    if (!categoria.descripcion.trim()) {
-      throw new SeedError(
-        `La categoría "${categoria.nombre}" no tiene descripción.`,
-      );
-    }
-    if (!esPrioridadValida(categoria.prioridadBase)) {
-      throw new SeedError(
-        `La categoría "${categoria.nombre}" tiene prioridadBase ${categoria.prioridadBase}; debe ser un entero entre ${PRIORIDAD_MINIMA} y ${PRIORIDAD_MAXIMA}.`,
-      );
     }
     categorias.add(categoria.nombre);
   }
@@ -482,6 +425,11 @@ function validarDefinicionesDemo(): void {
     if (ubicacion.region !== REGION) {
       throw new SeedError(
         `La ubicación "${ubicacion.id}" debe pertenecer a ${REGION}.`,
+      );
+    }
+    if (!COMUNAS_VALIDAS.has(ubicacion.comuna)) {
+      throw new SeedError(
+        `La ubicación "${ubicacion.id}" debe pertenecer a una comuna real y coherente de La Araucanía (Temuco, Padre Las Casas, Villarrica, Angol, Nueva Imperial): "${ubicacion.comuna}".`,
       );
     }
     if (
@@ -539,13 +487,13 @@ function validarDefinicionesDemo(): void {
 
 /**
  * Verifica en la base de auth-usuarios que los tres ciudadanos demo existan y
- * tengan el rol CIUDADANO. Se ejecuta antes de la transacción de incidentes.
+ * tengan el rol CIUDADANO. Se ejecuta antes de cualquier escritura en incidentes.
  */
 async function validarCiudadanosDemo(): Promise<void> {
   const connectionString = process.env.DATABASE_URL_AUTH;
   if (!connectionString) {
     throw new SeedError(
-      'DATABASE_URL_AUTH no está definida. Este seed valida los ciudadanos demo de la Issue #151 en la base de auth-usuarios; define la variable en web/backend/.env y ejecuta primero el seed de auth-usuarios.',
+      'DATABASE_URL_AUTH no está definida. Este seed valida los ciudadanos demo de la Issue #151 en la base de auth-usuarios; define la variable en web/backend/.env y ejecuta primero el seed de auth-usuarios. Si falla alguna validación, el seed aborta sin escribir ni alterar registros en la base de incidentes.',
     );
   }
 
@@ -572,7 +520,7 @@ async function validarCiudadanosDemo(): Promise<void> {
     const faltantes = CIUDADANOS_DEMO.filter((id) => !rolesPorId.has(id));
     if (faltantes.length > 0) {
       throw new SeedError(
-        `Faltan ciudadanos demo en auth-usuarios: ${faltantes.join(', ')}. Ejecuta "cd web/backend/apps/auth-usuarios && npx prisma db seed" (Issue #151) antes de este seed.`,
+        `Faltan ciudadanos demo en auth-usuarios: ${faltantes.join(', ')}. Ejecuta "cd web/backend/apps/auth-usuarios && npx prisma db seed" (Issue #151) antes de este seed. El seed aborta sin escribir ni alterar registros en la base de incidentes.`,
       );
     }
 
@@ -581,7 +529,7 @@ async function validarCiudadanosDemo(): Promise<void> {
     );
     if (sinRolCiudadano.length > 0) {
       throw new SeedError(
-        `Los siguientes ciudadanos demo no tienen el rol CIUDADANO: ${sinRolCiudadano.join(', ')}. Vuelve a ejecutar el seed de auth-usuarios (#151).`,
+        `Los siguientes ciudadanos demo no tienen el rol CIUDADANO: ${sinRolCiudadano.join(', ')}. Vuelve a ejecutar el seed de auth-usuarios (#151). El seed aborta sin escribir ni alterar registros en la base de incidentes.`,
       );
     }
   } catch (error) {
@@ -589,157 +537,86 @@ async function validarCiudadanosDemo(): Promise<void> {
       throw error;
     }
     throw new SeedError(
-      `No se pudieron validar los ciudadanos demo en auth-usuarios: ${mensajeDeError(error)}. Verifica DATABASE_URL_AUTH y que el seed de #151 se haya ejecutado.`,
+      `No se pudieron validar los ciudadanos demo en auth-usuarios: ${mensajeDeError(error)}. Verifica DATABASE_URL_AUTH y que el seed de #151 se haya ejecutado. El seed aborta sin escribir ni alterar registros en la base de incidentes.`,
     );
   } finally {
     await authPool.end().catch(() => undefined);
   }
 }
 
-async function asegurarEstados(
-  tx: Prisma.TransactionClient,
-): Promise<{ porNombre: Map<string, EstadoAsegurado>; resumen: ResumenEscritura }> {
-  const porNombre = new Map<string, EstadoAsegurado>();
-  const resumen = nuevoResumen();
-
-  for (const estado of ESTADOS_DEMO) {
-    const existente = await tx.estado.findUnique({
-      where: { nombre: estado.nombre },
-    });
-
-    if (!existente) {
-      const creado = await tx.estado.create({ data: estado });
-      porNombre.set(creado.nombre, {
-        id: creado.id,
-        nombre: creado.nombre,
-        orden: creado.orden,
-      });
-      registrarResultado(resumen, 'creado');
-      continue;
-    }
-
-    if (existente.orden !== estado.orden) {
-      const actualizado = await tx.estado.update({
-        where: { id: existente.id },
-        data: { orden: estado.orden },
-      });
-      porNombre.set(actualizado.nombre, {
-        id: actualizado.id,
-        nombre: actualizado.nombre,
-        orden: actualizado.orden,
-      });
-      registrarResultado(resumen, 'actualizado');
-      continue;
-    }
-
-    porNombre.set(existente.nombre, {
-      id: existente.id,
-      nombre: existente.nombre,
-      orden: existente.orden,
-    });
-    registrarResultado(resumen, 'sin-cambios');
-  }
-
-  return { porNombre, resumen };
-}
-
-async function asegurarCategorias(
-  tx: Prisma.TransactionClient,
+/**
+ * Carga los catálogos existentes desde la base de datos (SOLO LECTURA).
+ * No se crean ni modifican estados ni categorías.
+ */
+async function cargarCatalogos(
+  prisma: PrismaClient,
 ): Promise<{
-  porNombre: Map<string, CategoriaAsegurada>;
-  resumen: ResumenEscritura;
+  estados: Map<string, EstadoExistente>;
+  categorias: Map<string, CategoriaExistente>;
 }> {
-  const porNombre = new Map<string, CategoriaAsegurada>();
-  const resumen = nuevoResumen();
+  const [estadosDb, categoriasDb] = await Promise.all([
+    prisma.estado.findMany({ orderBy: { orden: 'asc' } }),
+    prisma.categoria.findMany({ orderBy: { nombre: 'asc' } }),
+  ]);
 
-  for (const categoria of CATEGORIAS_DEMO) {
-    const existentes = await tx.categoria.findMany({
-      where: { nombre: categoria.nombre },
-      orderBy: { id: 'asc' },
+  const estados = new Map<string, EstadoExistente>();
+  for (const estado of estadosDb) {
+    estados.set(estado.nombre, {
+      id: estado.id,
+      nombre: estado.nombre,
+      orden: estado.orden,
     });
-
-    if (existentes.length === 0) {
-      const creada = await tx.categoria.create({ data: categoria });
-      porNombre.set(creada.nombre, {
-        id: creada.id,
-        nombre: creada.nombre,
-        prioridadBase: creada.prioridadBase,
-      });
-      registrarResultado(resumen, 'creado');
-      continue;
-    }
-
-    if (existentes.length > 1) {
-      console.warn(
-        `Aviso: existen ${existentes.length} categorías con el nombre "${categoria.nombre}"; se usa la de id ${existentes[0].id}.`,
-      );
-    }
-
-    const [principal] = existentes;
-    const requiereActualizacion =
-      principal.descripcion !== categoria.descripcion ||
-      principal.prioridadBase !== categoria.prioridadBase ||
-      principal.esEmergenciaCritica !== categoria.esEmergenciaCritica ||
-      principal.canalOficialContacto !== categoria.canalOficialContacto;
-
-    if (requiereActualizacion) {
-      const actualizada = await tx.categoria.update({
-        where: { id: principal.id },
-        data: categoria,
-      });
-      porNombre.set(actualizada.nombre, {
-        id: actualizada.id,
-        nombre: actualizada.nombre,
-        prioridadBase: actualizada.prioridadBase,
-      });
-      registrarResultado(resumen, 'actualizado');
-      continue;
-    }
-
-    porNombre.set(principal.nombre, {
-      id: principal.id,
-      nombre: principal.nombre,
-      prioridadBase: principal.prioridadBase,
-    });
-    registrarResultado(resumen, 'sin-cambios');
   }
 
-  return { porNombre, resumen };
+  const categorias = new Map<string, CategoriaExistente>();
+  for (const categoria of categoriasDb) {
+    categorias.set(categoria.nombre, {
+      id: categoria.id,
+      nombre: categoria.nombre,
+      prioridadBase: categoria.prioridadBase,
+    });
+  }
+
+  return { estados, categorias };
 }
 
 /**
- * Comprueba que los catálogos recién asegurados sean utilizables por el
- * dominio antes de crear ubicaciones e incidentes.
+ * Valida que existan todos los catálogos requeridos en la base de datos.
+ * Si falta alguno, aborta con exit code 1 sin escribir ni alterar registros.
  */
-function validarCatalogosAsegurados(
-  estados: Map<string, EstadoAsegurado>,
-  categorias: Map<string, CategoriaAsegurada>,
+function validarCatalogosExistentes(
+  estados: Map<string, EstadoExistente>,
+  categorias: Map<string, CategoriaExistente>,
 ): void {
+  const estadosFaltantes: string[] = [];
   for (const nombre of ESTADOS_INCIDENTE) {
     if (!estados.has(nombre)) {
-      throw new SeedError(
-        `No se pudo asegurar el estado requerido "${nombre}" en la base de incidentes.`,
-      );
+      estadosFaltantes.push(nombre);
     }
   }
+  if (estadosFaltantes.length > 0) {
+    throw new SeedError(
+      `Faltan estados canónicos en la base de incidentes: ${estadosFaltantes.join(', ')}. Se requieren los 5 estados (${ESTADOS_INCIDENTE.join(', ')}). Los catálogos se tratan como SOLO LECTURA; créalos/migrálos previamente. El seed aborta sin escribir ni alterar registros.`,
+    );
+  }
 
-  for (const definicion of CATEGORIAS_DEMO) {
-    const categoria = categorias.get(definicion.nombre);
-    if (!categoria) {
-      throw new SeedError(
-        `No se pudo asegurar la categoría requerida "${definicion.nombre}" en la base de incidentes.`,
-      );
+  const categoriasFaltantes: string[] = [];
+  for (const categoria of CATEGORIAS_DEMO) {
+    if (!categorias.has(categoria.nombre)) {
+      categoriasFaltantes.push(categoria.nombre);
+    } else {
+      const existente = categorias.get(categoria.nombre)!;
+      if (!esPrioridadValida(existente.prioridadBase)) {
+        throw new SeedError(
+          `La categoría "${categoria.nombre}" tiene prioridadBase ${existente.prioridadBase} inválido en la base de datos; debe estar entre 1 y 5. El seed aborta sin escribir ni alterar registros.`,
+        );
+      }
     }
-    if (!esPrioridadValida(categoria.prioridadBase)) {
-      throw new SeedError(
-        `La categoría "${definicion.nombre}" tiene prioridadBase ${categoria.prioridadBase}; debe estar entre ${PRIORIDAD_MINIMA} y ${PRIORIDAD_MAXIMA}.`,
-      );
-    }
-    if (categoria.prioridadBase !== definicion.prioridadBase) {
-      throw new SeedError(
-        `La categoría "${definicion.nombre}" tiene prioridadBase ${categoria.prioridadBase}, pero el seed espera ${definicion.prioridadBase}.`,
-      );
-    }
+  }
+  if (categoriasFaltantes.length > 0) {
+    throw new SeedError(
+      `Faltan las 8 categorías requeridas en la base de incidentes: ${categoriasFaltantes.join(', ')}. Se requieren (${CATEGORIAS_DEMO.map((c) => c.nombre).join(', ')}). Los catálogos se tratan como SOLO LECTURA; créalos/migrálos previamente. El seed aborta sin escribir ni alterar registros.`,
+    );
   }
 }
 
@@ -788,8 +665,8 @@ async function asegurarUbicaciones(
 
 async function asegurarIncidentes(
   tx: Prisma.TransactionClient,
-  estados: Map<string, EstadoAsegurado>,
-  categorias: Map<string, CategoriaAsegurada>,
+  estados: Map<string, EstadoExistente>,
+  categorias: Map<string, CategoriaExistente>,
 ): Promise<ResumenEscritura> {
   const resumen = nuevoResumen();
 
@@ -797,23 +674,23 @@ async function asegurarIncidentes(
     const categoria = categorias.get(incidente.categoria);
     if (!categoria) {
       throw new SeedError(
-        `No se encontró la categoría "${incidente.categoria}" para el incidente "${incidente.id}".`,
+        `No se encontró la categoría "${incidente.categoria}" en los catálogos vigentes de la base de incidentes (solo lectura).`,
       );
     }
 
     const estado = estados.get(incidente.estado);
     if (!estado) {
       throw new SeedError(
-        `No se encontró el estado "${incidente.estado}" para el incidente "${incidente.id}".`,
+        `No se encontró el estado "${incidente.estado}" en los catálogos vigentes de la base de incidentes (solo lectura).`,
       );
     }
 
-    // Misma regla que IncidentesService.create: la prioridad inicial siempre
-    // se deriva de la categoría y debe ser un valor válido de la escala.
+    // La prioridad inicial se deriva directamente del prioridadBase de la
+    // categoría vigente existente en la BD.
     const nivelPrioridad = categoria.prioridadBase;
     if (!esPrioridadValida(nivelPrioridad)) {
       throw new SeedError(
-        `La categoría "${categoria.nombre}" no tiene una prioridad base válida (${nivelPrioridad}).`,
+        `La categoría vigente "${categoria.nombre}" no tiene una prioridad base válida (${nivelPrioridad}).`,
       );
     }
 
@@ -874,41 +751,37 @@ async function ejecutarSeed(): Promise<void> {
     );
   }
 
-  // La validación de usuarios es de solo lectura y ocurre antes de la
-  // transacción: si faltan ciudadanos demo, la base de incidentes no cambia.
+  // Validación previa y de solo lectura: usuarios demo y catálogos vigentes.
+  // Si falta algún requisito, se aborta sin escribir ni alterar registros.
   await validarCiudadanosDemo();
 
   const pool = new Pool({ connectionString });
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
   try {
+    // Los catálogos se consultan como SOLO LECTURA (sin crear/modificar).
+    const catalogos = await cargarCatalogos(prisma);
+    validarCatalogosExistentes(catalogos.estados, catalogos.categorias);
+
     const resultado = await prisma.$transaction(
       async (tx) => {
-        const estados = await asegurarEstados(tx);
-        const categorias = await asegurarCategorias(tx);
-
-        validarCatalogosAsegurados(
-          estados.porNombre,
-          categorias.porNombre,
-        );
-
         const ubicaciones = await asegurarUbicaciones(tx);
         const incidentes = await asegurarIncidentes(
           tx,
-          estados.porNombre,
-          categorias.porNombre,
+          catalogos.estados,
+          catalogos.categorias,
         );
 
-        return { estados, categorias, ubicaciones, incidentes };
+        return { ubicaciones, incidentes };
       },
       { maxWait: 10000, timeout: 60000 },
     );
 
     console.log('');
     console.log('Seed de incidentes demo (#152) completado');
-    console.log(`  Estados:     ${formatearResumen(resultado.estados.resumen)}`);
+    console.log(`  Estados vigentes (solo lectura): ${ESTADOS_INCIDENTE.length}`);
     console.log(
-      `  Categorías:  ${formatearResumen(resultado.categorias.resumen)}`,
+      `  Categorías vigentes (solo lectura): ${CATEGORIAS_DEMO.length}`,
     );
     console.log(
       `  Ubicaciones: ${formatearResumen(resultado.ubicaciones.resumen)}`,
