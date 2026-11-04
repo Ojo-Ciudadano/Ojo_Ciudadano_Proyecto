@@ -43,7 +43,7 @@ fun AdminIncidentDetailScreen(id: String?, onBack: () -> Unit) {
         }
     )
     val state by model.state.collectAsState()
-    AdminIncidentDetailContent(state, onBack, model::retry)
+    AdminIncidentDetailContent(state, onBack, model::retry, model::retryHistory)
 }
 
 @Composable
@@ -51,6 +51,7 @@ fun AdminIncidentDetailContent(
     state: AdminIncidentDetailState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onRetryHistory: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier.fillMaxSize()) {
@@ -67,7 +68,15 @@ fun AdminIncidentDetailContent(
                         OutlinedButton(onClick = onRetry) { Text("Reintentar") }
                     }
                 }
-                IncidentsUiState.Success -> state.incident?.let { AdminIncidentInformation(it) }
+                IncidentsUiState.Success -> state.incident?.let {
+                    AdminIncidentInformation(it)
+                    AdminIncidentHistorySection(
+                        status = state.historyStatus,
+                        history = state.history,
+                        canRetry = state.historyCanRetry,
+                        onRetry = onRetryHistory
+                    )
+                }
                 IncidentsUiState.Empty -> Unit
             }
         }
@@ -108,8 +117,12 @@ private fun AdminIncidentInformation(incident: Incident) {
 }
 
 @Composable
-private fun DetailSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
+internal fun DetailSection(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    OutlinedCard(modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 title,
@@ -124,7 +137,7 @@ private fun DetailSection(title: String, content: @Composable ColumnScope.() -> 
 }
 
 @Composable
-private fun DetailField(label: String, value: String) {
+internal fun DetailField(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value.ifBlank { "No disponible" }, style = MaterialTheme.typography.bodyMedium)
