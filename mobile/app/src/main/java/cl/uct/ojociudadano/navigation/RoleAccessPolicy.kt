@@ -11,6 +11,7 @@ object RoleAccessPolicy {
         AppRoutes.REGISTER to setOf(InitialDestination.AUTHENTICATION),
         AppRoutes.ADMIN to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ADMIN_INCIDENTS to setOf(InitialDestination.ADMINISTRATOR),
+        AppRoutes.ADMIN_INCIDENT_DETAIL to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ROLE_UNAVAILABLE to setOf(InitialDestination.UNAVAILABLE),
         AppRoutes.HOME to setOf(InitialDestination.CITIZEN),
         AppRoutes.REPORTS to setOf(InitialDestination.CITIZEN),
@@ -24,6 +25,8 @@ object RoleAccessPolicy {
     /** Accept registered patterns and concrete incident routes; unclassified routes are denied. */
     fun allows(state: SessionState, route: String?): Boolean {
         val destination = when {
+            route == AppRoutes.ADMIN_INCIDENT_DETAIL -> route
+            route != null && adminIncidentRoute.matches(route) -> AppRoutes.ADMIN_INCIDENT_DETAIL
             route == AppRoutes.INCIDENT_DETAIL -> route
             route != null && incidentRoute.matches(route) -> AppRoutes.INCIDENT_DETAIL
             else -> route
@@ -36,4 +39,5 @@ object RoleAccessPolicy {
     internal val registeredRoutes: Set<String> get() = audiences.keys
 
     private val incidentRoute = Regex("incident/[^/?#]+")
+    private val adminIncidentRoute = Regex("admin/incidents/[^/?#]+")
 }

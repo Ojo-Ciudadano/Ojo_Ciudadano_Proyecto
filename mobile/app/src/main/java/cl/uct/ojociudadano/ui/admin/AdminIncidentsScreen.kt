@@ -34,16 +34,15 @@ import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.reports.incidentDate
 
 @Composable
-fun AdminIncidentsScreen(onBack: () -> Unit) {
+fun AdminIncidentsScreen(onBack: () -> Unit, onIncidentSelected: (String) -> Unit) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: AdminIncidentsViewModel = viewModel(factory = remember(application) {
         AdminIncidentsViewModelFactory(application.container.incidentRepository)
     })
     val state by model.state.collectAsState()
-    AdminIncidentsContent(state, onBack, model::loadIncidents)
+    AdminIncidentsContent(state, onBack, model::loadIncidents, onIncidentSelected = onIncidentSelected)
 }
 
-/** #104 can supply selection by real ID once its protected administrative destination exists. */
 @Composable
 fun AdminIncidentsContent(
     state: AdminIncidentsState,
@@ -93,7 +92,6 @@ fun AdminIncidentsContent(
 
 @Composable
 private fun AdminIncidentCard(incident: Incident, onIncidentSelected: ((String) -> Unit)?) {
-    // No dead click target or citizen detail navigation while #104 is pending.
     val selection = if (onIncidentSelected == null) Modifier else Modifier.clickable(
         role = Role.Button,
         onClickLabel = "Seleccionar incidente",
@@ -114,17 +112,7 @@ private fun AdminIncidentCard(incident: Incident, onIncidentSelected: ((String) 
             if (incident.description.isNotBlank()) {
                 Text(incident.description, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Text(
-                    "Estado: ${incident.status.name}",
-                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
+            AdminIncidentStatusBadge(incident.status.name)
             val location = listOfNotNull(
                 incident.location.referenceAddress,
                 incident.location.sector,
@@ -144,5 +132,20 @@ private fun AdminIncidentCard(incident: Incident, onIncidentSelected: ((String) 
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+internal fun AdminIncidentStatusBadge(name: String) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    ) {
+        Text(
+            "Estado: ${name.ifBlank { "No disponible" }}",
+            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge
+        )
     }
 }
