@@ -159,7 +159,13 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
 
       // La identidad queda disponible en la capa para futuras interacciones.
       circle.incidentId = marcador.id
-      circle.bindTooltip(marcador.titulo, { direction: 'top', offset: [0, -8] })
+      const tooltip = document.createElement('span')
+      tooltip.textContent = marcador.titulo
+
+      circle.bindTooltip(tooltip, {
+        direction: 'top',
+        offset: [0, -8],
+      })
 
       // Se construye el popup con nodos de texto para evitar inyección de HTML.
       const popup = document.createElement('div')

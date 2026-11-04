@@ -59,7 +59,11 @@ export function LoginPage() {
     <div className="web-auth">
       <div className="web-auth-card">
         <div className="web-auth-header">
-          <img src="/logo-2.jpeg" alt="Ojo Ciudadano" className="login-logo" />
+          <img
+           src="/img/02.png"
+           alt="Ojo Ciudadano"
+           className="login-logo"
+          />
           <h2>Acceso plataforma</h2>
         </div>
 

@@ -2,7 +2,9 @@ package cl.uct.ojociudadano.data.model
 
 data class Notification(
     val id: String,
-    val title: String,
+    val userId: String,
+    val incidentId: String,
     val message: String,
-    val read: Boolean
+    val isRead: Boolean,
+    val createdAt: String
 )
