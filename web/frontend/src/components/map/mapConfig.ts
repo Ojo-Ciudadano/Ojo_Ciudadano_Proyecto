@@ -50,9 +50,6 @@ export interface IncidentMapMarker {
   longitud: number
   titulo: string
   descripcion?: string | null
-  categoria?: string | null
-  estado?: string | null
-  fechaCreacion?: string | null
   prioridad?: number | null
 }
 
@@ -92,21 +89,7 @@ export function normalizarMarcadores(
       continue
     }
     ids.add(marcador.id)
-
-    // Se reconstruye el marcador enumerando los campos del contrato: así la
-    // normalización conserva explícitamente `categoria`, `estado` y
-    // `fechaCreacion`, además del resto de los datos de presentación.
-    resultado.push({
-      id: marcador.id,
-      latitud: marcador.latitud,
-      longitud: marcador.longitud,
-      titulo: marcador.titulo,
-      descripcion: marcador.descripcion,
-      categoria: marcador.categoria,
-      estado: marcador.estado,
-      fechaCreacion: marcador.fechaCreacion,
-      prioridad: marcador.prioridad,
-    })
+    resultado.push(marcador)
   }
 
   return resultado

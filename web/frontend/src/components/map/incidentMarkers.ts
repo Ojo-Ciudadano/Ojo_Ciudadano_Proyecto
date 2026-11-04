@@ -3,12 +3,20 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from './mapConfig'
-import { textoOpcional } from './textoOpcional'
 import type { Incidente } from '../../types/incidente'
 
 export interface ErrorMapa {
   mensaje: string
   permiteReintentar: boolean
+}
+
+function textoOpcional(valor: unknown): string | undefined {
+  if (typeof valor !== 'string') {
+    return undefined
+  }
+
+  const texto = valor.trim()
+  return texto === '' ? undefined : texto
 }
 
 function numeroOpcional(valor: unknown): number | undefined {
@@ -60,19 +68,12 @@ export function mapearIncidenteAMarcador(
     textoOpcional(ubicacion.direccionReferencia) ??
     null
 
-  const categoria = textoOpcional(incidente.categoria?.nombre) ?? null
-  const estado = textoOpcional(incidente.estado?.nombre) ?? null
-  const fechaCreacion = textoOpcional(incidente.fechaCreacion) ?? null
-
   return {
     id: incidente.id,
     latitud: latitud as number,
     longitud: longitud as number,
     titulo,
     descripcion,
-    categoria,
-    estado,
-    fechaCreacion,
     prioridad:
       typeof incidente.nivelPrioridad === 'number'
         ? incidente.nivelPrioridad
