@@ -105,7 +105,16 @@ npx prisma db seed
 ```
 > Los usuarios demo, sus UUIDs fijos y la variable `DEMO_CITIZEN_PASSWORD` se detallan en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#5-seed-de-ciudadanos-demo-issue-151). Para poblar la base remota del clúster UCT se usa `kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez`.
 
-### 8. Ejecución en Modo Desarrollo
+### 8. Cargar Seed de Incidentes Demo (#152)
+```bash
+cd web/backend/apps/incidentes
+
+# Requiere que el seed de ciudadanos demo (#151) ya se haya ejecutado
+npx prisma db seed
+```
+> Crea 10 incidentes georreferenciados en Temuco, Padre Las Casas, Villarrica, Angol y Nueva Imperial, asociados a los ciudadanos demo de #151. Es idempotente y valida los usuarios en `DATABASE_URL_AUTH` antes de escribir. El detalle y el procedimiento remoto con `kubectl port-forward` están en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#6-seed-de-incidentes-demo-issue-152).
+
+### 9. Ejecución en Modo Desarrollo
 Puedes iniciar cada servicio de forma individual según se requiera:
 
 ```bash
@@ -122,7 +131,7 @@ npm run start:dev incidentes
 npm run start:dev notificaciones
 ```
 
-### 9. Pruebas y Calidad de Código
+### 10. Pruebas y Calidad de Código
 ```bash
 # Ejecutar suite de pruebas unitarias
 npm test
