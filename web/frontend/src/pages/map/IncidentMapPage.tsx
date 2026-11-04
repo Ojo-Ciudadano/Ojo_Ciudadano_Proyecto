@@ -32,6 +32,14 @@ export function IncidentMapPage() {
     cargando,
     error,
     reintentar,
+    filtros,
+    estados,
+    categorias,
+    hayFiltros,
+    cambiarFiltro,
+    restablecerFiltros,
+    incidenteSeleccionadoId,
+    seleccionarIncidente,
     totalIncidentes,
     totalGeorreferenciados,
     totalOmitidos,
@@ -51,8 +59,67 @@ export function IncidentMapPage() {
         </p>
       </header>
 
-      <div className="mapa-tarjeta">
-        <IncidentMap markers={marcadores} />
+      <div
+        className="mapa-filtros"
+        role="group"
+        aria-label="Filtros del mapa de incidentes"
+      >
+        <div className="mapa-filtro">
+          <label htmlFor="mapa-filtro-estado">Estado</label>
+
+          <select
+            id="mapa-filtro-estado"
+            value={filtros.estadoId}
+            onChange={(event) =>
+              cambiarFiltro('estadoId', event.target.value)
+            }
+          >
+            <option value="">Todos los estados</option>
+
+            {estados.map((estado) => (
+              <option key={estado.id} value={estado.id}>
+                {estado.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mapa-filtro">
+          <label htmlFor="mapa-filtro-categoria">Categoría</label>
+
+          <select
+            id="mapa-filtro-categoria"
+            value={filtros.categoriaId}
+            onChange={(event) =>
+              cambiarFiltro('categoriaId', event.target.value)
+            }
+          >
+            <option value="">Todas las categorías</option>
+
+            {categorias.map((categoria) => (
+              <option key={categoria.id} value={categoria.id}>
+                {categoria.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          className="mapa-restablecer"
+          onClick={restablecerFiltros}
+          disabled={!hayFiltros}
+        >
+          Restablecer filtros
+        </button>
+      </div>
+
+      <div className="mapa-tarjeta" aria-busy={cargando}>
+        <IncidentMap
+          markers={marcadores}
+          selectedMarkerId={incidenteSeleccionadoId}
+          onSelectMarker={seleccionarIncidente}
+        />
 
         {cargando && (
           <div className="mapa-overlay" role="status" aria-live="polite">
@@ -87,11 +154,16 @@ export function IncidentMapPage() {
             aria-live="polite"
           >
             <div className="mapa-overlay__panel">
-              <p>No hay incidentes georreferenciados para mostrar.</p>
+              <p>
+                {hayFiltros
+                  ? 'No se encontraron incidentes georreferenciados con los filtros seleccionados.'
+                  : 'No hay incidentes georreferenciados para mostrar.'}
+              </p>
               {totalIncidentes > 0 && (
                 <p className="mapa-overlay__detalle">
-                  Se encontraron {totalIncidentes} incidentes, pero ninguno
-                  informa coordenadas válidas.
+                  {hayFiltros
+                    ? `Se encontraron ${totalIncidentes} incidentes para los filtros aplicados, pero ninguno informa coordenadas válidas.`
+                    : `Se encontraron ${totalIncidentes} incidentes, pero ninguno informa coordenadas válidas.`}
                 </p>
               )}
             </div>

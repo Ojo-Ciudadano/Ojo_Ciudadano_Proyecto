@@ -26,6 +26,7 @@ export interface Incidente {
   estado?: {
     id?: string | null
     nombre?: string | null
+    orden?: number | null
   } | null
 }
 
@@ -33,4 +34,14 @@ export interface FiltrosIncidentes {
   estadoId: string
   comuna: string
   categoriaId: string
+}
+
+export interface FiltrosMapaIncidentes {
+  estadoId: string
+  categoriaId: string
+}
+
+export interface OpcionCatalogoMapa {
+  id: string
+  nombre: string
 }
