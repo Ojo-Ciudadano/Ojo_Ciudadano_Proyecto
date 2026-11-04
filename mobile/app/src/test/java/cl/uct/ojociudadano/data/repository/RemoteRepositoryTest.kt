@@ -189,6 +189,8 @@ class RemoteRepositoryTest {
         private val categories: List<CategoryDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+        override suspend fun updateIncidentStatus(incidentId: String, request: cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto, expectedSession: cl.uct.ojociudadano.data.session.TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.IncidentDto = error("Unused")
+
         override suspend fun register(request: RegisterRequestDto): RegisterResponseDto =
             error("Registration is not used by this test")
 

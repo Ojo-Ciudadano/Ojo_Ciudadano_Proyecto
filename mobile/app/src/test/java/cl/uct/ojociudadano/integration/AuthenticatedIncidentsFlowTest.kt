@@ -312,6 +312,98 @@ class AuthenticatedIncidentsFlowTest {
         assertEquals(0, server.requestCount)
     }
 
+    @Test fun `status patch uses canonical contract JWT and confirmed response`() = runTest {
+        val admin = userA.copy(roles = listOf("ADMIN"))
+        manager.establish(admin)
+        server.enqueue(MockResponse().setBody(incidentJson(admin).replace("Nuevo", "En revisión")))
+        val id = "d0000000-0000-4000-8000-000000000004"
+        val result = repository().updateStatus(id, "En revisión", "  Inspección en terreno  ")
+        assertEquals(id, result.id)
+        assertEquals("En revisión", result.status.name)
+        val request = takeRequest()
+        assertEquals("PATCH", request.method)
+        assertEquals("/api/v1/incidentes/$id/estado", request.path)
+        assertEquals("Bearer ${admin.accessToken}", request.getHeader("Authorization"))
+        val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+        assertEquals(setOf("estado", "observacion"), json.keySet())
+        assertEquals("En revisión", json["estado"].asString)
+        assertEquals("Inspección en terreno", json["observacion"].asString)
+    }
+
+    @Test fun `status patch rejects blank observations noncanonical states and citizen locally`() = runTest {
+        manager.establish(userA.copy(roles = listOf("ADMIN")))
+        for (observation in listOf("", " ", "\n\t")) {
+            assertTrue(runCatching { repository().updateStatus("incident-id", "En revisión", observation) }
+                .exceptionOrNull() is IllegalArgumentException)
+        }
+        assertTrue(runCatching { repository().updateStatus("incident-id", "En revision", "Valid") }
+            .exceptionOrNull() is IllegalArgumentException)
+        for (roles in listOf(listOf("CIUDADANO"), emptyList(), listOf("ADMIN", "unknown"))) {
+            manager.establish(userA.copy(roles = roles))
+            val failure = runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
+            assertEquals(403, (failure as ApiException.Http).statusCode)
+        }
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test fun `status errors preserve session except 401 which invokes existing invalidation`() = runTest {
+        val admin = userA.copy(roles = listOf("ADMIN"))
+        for (code in listOf(400, 403, 404, 409, 500, 503)) {
+            manager.establish(admin)
+            server.enqueue(MockResponse().setResponseCode(code).setBody("{}"))
+            val failure = runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
+            assertEquals(code, (failure as ApiException.Http).statusCode)
+            takeRequest()
+            assertTrue(manager.state.value is SessionState.Authenticated)
+        }
+        server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
+        val failure = runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
+        assertEquals(401, (failure as ApiException.Http).statusCode)
+        takeRequest()
+        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertSessionFailure { repository().updateStatus("incident-id", "En revisión", "Valid") }
+        assertEquals(7, server.requestCount)
+    }
+
+    @Test fun `logout expiry and changed session block status operation and late response`() = runTest {
+        val admin = userA.copy(roles = listOf("ADMIN"))
+        manager.establish(admin)
+        manager.logout()
+        assertSessionFailure { repository().updateStatus("incident-id", "En revisión", "Valid") }
+        manager.establish(testSession(expiresAt = 1_001).copy(roles = listOf("ADMIN")))
+        now = 1_001
+        assertSessionFailure { repository().updateStatus("incident-id", "En revisión", "Valid") }
+        assertEquals(0, server.requestCount)
+        now = 1_000
+        manager.establish(admin)
+        val release = CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                check(release.await(5, TimeUnit.SECONDS))
+                return MockResponse().setBody(incidentJson(admin))
+            }
+        }
+        val pending = async(Dispatchers.IO) {
+            runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
+        }
+        try {
+            takeRequest()
+            manager.establish(userB)
+        } finally {
+            release.countDown()
+        }
+        assertTrue(pending.await() is SessionRequiredException)
+    }
+
+    @Test fun `malformed status response becomes controlled error and preserves session`() = runTest {
+        manager.establish(userA.copy(roles = listOf("ADMIN")))
+        server.enqueue(MockResponse().setBody("["))
+        val failure = runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
+        assertTrue(failure is ApiException.Unexpected)
+        takeRequest()
+        assertTrue(manager.state.value is SessionState.Authenticated)
+    }
+
     private suspend fun assertUserOperations(repository: RemoteIncidentRepository, user: AuthenticatedSession) {
         server.enqueue(MockResponse().setBody("[${incidentJson(user)}]"))
         server.enqueue(MockResponse().setResponseCode(201).setBody(incidentJson(user)))

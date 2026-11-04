@@ -1867,6 +1867,8 @@ private class FakeIncidentRepository(
     private val onCreate: suspend () -> Unit = {},
     private val onUpload: suspend (file: File, mimeType: String) -> Unit = { _, _ -> }
 ) : IncidentRepository {
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
+
 
     val createInputs = mutableListOf<CreateIncidentInput>()
     val uploadAttempts = mutableListOf<UploadedEvidence>()

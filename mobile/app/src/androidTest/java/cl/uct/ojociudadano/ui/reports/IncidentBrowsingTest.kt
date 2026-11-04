@@ -57,6 +57,8 @@ class IncidentBrowsingTest {
     }
 
     private class Repository : IncidentRepository {
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
+
         @Volatile var failAll = false
         var other = false
         override suspend fun getCurrentUserIncidents() = emptyList<Incident>()

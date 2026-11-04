@@ -112,6 +112,8 @@ class AdminIncidentsViewModelTest {
     }
 
     private class Repository : IncidentRepository {
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
+
         var calls = 0
         var rows = listOf(incident)
         var failure: Exception? = null

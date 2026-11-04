@@ -154,6 +154,8 @@ class EvidenceImageFetcherTest {
     private class FakeIncidentRepository(
         private val onDownload: suspend (String) -> ResponseBody
     ) : IncidentRepository {
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
+
 
         var requestedId: String? = null
             private set
