@@ -27,16 +27,12 @@ export function Navbar() {
 
   return (
     <aside className="web-sidebar">
-      <div className={`ws-brand${!isAdmin ? ' ws-brand-ciudadano' : ''}`}>
+      <div className="ws-brand ws-brand-ciudadano">
         <img
-          src={isAdmin ? '/logo-3.jpeg' : '/img/03.png'}
+          src="/img/03.png"
           alt="Ojo Ciudadano"
           className="sidebar-logo"
         />
-
-        {isAdmin && (
-          <span className="ws-brand-text">Ojo Ciudadano</span>
-        )}
       </div>
 
       <nav className="ws-nav">
