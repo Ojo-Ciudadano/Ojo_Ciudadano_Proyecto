@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from 'react'
 import {
   normalizarHistorialIncidente,
@@ -29,7 +30,7 @@ type TipoMovimientoHistorial =
 const PATRON_ASIGNACION = /^Asignado a\s+\S+/i
 const PATRON_REASIGNACION = /^Reasignado de\s+\S+\s+a\s+\S+/i
 
-function clasificarMovimiento(
+export function clasificarMovimiento(
   registro: RegistroHistorialIncidente,
 ): TipoMovimientoHistorial {
   const tipoExplicito = (
@@ -94,7 +95,7 @@ function textoActor(usuarioId?: string | null): string {
   return usuarioId?.trim() || 'Sin información'
 }
 
-function deduplicarManteniendoOrden(
+export function deduplicarManteniendoOrden(
   registros: RegistroHistorialIncidente[],
 ): RegistroHistorialIncidente[] {
   const vistos = new Set<string>()
@@ -111,7 +112,7 @@ function deduplicarManteniendoOrden(
   return resultado
 }
 
-function interpretarErrorHistorial(error: unknown): ErrorHistorial {
+export function interpretarErrorHistorial(error: unknown): ErrorHistorial {
   const statusCode =
     typeof error === 'object' &&
     error !== null &&

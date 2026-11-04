@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npx tsx --test src/tests/auth-permission-errors.test.ts src/tests/incident-map.test.ts src/tests/usuarios-listado.test.ts src/tests/notificaciones.test.ts src/tests/useNotificaciones.test.tsx"
+    "test": "npx tsx --tsconfig tsconfig.app.json --test src/tests/auth-permission-errors.test.ts src/tests/incident-map.test.ts src/tests/usuarios-listado.test.ts src/tests/notificaciones.test.ts src/tests/useNotificaciones.test.tsx src/tests/incidente-historial.test.tsx"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
