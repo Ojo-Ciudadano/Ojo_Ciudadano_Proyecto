@@ -60,7 +60,7 @@ class IncidentBrowsingTest {
         @Volatile var failAll = false
         var other = false
         override suspend fun getCurrentUserIncidents() = emptyList<Incident>()
-        override suspend fun getIncidents(): List<Incident> {
+        override suspend fun getIncidents(filters: IncidentFilters): List<Incident> {
             if (failAll) throw ApiException.Http(503, emptyList(), null, null)
             return if (!other) emptyList() else listOf(Incident(
                 "test-incident", "Luminaria de prueba", "Evidencia utilizada exclusivamente en pruebas",

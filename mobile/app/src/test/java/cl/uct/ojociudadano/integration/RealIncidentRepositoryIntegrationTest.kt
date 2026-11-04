@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.integration
 
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
@@ -28,7 +29,7 @@ class RealIncidentRepositoryIntegrationTest {
             manager
         )
 
-        val allIncidents = repository.getIncidents()
+        val allIncidents = repository.getIncidents(IncidentFilters())
         val userIncidents = repository.getCurrentUserIncidents()
         val allIds = allIncidents.map { it.id }.toSet()
 

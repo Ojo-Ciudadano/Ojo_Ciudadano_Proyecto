@@ -5,6 +5,7 @@ import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.data.repository.CategoryRepository
@@ -157,7 +158,7 @@ class ReportsViewModelTest {
         }
         var allQueryCount = 0
         var pendingAll: kotlinx.coroutines.CompletableDeferred<List<Incident>>? = null
-        override suspend fun getIncidents(): List<Incident> {
+        override suspend fun getIncidents(filters: IncidentFilters): List<Incident> {
             allQueryCount++
             pendingAll?.let { return it.await() }
             failure?.let { throw it }
