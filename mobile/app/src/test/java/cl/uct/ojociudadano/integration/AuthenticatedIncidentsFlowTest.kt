@@ -202,6 +202,42 @@ class AuthenticatedIncidentsFlowTest {
     }
 
     @Test
+    fun `administrator general query retains other reporter incident id and nullable priority`() = runTest {
+        val admin = userA.copy(roles = listOf("ADMIN"))
+        manager.establish(admin)
+        server.enqueue(MockResponse().setBody("[${incidentJson(userB)}]"))
+
+        val incident = repository().getIncidents().single()
+
+        assertEquals("d0000000-0000-4000-8000-000000000004", incident.id)
+        assertEquals(userB.userId, incident.reporterUserId)
+        assertEquals("Alumbrado", incident.category.name)
+        assertEquals("Nuevo", incident.status.name)
+        assertEquals("Centro", incident.location.sector)
+        assertNull(incident.priorityLevel)
+        val request = takeRequest()
+        assertEquals("/api/v1/incidentes", request.path)
+        assertEquals("Bearer ${admin.accessToken}", request.getHeader("Authorization"))
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `administrator forbidden and server errors preserve authenticated session`() = runTest {
+        val admin = userA.copy(roles = listOf("ADMIN"))
+        manager.establish(admin)
+        for (code in listOf(403, 503)) {
+            server.enqueue(MockResponse().setResponseCode(code))
+
+            val failure = runCatching { repository().getIncidents() }.exceptionOrNull()
+
+            assertTrue(failure is ApiException.Http)
+            assertEquals(code, (failure as ApiException.Http).statusCode)
+            assertEquals(SessionState.Authenticated(admin), manager.state.value)
+            assertEquals("Bearer ${admin.accessToken}", takeRequest().getHeader("Authorization"))
+        }
+    }
+
+    @Test
     fun `evidence queries and streaming download use active session JWT`() = runTest {
         manager.establish(userA)
         server.enqueue(MockResponse().setBody("[]"))

@@ -15,7 +15,57 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from '../components/map/mapConfig'
+import {
+  interpretarErrorMapa,
+  mapearIncidenteAMarcador,
+  mapearIncidentesAMarcadores,
+} from '../components/map/incidentMarkers'
+import {
+  normalizarIncidentes,
+  obtenerIncidentesParaMapa,
+} from '../services/incidentes.service'
+import { apiClient } from '../services/api'
 import { NAVIGATION_RULES, ROLES, getVisibleNavigation } from '../config/navigation'
+import type { Incidente } from '../types/incidente'
+
+const almacenamiento = new Map<string, string>()
+
+// `apiClient` lee el token desde localStorage; node:test no incluye Storage.
+if (typeof globalThis.localStorage === 'undefined') {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (clave: string) => almacenamiento.get(clave) ?? null,
+      setItem: (clave: string, valor: string) => {
+        almacenamiento.set(clave, String(valor))
+      },
+      removeItem: (clave: string) => {
+        almacenamiento.delete(clave)
+      },
+      clear: () => {
+        almacenamiento.clear()
+      },
+      key: (indice: number) =>
+        Array.from(almacenamiento.keys())[indice] ?? null,
+      get length() {
+        return almacenamiento.size
+      },
+    },
+  })
+}
+
+const incidenteBase: Incidente = {
+  id: 'INC-1',
+  titulo: 'Incendio forestal',
+  descripcion: 'Humo visible en el cerro',
+  nivelPrioridad: 1,
+  ubicacion: {
+    latitud: -38.7359,
+    longitud: -72.5904,
+    comuna: 'Temuco',
+    region: 'La Araucanía',
+  },
+}
 
 const marcadorBase: IncidentMapMarker = {
   id: 'INC-1',
@@ -117,6 +167,204 @@ describe('Integración del mapa en la navegación autenticada', () => {
     for (const rol of [ROLES.CIUDADANO, ROLES.ADMIN]) {
       const rutas = getVisibleNavigation([rol], 'main').map((item) => item.path)
       assert.ok(rutas.includes('/mapa'), `El rol ${rol} debería ver /mapa`)
+    }
+  })
+})
+
+describe('Mapeo de incidentes a marcadores (#140)', () => {
+  it('asocia el id del incidente y conserva sus datos de presentación', () => {
+    const marcador = mapearIncidenteAMarcador(incidenteBase)
+
+    assert.ok(marcador)
+    assert.equal(marcador.id, 'INC-1')
+    assert.equal(marcador.latitud, -38.7359)
+    assert.equal(marcador.longitud, -72.5904)
+    assert.equal(marcador.titulo, 'Incendio forestal')
+    assert.equal(marcador.descripcion, 'Humo visible en el cerro')
+    assert.equal(marcador.prioridad, 1)
+  })
+
+  it('excluye coordenadas nulas, ausentes, no numéricas o fuera de rango', () => {
+    const invalidos: (Incidente | null)[] = [
+      null,
+      { ...incidenteBase, id: 'SIN-UBICACION', ubicacion: null },
+      { ...incidenteBase, id: 'SIN-LATITUD', ubicacion: { longitud: -72.5904 } },
+      { ...incidenteBase, id: 'NULAS', ubicacion: { latitud: null, longitud: null } },
+      { ...incidenteBase, id: 'FUERA-RANGO', ubicacion: { latitud: 120, longitud: -72.5904 } },
+      { ...incidenteBase, id: 'TEXTO', ubicacion: { latitud: 'abc' as unknown as number, longitud: -72.5904 } },
+      { ...incidenteBase, id: 'NAN', ubicacion: { latitud: Number.NaN, longitud: -72.5904 } },
+      { ...incidenteBase, id: 'INFINITO', ubicacion: { latitud: -38.7359, longitud: Number.POSITIVE_INFINITY } },
+    ]
+
+    for (const incidente of invalidos) {
+      assert.equal(mapearIncidenteAMarcador(incidente), null)
+    }
+  })
+
+  it('filtra inválidos sin romper los válidos y deduplica por id', () => {
+    const incidentes: Incidente[] = [
+      incidenteBase,
+      { ...incidenteBase, id: 'INC-2', ubicacion: { latitud: 91, longitud: 0 } },
+      {
+        ...incidenteBase,
+        id: 'INC-3',
+        titulo: 'Corte de suministro',
+        nivelPrioridad: 2,
+        ubicacion: {
+          latitud: '-38.70' as unknown as number,
+          longitud: '-72.60' as unknown as number,
+        },
+      },
+      { ...incidenteBase, id: 'INC-1', titulo: 'Duplicado de INC-1' },
+    ]
+
+    const marcadores = mapearIncidentesAMarcadores(incidentes)
+
+    assert.deepEqual(
+      marcadores.map((marcador) => marcador.id),
+      ['INC-1', 'INC-3'],
+    )
+    assert.equal(marcadores[1].titulo, 'Corte de suministro')
+    assert.equal(marcadores[1].prioridad, 2)
+  })
+
+  it('tolera listados nulos y actualiza la capa reemplazando el listado previo', () => {
+    assert.deepEqual(mapearIncidentesAMarcadores(undefined), [])
+    assert.deepEqual(mapearIncidentesAMarcadores(null), [])
+
+    const inicial = mapearIncidentesAMarcadores([incidenteBase])
+    const actualizado = mapearIncidentesAMarcadores([
+      { ...incidenteBase, id: 'INC-9', titulo: 'Nuevo reporte' },
+    ])
+
+    assert.deepEqual(inicial.map((marcador) => marcador.id), ['INC-1'])
+    assert.deepEqual(actualizado.map((marcador) => marcador.id), ['INC-9'])
+
+    // Cada sincronización entrega ids únicos aunque la API repita registros.
+    const conDuplicados = mapearIncidentesAMarcadores([
+      incidenteBase,
+      incidenteBase,
+    ])
+    assert.equal(conDuplicados.length, 1)
+  })
+
+  it('traduce errores de sesión, permisos y fallos generales de la consulta', () => {
+    const sesion = interpretarErrorMapa({ statusCode: 401 })
+    assert.equal(sesion.permiteReintentar, false)
+    assert.match(sesion.mensaje, /sesión/i)
+
+    const permisos = interpretarErrorMapa({ response: { status: 403 } })
+    assert.equal(permisos.permiteReintentar, false)
+    assert.match(permisos.mensaje, /permisos/i)
+
+    const red = interpretarErrorMapa(new Error('network error'))
+    assert.equal(red.permiteReintentar, true)
+    assert.match(red.mensaje, /Inténtalo nuevamente/i)
+  })
+})
+
+describe('Normalización de respuestas de incidentes (#140)', () => {
+  it('acepta el arreglo plano actual de la API', () => {
+    assert.deepEqual(normalizarIncidentes([incidenteBase]), [incidenteBase])
+  })
+
+  it('rechaza respuestas que no son un arreglo de incidentes', () => {
+    assert.equal(normalizarIncidentes(null), null)
+    assert.equal(normalizarIncidentes(undefined), null)
+    assert.equal(normalizarIncidentes({ mensaje: 'sin datos' }), null)
+    assert.equal(normalizarIncidentes({ data: [incidenteBase] }), null)
+    assert.equal(normalizarIncidentes('texto'), null)
+  })
+})
+
+describe('Consulta de incidentes para el mapa (#140)', () => {
+  it('consulta el listado plano una sola vez y sin parámetros de paginación', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const solicitudes: unknown[] = []
+
+    apiClient.defaults.adapter = async (config) => {
+      solicitudes.push(config.params)
+
+      return {
+        data: [incidenteBase, { ...incidenteBase, id: 'INC-2' }],
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      const incidentes = await obtenerIncidentesParaMapa()
+
+      assert.deepEqual(
+        incidentes.map((incidente) => incidente.id),
+        ['INC-1', 'INC-2'],
+      )
+      assert.equal(solicitudes.length, 1)
+      assert.deepEqual(solicitudes[0], {})
+
+      const marcadores = mapearIncidentesAMarcadores(incidentes)
+      assert.equal(marcadores.length, 2)
+      assert.deepEqual(
+        marcadores.map((marcador) => marcador.id),
+        ['INC-1', 'INC-2'],
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('rechaza respuestas que no son un arreglo de incidentes', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+
+    apiClient.defaults.adapter = async (config) => ({
+      data: { items: [incidenteBase] },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })
+
+    try {
+      await assert.rejects(
+        () => obtenerIncidentesParaMapa(),
+        /lista de incidentes inválida/i,
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('propaga los errores de la API para que la pantalla ofrezca reintento', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+
+    apiClient.defaults.adapter = async (config) => {
+      const error = Object.assign(new Error('Fallo interno'), {
+        config,
+        response: {
+          status: 500,
+          statusText: 'Internal Server Error',
+          headers: {},
+          config,
+          data: { statusCode: 500, message: 'Fallo interno' },
+        },
+      })
+      throw error
+    }
+
+    try {
+      await assert.rejects(
+        () => obtenerIncidentesParaMapa(),
+        (error: unknown) => {
+          const info = interpretarErrorMapa(error)
+          assert.equal(info.permiteReintentar, true)
+          assert.match(info.mensaje, /No se pudieron cargar/i)
+          return true
+        },
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
     }
   })
 })

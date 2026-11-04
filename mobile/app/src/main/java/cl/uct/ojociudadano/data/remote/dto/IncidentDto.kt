@@ -15,5 +15,6 @@ data class IncidentDto(
     val estado: IncidentStatusDto,
     val ubicacion: IncidentLocationDto,
     val historial: List<HistorialEstadoDto>? = null,
-    val asignacionActiva: AsignacionDto? = null
+    val asignacionActiva: AsignacionDto? = null,
+    val evidencias: List<EvidenceDto>? = null
 )

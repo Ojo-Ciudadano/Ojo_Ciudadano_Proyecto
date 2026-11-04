@@ -10,6 +10,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.ui.components.CitizenMessage
+import cl.uct.ojociudadano.ui.reports.evidence.IncidentEvidenceGallery
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -24,7 +25,7 @@ fun IncidentCard(incident: Incident, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            IncidentPhoto(incident.id)
+            IncidentEvidenceGallery(incident.evidences, compact = true)
             Text(incident.category.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text(incident.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(incident.description, maxLines = 2, overflow = TextOverflow.Ellipsis)

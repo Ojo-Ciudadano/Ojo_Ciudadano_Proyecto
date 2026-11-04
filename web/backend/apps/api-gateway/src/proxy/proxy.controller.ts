@@ -1,10 +1,12 @@
-import { All, Controller, Patch, Req, Res, UseGuards } from '@nestjs/common';
+import { All, Controller, Get, Patch, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { RolesGuard } from './roles.guard';
 import { Role, Roles } from './roles.decorator';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ProxyService } from './proxy.service';
 
+@ApiExcludeController()
 @Controller()
 export class ProxyController {
   constructor(private readonly proxyService: ProxyService) {}
@@ -47,6 +49,16 @@ export class ProxyController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async handleIncidentesAsignacionProxy(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyService.forward(req, res);
+  }
+
+  // Issue #114: consultar notificaciones del usuario autenticado
+  @Get('notificaciones')
+  @UseGuards(JwtAuthGuard)
+  async handleMisNotificacionesProxy(
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {

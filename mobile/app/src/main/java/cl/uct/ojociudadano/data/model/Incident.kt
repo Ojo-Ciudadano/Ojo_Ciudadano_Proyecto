@@ -1,5 +1,7 @@
 package cl.uct.ojociudadano.data.model
 
+import cl.uct.ojociudadano.domain.model.Evidence
+
 data class Incident(
     val id: String,
     val title: String,
@@ -12,5 +14,6 @@ data class Incident(
     val createdAt: String,
     val updatedAt: String,
     val history: List<IncidentStateHistory> = emptyList(),
-    val activeAssignment: IncidentAssignment? = null
+    val activeAssignment: IncidentAssignment? = null,
+    val evidences: List<Evidence> = emptyList()
 )

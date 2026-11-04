@@ -18,14 +18,22 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiParam,
+  ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 
 import { AuthGuard } from '@nestjs/passport';
 
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
-import { ListarUsuariosDto } from './dto/listar-usuarios.dto';
+import {
+  ListarUsuariosDto,
+  UsuariosPaginadosResponseDto,
+} from './dto/listar-usuarios.dto';
 import { PerfilUsuarioDto } from './dto/perfil-usuario.dto';
-import { UpdateUsuarioRolDto } from './dto/update-usuario-rol.dto';
+import {
+  UpdateUsuarioRolDto,
+  UpdateUsuarioRolResponseDto,
+} from './dto/update-usuario-rol.dto';
 import { UsuarioConRolesDto } from './dto/usuario-con-roles.dto';
 
 import { UsuariosService } from './usuarios.service';
@@ -42,7 +50,9 @@ export class UsuariosController {
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Obtener el perfil del usuario autenticado',
+    summary: 'Obtener el perfil y roles vigentes del usuario autenticado',
+    description:
+      'Resuelve exclusivamente el perfil del usuario portador del token Bearer JWT (claim sub) y devuelve sus roles vigentes en PostgreSQL (#118). Acceso permitido para roles ADMIN y CIUDADANO.',
   })
   @ApiResponse({
     status: 200,
@@ -60,9 +70,7 @@ export class UsuariosController {
   async obtenerMiPerfil(
     @Req() request: Request & { user: { userId: string } },
   ) {
-    return this.usuariosService.obtenerMiPerfil(
-      request.user.userId,
-    );
+    return this.usuariosService.obtenerMiPerfil(request.user.userId);
   }
 
   // Obtener usuario por ID con sus roles vigentes (Issue #123)
@@ -71,7 +79,14 @@ export class UsuariosController {
   @Roles(Role.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Obtener usuario por ID con sus roles vigentes',
+    summary: 'Obtener usuario por ID con sus roles vigentes (Solo ADMIN)',
+    description:
+      'Consulta la información y roles vigentes de un usuario específico por su UUID (#123). Restringido al rol ADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID del usuario a consultar',
+    example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
   })
   @ApiResponse({
     status: 200,
@@ -94,21 +109,11 @@ export class UsuariosController {
     return this.usuariosService.obtenerUsuarioPorIdConRoles(id);
   }
 
-  // Registrar un nuevo ciudadano
+  // Endpoint stub excluido de OpenAPI para no presentar como disponible una operación pendiente (#156)
   @Post('registro')
-  @ApiOperation({
-    summary: 'Registrar un nuevo ciudadano',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'El usuario ha sido registrado exitosamente.',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Error de validación en los datos de entrada.',
-  })
+  @ApiExcludeEndpoint()
   registrar(@Body() _createUsuarioDto: CreateUsuarioDto) {
-    // La implementación lógica la hará Franchesca (FM-03)
+    // La implementación lógica real está en POST /auth/register
     return { mensaje: 'Endpoint documentado' };
   }
 
@@ -118,15 +123,18 @@ export class UsuariosController {
   @Roles(Role.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Listar usuarios con paginación y filtro por rol',
+    summary: 'Listar usuarios con paginación y filtro opcional por rol (Solo ADMIN)',
+    description:
+      'Devuelve un listado paginado de usuarios ordenado por fechaRegistro descendente con metadatos de paginación (page, limit, total, totalPages) y filtro opcional por rol ADMIN o CIUDADANO (#121).',
   })
   @ApiResponse({
     status: 200,
-    description: 'Listado de usuarios obtenido correctamente.',
+    description: 'Listado paginado de usuarios obtenido correctamente.',
+    type: UsuariosPaginadosResponseDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Parámetros de consulta inválidos.',
+    description: 'Parámetros de consulta inválidos (page < 1, limit > 100 o rol no válido).',
   })
   @ApiResponse({
     status: 401,
@@ -136,9 +144,7 @@ export class UsuariosController {
     status: 403,
     description: 'Acceso permitido únicamente a administradores.',
   })
-  async listarUsuarios(
-    @Query() filtros: ListarUsuariosDto,
-  ) {
+  async listarUsuarios(@Query() filtros: ListarUsuariosDto) {
     return this.usuariosService.listarUsuarios(filtros);
   }
 
@@ -148,13 +154,19 @@ export class UsuariosController {
   @Roles(Role.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Cambiar el rol de un usuario',
+    summary: 'Cambiar el rol de un usuario (Solo ADMIN)',
     description:
-      'Permite a un administrador cambiar el rol de otro usuario a ADMIN o CIUDADANO.',
+      'Permite a un administrador cambiar el rol de un usuario a ADMIN o CIUDADANO (#122). Impide que un administrador se quite su propio rol ADMIN (403 Forbidden).',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID del usuario cuyo rol se actualizará',
+    example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
   })
   @ApiResponse({
     status: 200,
     description: 'Rol actualizado correctamente.',
+    type: UpdateUsuarioRolResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -166,8 +178,7 @@ export class UsuariosController {
   })
   @ApiResponse({
     status: 403,
-    description:
-      'Permisos insuficientes o intento de autodegradación.',
+    description: 'Permisos insuficientes o intento de autodegradación de rol ADMIN.',
   })
   @ApiResponse({
     status: 404,
