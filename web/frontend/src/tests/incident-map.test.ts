@@ -27,6 +27,7 @@ import {
   TEXTO_FECHA_DESCONOCIDA,
   construirResumenIncidente,
   crearContenidoPopup,
+  crearContenidoTooltip,
   formatearFechaCreacion,
   reducirSeleccionPopup,
   type DocumentoPopup,
@@ -191,6 +192,26 @@ describe('Validación de coordenadas y marcadores', () => {
       ['INC-1', 'INC-4'],
     )
     assert.equal(resultado[1].titulo, 'Corte de servicio')
+  })
+
+  it('conserva explícitamente categoría, estado y fecha de creación al normalizar', () => {
+    const entrada: IncidentMapMarker = {
+      ...marcadorBase,
+      categoria: 'Incendios',
+      estado: 'En revisión',
+      fechaCreacion: '2026-11-03T15:12:00.000Z',
+    }
+
+    const resultado = normalizarMarcadores([entrada])
+
+    assert.equal(resultado.length, 1)
+    assert.equal(resultado[0].categoria, 'Incendios')
+    assert.equal(resultado[0].estado, 'En revisión')
+    assert.equal(resultado[0].fechaCreacion, '2026-11-03T15:12:00.000Z')
+    // La normalización reconstruye el marcador sin perder campos opcionales.
+    assert.notEqual(resultado[0], entrada)
+    assert.equal(resultado[0].descripcion, entrada.descripcion)
+    assert.equal(resultado[0].prioridad, entrada.prioridad)
   })
 
   it('tolera entradas nulas o no definidas', () => {
@@ -394,6 +415,26 @@ describe('Popup resumen del marcador (#141)', () => {
     )
   })
 
+  it('construye el tooltip como nodo de texto y neutraliza títulos con HTML', () => {
+    const documento = crearDocumentoFalso()
+    const tooltip = comoElementoFalso(
+      crearContenidoTooltip('<img src=x onerror=alert(1)>', documento),
+    )
+
+    assert.equal(tooltip.tagName, 'span')
+    assert.equal(tooltip.textContent, '<img src=x onerror=alert(1)>')
+    // Al no interpretarse como HTML no se crean nodos hijos ejecutables.
+    assert.equal(tooltip.hijos.length, 0)
+  })
+
+  it('formatea la fecha de creación en la zona horaria de America/Santiago', () => {
+    // 15:12 UTC corresponde a 12:12 en Chile (UTC-3 en noviembre).
+    assert.match(
+      formatearFechaCreacion('2026-11-03T15:12:00.000Z'),
+      /12:12/,
+    )
+  })
+
   it('reemplaza la selección al cambiar de marcador y solo limpia al cerrar el seleccionado', () => {
     let estado = reducirSeleccionPopup(ESTADO_SELECCION_INICIAL, {
       tipo: 'seleccionar',
@@ -424,6 +465,46 @@ describe('Popup resumen del marcador (#141)', () => {
       { tipo: 'limpiar' },
     )
     assert.equal(estado.incidenteSeleccionadoId, null)
+  })
+})
+
+describe('Pipeline completo de transformación (#141)', () => {
+  it('conserva categoría, estado y fecha desde el incidente hasta el resumen', () => {
+    const marcador = mapearIncidenteAMarcador(incidenteBase)
+    assert.ok(marcador, 'El incidente base debería mapearse a un marcador')
+
+    const [normalizado] = normalizarMarcadores([marcador])
+    assert.ok(normalizado, 'El marcador válido debería sobrevivir a la normalización')
+
+    const resumen = construirResumenIncidente(normalizado)
+
+    assert.equal(resumen.incidentId, incidenteBase.id)
+    assert.equal(resumen.titulo, incidenteBase.titulo)
+    assert.equal(resumen.categoria, incidenteBase.categoria?.nombre)
+    assert.equal(resumen.estado, incidenteBase.estado?.nombre)
+    assert.equal(
+      resumen.fechaCreacion,
+      formatearFechaCreacion(incidenteBase.fechaCreacion),
+    )
+    assert.notEqual(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+  })
+
+  it('mantiene los respaldos cuando el incidente no informa esos campos', () => {
+    const marcador = mapearIncidenteAMarcador({
+      ...incidenteBase,
+      id: 'INC-SIN-DATOS',
+      categoria: null,
+      estado: null,
+      fechaCreacion: null,
+    })
+    assert.ok(marcador)
+
+    const [normalizado] = normalizarMarcadores([marcador])
+    const resumen = construirResumenIncidente(normalizado)
+
+    assert.equal(resumen.categoria, TEXTO_CATEGORIA_DESCONOCIDA)
+    assert.equal(resumen.estado, TEXTO_ESTADO_DESCONOCIDO)
+    assert.equal(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
   })
 })
 

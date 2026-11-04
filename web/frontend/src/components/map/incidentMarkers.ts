@@ -3,20 +3,12 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from './mapConfig'
+import { textoOpcional } from './textoOpcional'
 import type { Incidente } from '../../types/incidente'
 
 export interface ErrorMapa {
   mensaje: string
   permiteReintentar: boolean
-}
-
-function textoOpcional(valor: unknown): string | undefined {
-  if (typeof valor !== 'string') {
-    return undefined
-  }
-
-  const texto = valor.trim()
-  return texto === '' ? undefined : texto
 }
 
 function numeroOpcional(valor: unknown): number | undefined {

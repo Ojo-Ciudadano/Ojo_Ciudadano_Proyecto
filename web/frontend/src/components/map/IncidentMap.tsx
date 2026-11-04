@@ -17,6 +17,7 @@ import {
 import {
   ESTADO_SELECCION_INICIAL,
   crearContenidoPopup,
+  crearContenidoTooltip,
   reducirSeleccionPopup,
 } from './incidentPopup'
 import './IncidentMap.css'
@@ -172,7 +173,11 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
 
       // La identidad queda disponible en la capa para futuras interacciones.
       circle.incidentId = marcador.id
-      circle.bindTooltip(marcador.titulo, { direction: 'top', offset: [0, -8] })
+
+      // El tooltip recibe un nodo con `textContent` para que un título con
+      // etiquetas HTML se muestre como texto y no pueda inyectar marcado.
+      const tooltipNode = crearContenidoTooltip(marcador.titulo, document)
+      circle.bindTooltip(tooltipNode, { direction: 'top', offset: [0, -8] })
 
       // El popup usa `textContent` en todos sus campos (sin `innerHTML`).
       circle.bindPopup(crearContenidoPopup(marcador, document))

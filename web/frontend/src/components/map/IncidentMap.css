@@ -80,6 +80,7 @@
 .incident-map__popup-titulo {
   color: #0b1f4d;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .incident-map__popup-datos {
@@ -98,6 +99,7 @@
 .incident-map__popup-datos dd {
   margin: 0;
   color: #121212;
+  overflow-wrap: anywhere;
 }
 
 /* Ajustes visuales de los controles de Leaflet al tema del proyecto. */

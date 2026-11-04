@@ -1,4 +1,5 @@
 import type { IncidentMapMarker } from './mapConfig'
+import { textoOpcional } from './textoOpcional'
 
 /**
  * Utilidades del popup resumen de marcadores (#141).
@@ -62,21 +63,13 @@ export function reducirSeleccionPopup(
   }
 }
 
-function textoOpcional(valor: unknown): string | undefined {
-  if (typeof valor !== 'string') {
-    return undefined
-  }
-
-  const texto = valor.trim()
-  return texto === '' ? undefined : texto
-}
-
 const formateadorFecha = new Intl.DateTimeFormat('es-CL', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+  timeZone: 'America/Santiago',
 })
 
 /** Formatea la fecha de creación en un texto legible o un respaldo seguro. */
@@ -123,6 +116,22 @@ export function construirCamposResumen(
 /** Subconjunto de `Document` necesario para construir el contenido. */
 export interface DocumentoPopup {
   createElement(tagName: string): HTMLElement
+}
+
+/**
+ * Construye el contenido del tooltip del marcador como un nodo de texto.
+ *
+ * Leaflet interpreta como HTML el contenido de un tooltip cuando se le pasa un
+ * string, por lo que se entrega siempre un elemento con `textContent`: así un
+ * título con etiquetas HTML se muestra de forma literal y no se ejecuta.
+ */
+export function crearContenidoTooltip(
+  titulo: string,
+  documento: DocumentoPopup,
+): HTMLElement {
+  const tooltip = documento.createElement('span')
+  tooltip.textContent = typeof titulo === 'string' ? titulo : ''
+  return tooltip
 }
 
 /**
