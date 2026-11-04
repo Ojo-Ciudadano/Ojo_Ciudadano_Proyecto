@@ -75,5 +75,9 @@ class IncidentBrowsingTest {
         override suspend fun getEvidencesByIncident(incidenteId: String) = emptyList<Evidence>()
         override suspend fun getEvidenceById(id: String): Evidence = error("Unused")
         override suspend fun downloadEvidenceFile(id: String): okhttp3.ResponseBody = error("Unused")
+        override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> = error("Unused")
+        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): IncidentAssignment = error("Unused")
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
+        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> = error("Unused")
     }
 }

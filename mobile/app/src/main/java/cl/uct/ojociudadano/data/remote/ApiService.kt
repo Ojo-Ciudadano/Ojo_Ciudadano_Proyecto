@@ -18,8 +18,15 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Tag
 import retrofit2.http.Streaming
+import retrofit2.http.PATCH
 import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
 import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
+import cl.uct.ojociudadano.data.remote.dto.PaginatedResponseDto
+import cl.uct.ojociudadano.data.remote.dto.UsuarioDto
+import cl.uct.ojociudadano.data.remote.dto.HistorialEstadoDto
+import cl.uct.ojociudadano.data.remote.dto.AsignacionDto
+import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
 
 interface ApiService {
 
@@ -83,4 +90,32 @@ interface ApiService {
         @Path("id") id: String,
         @Tag expectedSession: TokenSnapshot? = null
     ): ResponseBody
+
+    @GET("api/v1/usuarios")
+    suspend fun getUsuarios(
+        @Query("page") page: Int? = 1,
+        @Query("limit") limit: Int? = 20,
+        @Query("rol") rol: String? = null,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): PaginatedResponseDto<UsuarioDto>
+
+    @GET("api/v1/incidentes/{id}/historial")
+    suspend fun getIncidentHistory(
+        @Path("id") incidentId: String,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): List<HistorialEstadoDto>
+
+    @PATCH("api/v1/incidentes/{id}/asignacion")
+    suspend fun assignResponsible(
+        @Path("id") incidentId: String,
+        @Body request: AssignResponsibleRequestDto,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): AsignacionDto
+
+    @PATCH("api/v1/incidentes/{id}/prioridad")
+    suspend fun updatePriority(
+        @Path("id") incidentId: String,
+        @Body request: UpdatePriorityRequestDto,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): IncidentDto
 }

@@ -2,10 +2,14 @@ package cl.uct.ojociudadano.ui.admin
 
 import androidx.lifecycle.ViewModelStore
 import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
 import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
@@ -242,6 +246,17 @@ class AdminIncidentsViewModelTest {
         override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> = error("Must not query photos")
         override suspend fun getEvidenceById(id: String): Evidence = error("Unused")
         override suspend fun downloadEvidenceFile(id: String): ResponseBody = error("Unused")
+
+        override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> = error("Unused")
+
+        override suspend fun assignResponsible(
+            incidentId: String,
+            assignedUserId: String
+        ): IncidentAssignment = error("Unused")
+
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
+
+        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> = error("Unused")
     }
 
     private class FakeCategoryRepository(

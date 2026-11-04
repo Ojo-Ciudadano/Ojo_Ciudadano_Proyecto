@@ -1,8 +1,12 @@
 package cl.uct.ojociudadano.data.evidence
 
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
 import cl.uct.ojociudadano.data.model.IncidentFilters
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.domain.model.Evidence
@@ -179,6 +183,20 @@ class EvidenceImageFetcherTest {
             requestedId = id
             return onDownload(id)
         }
+
+        override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> =
+            error("No usado")
+
+        override suspend fun assignResponsible(
+            incidentId: String,
+            assignedUserId: String
+        ): IncidentAssignment = error("No usado")
+
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident =
+            error("No usado")
+
+        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> =
+            error("No usado")
     }
 
     private fun sampleEvidence() = Evidence(

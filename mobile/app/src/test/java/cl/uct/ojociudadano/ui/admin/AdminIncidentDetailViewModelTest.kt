@@ -2,11 +2,16 @@ package cl.uct.ojociudadano.ui.admin
 
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.IncidentStatus
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
@@ -157,13 +162,17 @@ class AdminIncidentDetailViewModelTest {
                 throw exception
             }
         }
-        override suspend fun getIncidents(): List<Incident> = error("Must not query list")
+        override suspend fun getIncidents(filters: IncidentFilters): List<Incident> = error("Must not query list")
         override suspend fun getCurrentUserIncidents(): List<Incident> = error("Must not query own incidents")
         override suspend fun createIncident(input: CreateIncidentInput): Incident = error("Unused")
         override suspend fun uploadEvidence(incidenteId: String, file: File, mimeType: String): Evidence = error("Unused")
         override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> = error("Must not query photos")
         override suspend fun getEvidenceById(id: String): Evidence = error("Unused")
         override suspend fun downloadEvidenceFile(id: String): ResponseBody = error("Unused")
+        override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> = error("Unused")
+        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): IncidentAssignment = error("Unused")
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
+        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> = error("Unused")
     }
 
     private fun http(code: Int) = ApiException.Http(code, listOf("private host"), null, null)
