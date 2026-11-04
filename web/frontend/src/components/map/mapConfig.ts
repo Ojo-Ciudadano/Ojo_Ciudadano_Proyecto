@@ -50,6 +50,9 @@ export interface IncidentMapMarker {
   longitud: number
   titulo: string
   descripcion?: string | null
+  categoria?: string | null
+  estado?: string | null
+  fechaCreacion?: string | null
   prioridad?: number | null
 }
 

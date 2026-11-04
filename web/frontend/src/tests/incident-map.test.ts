@@ -21,6 +21,17 @@ import {
   mapearIncidentesAMarcadores,
 } from '../components/map/incidentMarkers'
 import {
+  ESTADO_SELECCION_INICIAL,
+  TEXTO_CATEGORIA_DESCONOCIDA,
+  TEXTO_ESTADO_DESCONOCIDO,
+  TEXTO_FECHA_DESCONOCIDA,
+  construirResumenIncidente,
+  crearContenidoPopup,
+  formatearFechaCreacion,
+  reducirSeleccionPopup,
+  type DocumentoPopup,
+} from '../components/map/incidentPopup'
+import {
   normalizarIncidentes,
   obtenerIncidentesParaMapa,
 } from '../services/incidentes.service'
@@ -58,7 +69,10 @@ const incidenteBase: Incidente = {
   id: 'INC-1',
   titulo: 'Incendio forestal',
   descripcion: 'Humo visible en el cerro',
+  fechaCreacion: '2026-11-03T15:12:00.000Z',
   nivelPrioridad: 1,
+  categoria: { id: 'CAT-1', nombre: 'Incendios' },
+  estado: { id: 'EST-1', nombre: 'Reportado' },
   ubicacion: {
     latitud: -38.7359,
     longitud: -72.5904,
@@ -72,7 +86,51 @@ const marcadorBase: IncidentMapMarker = {
   latitud: -38.7359,
   longitud: -72.5904,
   titulo: 'Incendio forestal',
+  descripcion: 'Humo visible en el cerro',
+  categoria: 'Incendios',
+  estado: 'Reportado',
+  fechaCreacion: '2026-11-03T15:12:00.000Z',
   prioridad: 1,
+}
+
+interface ElementoFalso {
+  tagName: string
+  className: string
+  textContent: string
+  atributos: Record<string, string>
+  hijos: ElementoFalso[]
+  appendChild(hijo: ElementoFalso): void
+  setAttribute(nombre: string, valor: string): void
+}
+
+function crearElementoFalso(tagName: string): ElementoFalso {
+  const elemento: ElementoFalso = {
+    tagName,
+    className: '',
+    textContent: '',
+    atributos: {},
+    hijos: [],
+    appendChild(hijo: ElementoFalso) {
+      elemento.hijos.push(hijo)
+    },
+    setAttribute(nombre: string, valor: string) {
+      elemento.atributos[nombre] = valor
+    },
+  }
+
+  return elemento
+}
+
+function crearDocumentoFalso(): DocumentoPopup {
+  return {
+    createElement(tagName: string): HTMLElement {
+      return crearElementoFalso(tagName) as unknown as HTMLElement
+    },
+  }
+}
+
+function comoElementoFalso(elemento: HTMLElement): ElementoFalso {
+  return elemento as unknown as ElementoFalso
 }
 
 describe('Configuración del mapa de incidentes (#139)', () => {
@@ -181,6 +239,9 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
     assert.equal(marcador.longitud, -72.5904)
     assert.equal(marcador.titulo, 'Incendio forestal')
     assert.equal(marcador.descripcion, 'Humo visible en el cerro')
+    assert.equal(marcador.categoria, 'Incendios')
+    assert.equal(marcador.estado, 'Reportado')
+    assert.equal(marcador.fechaCreacion, '2026-11-03T15:12:00.000Z')
     assert.equal(marcador.prioridad, 1)
   })
 
@@ -260,6 +321,109 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
     const red = interpretarErrorMapa(new Error('network error'))
     assert.equal(red.permiteReintentar, true)
     assert.match(red.mensaje, /Inténtalo nuevamente/i)
+  })
+})
+
+describe('Popup resumen del marcador (#141)', () => {
+  it('resume título, categoría, estado y fecha de creación', () => {
+    const resumen = construirResumenIncidente(marcadorBase)
+
+    assert.equal(resumen.incidentId, 'INC-1')
+    assert.equal(resumen.titulo, 'Incendio forestal')
+    assert.equal(resumen.categoria, 'Incendios')
+    assert.equal(resumen.estado, 'Reportado')
+    assert.notEqual(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+    assert.match(resumen.fechaCreacion, /2026/)
+  })
+
+  it('usa respaldos legibles cuando faltan datos o la fecha es inválida', () => {
+    const resumen = construirResumenIncidente({
+      ...marcadorBase,
+      titulo: '   ',
+      categoria: null,
+      estado: '',
+      fechaCreacion: 'no-es-fecha',
+    })
+
+    assert.equal(resumen.titulo, 'Incidente INC-1')
+    assert.equal(resumen.categoria, TEXTO_CATEGORIA_DESCONOCIDA)
+    assert.equal(resumen.estado, TEXTO_ESTADO_DESCONOCIDO)
+    assert.equal(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+    assert.equal(formatearFechaCreacion(null), TEXTO_FECHA_DESCONOCIDA)
+    assert.equal(formatearFechaCreacion(undefined), TEXTO_FECHA_DESCONOCIDA)
+  })
+
+  it('construye el popup con nodos de texto y conserva el id del incidente', () => {
+    const documento = crearDocumentoFalso()
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorBase, documento),
+    )
+
+    assert.equal(contenido.className, 'incident-map__popup')
+    assert.equal(contenido.atributos['data-incident-id'], 'INC-1')
+
+    const [titulo, datos] = contenido.hijos
+    assert.equal(titulo.tagName, 'strong')
+    assert.equal(titulo.textContent, 'Incendio forestal')
+    assert.equal(datos.tagName, 'dl')
+    assert.deepEqual(
+      datos.hijos.map((hijo) => `${hijo.tagName}:${hijo.textContent}`),
+      [
+        'dt:Categoría',
+        'dd:Incendios',
+        'dt:Estado',
+        'dd:Reportado',
+        'dt:Fecha de creación',
+        `dd:${construirResumenIncidente(marcadorBase).fechaCreacion}`,
+      ],
+    )
+  })
+
+  it('trata un título con HTML como texto literal, sin interpretarlo', () => {
+    const documento = crearDocumentoFalso()
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(
+        { ...marcadorBase, titulo: '<img src=x onerror=alert(1)>' },
+        documento,
+      ),
+    )
+
+    assert.equal(
+      contenido.hijos[0].textContent,
+      '<img src=x onerror=alert(1)>',
+    )
+  })
+
+  it('reemplaza la selección al cambiar de marcador y solo limpia al cerrar el seleccionado', () => {
+    let estado = reducirSeleccionPopup(ESTADO_SELECCION_INICIAL, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-1',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-1')
+
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-2',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-2')
+
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-1',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-2')
+
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-2',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, null)
+
+    estado = reducirSeleccionPopup(
+      { incidenteSeleccionadoId: 'INC-3' },
+      { tipo: 'limpiar' },
+    )
+    assert.equal(estado.incidenteSeleccionadoId, null)
   })
 })
 
