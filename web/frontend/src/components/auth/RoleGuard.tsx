@@ -10,7 +10,7 @@ interface RoleGuardProps {
   /**
    * Roles autorizados para acceder a la ruta (ej: ['ADMIN']).
    */
-  allowedRoles: (RoleName | string)[]
+  allowedRoles: readonly (RoleName | string)[]
   /**
    * Ruta opcional hacia donde redirigir si no tiene permisos.
    */

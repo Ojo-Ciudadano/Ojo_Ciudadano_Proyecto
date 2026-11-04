@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -14,6 +14,13 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from './mapConfig'
+import {
+  ESTADO_SELECCION_INICIAL,
+  crearContenidoPopup,
+  crearContenidoTooltip,
+  reducirSeleccionPopup,
+  resolverIncidenteNavegacion,
+} from './incidentPopup'
 import './IncidentMap.css'
 
 const EMPTY_MARKERS: readonly IncidentMapMarker[] = []
@@ -29,13 +36,33 @@ interface IncidentMapProps {
    * reconstruir el mapa: el efecto solo sincroniza el `LayerGroup`.
    */
   markers?: readonly IncidentMapMarker[]
+  /**
+   * Acción invocada cuando el usuario solicita abrir el detalle del incidente
+   * desde el popup del marcador seleccionado (#142).
+   */
+  onOpenIncidentDetail?: (incidentId: string) => void
   className?: string
 }
 
-export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapProps) {
+export function IncidentMap({
+  markers = EMPTY_MARKERS,
+  onOpenIncidentDetail,
+  className,
+}: IncidentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersLayerRef = useRef<L.LayerGroup | null>(null)
+  const selectedMarkerRef = useRef<IncidentCircleMarker | null>(null)
+  const [seleccion, despacharSeleccion] = useReducer(
+    reducirSeleccionPopup,
+    ESTADO_SELECCION_INICIAL,
+  )
+  const seleccionRef = useRef(seleccion)
+  seleccionRef.current = seleccion
+
+  const onOpenDetailRef = useRef(onOpenIncidentDetail)
+  onOpenDetailRef.current = onOpenIncidentDetail
+
   const [tileError, setTileError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
 
@@ -143,6 +170,10 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
       return
     }
 
+    // Al refrescar la capa se descarta cualquier popup seleccionado.
+    selectedMarkerRef.current = null
+    seleccionRef.current = ESTADO_SELECCION_INICIAL
+    despacharSeleccion({ tipo: 'limpiar' })
     layer.clearLayers()
 
     for (const marcador of normalizarMarcadores(markers)) {
@@ -159,29 +190,56 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
 
       // La identidad queda disponible en la capa para futuras interacciones.
       circle.incidentId = marcador.id
-      const tooltip = document.createElement('span')
-      tooltip.textContent = marcador.titulo
-
-      circle.bindTooltip(tooltip, {
+      circle.bindTooltip(crearContenidoTooltip(marcador, document), {
         direction: 'top',
         offset: [0, -8],
       })
 
-      // Se construye el popup con nodos de texto para evitar inyección de HTML.
-      const popup = document.createElement('div')
-      popup.className = 'incident-map__popup'
+      // El popup usa `textContent` en todos sus campos (sin `innerHTML`).
+      circle.bindPopup(
+        crearContenidoPopup(marcador, document, {
+          onVerDetalle: (incidenteSolicitadoId) => {
+            const idDestino = resolverIncidenteNavegacion(
+              seleccionRef.current,
+              incidenteSolicitadoId,
+            )
+            if (idDestino) {
+              onOpenDetailRef.current?.(idDestino)
+            }
+          },
+        }),
+      )
 
-      const titulo = document.createElement('strong')
-      titulo.textContent = marcador.titulo
-      popup.appendChild(titulo)
+      circle.on('popupopen', () => {
+        // Garantiza un único popup abierto al cambiar de marcador.
+        const anterior = selectedMarkerRef.current
+        if (anterior && anterior !== circle) {
+          anterior.closePopup()
+        }
+        selectedMarkerRef.current = circle
+        const nuevoEstado = reducirSeleccionPopup(seleccionRef.current, {
+          tipo: 'seleccionar',
+          incidenteId: marcador.id,
+        })
+        seleccionRef.current = nuevoEstado
+        despacharSeleccion({
+          tipo: 'seleccionar',
+          incidenteId: marcador.id,
+        })
+      })
 
-      if (marcador.descripcion) {
-        const descripcion = document.createElement('p')
-        descripcion.textContent = marcador.descripcion
-        popup.appendChild(descripcion)
-      }
+      circle.on('popupclose', () => {
+        if (selectedMarkerRef.current === circle) {
+          selectedMarkerRef.current = null
+        }
+        const nuevoEstado = reducirSeleccionPopup(seleccionRef.current, {
+          tipo: 'cerrar',
+          incidenteId: marcador.id,
+        })
+        seleccionRef.current = nuevoEstado
+        despacharSeleccion({ tipo: 'cerrar', incidenteId: marcador.id })
+      })
 
-      circle.bindPopup(popup)
       circle.addTo(layer)
     }
   }, [markers, retryKey])
@@ -189,7 +247,10 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
   const rootClassName = ['incident-map', className].filter(Boolean).join(' ')
 
   return (
-    <div className={rootClassName}>
+    <div
+      className={rootClassName}
+      data-selected-incident-id={seleccion.incidenteSeleccionadoId ?? undefined}
+    >
       <div
         ref={containerRef}
         className="incident-map__canvas"

@@ -1,10 +1,68 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
+import {
+  ORIGEN_NAVEGACION_MAPA,
+  type EstadoNavegacionDetalle,
+} from '../../components/map/incidentPopup'
+import { ROLES } from '../../config/navigation'
+import { useAuth } from '../../contexts/AuthContext'
 import { useIncidenteDetalle } from '../../hooks/useIncidenteDetalle'
 import type { IncidenteDetalle } from '../../types/incidenteDetalle'
 import { AsignacionIncidente } from './AsignacionIncidente'
 import { CambioPrioridadIncidente } from './CambioPrioridadIncidente'
 import { CambioEstadoIncidente } from './CambioEstadoIncidente'
-import './IncidenteDetallePage.css'
+
+export interface EnlaceRetornoDetalle {
+  destino: string
+  etiqueta: string
+}
+
+/**
+ * Determina si el usuario autenticado puede ejecutar acciones administrativas
+ * (cambio de estado, asignación de responsable y cambio de prioridad) (#142).
+ */
+export function puedeGestionarIncidente(
+  roles?: readonly string[] | null,
+): boolean {
+  if (!Array.isArray(roles)) {
+    return false
+  }
+  return roles.includes(ROLES.ADMIN)
+}
+
+/**
+ * Resuelve el destino y texto del enlace de retorno en el detalle (#142).
+ * - Si se abrió desde el mapa (`state.origen === 'mapa'`), regresa a `/mapa`.
+ * - Si no viene del mapa y es Administrador, regresa a `/incidentes`.
+ * - Si es Ciudadano, regresa a `/mapa`.
+ */
+export function resolverEnlaceRetornoDetalle(
+  locationState: unknown,
+  roles?: readonly string[] | null,
+): EnlaceRetornoDetalle {
+  const origen =
+    typeof locationState === 'object' && locationState !== null
+      ? (locationState as EstadoNavegacionDetalle).origen
+      : undefined
+
+  if (origen === ORIGEN_NAVEGACION_MAPA) {
+    return {
+      destino: '/mapa',
+      etiqueta: '← Volver al mapa',
+    }
+  }
+
+  if (puedeGestionarIncidente(roles)) {
+    return {
+      destino: '/incidentes',
+      etiqueta: '← Volver a la tabla de incidentes',
+    }
+  }
+
+  return {
+    destino: '/mapa',
+    etiqueta: '← Volver al mapa',
+  }
+}
 
 function texto(valor?: string | null): string {
   return valor?.trim() || 'Sin información'
@@ -187,6 +245,11 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
 
 export function IncidenteDetallePage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const { user } = useAuth()
+
+  const esAdmin = puedeGestionarIncidente(user?.roles)
+  const retorno = resolverEnlaceRetornoDetalle(location.state, user?.roles)
 
   const {
     incidente,
@@ -205,8 +268,8 @@ export function IncidenteDetallePage() {
       className="detalle-pagina"
       aria-label="Detalle del incidente"
     >
-      <Link className="detalle-volver" to="/incidentes">
-        ← Volver a la tabla de incidentes
+      <Link className="detalle-volver" to={retorno.destino}>
+        {retorno.etiqueta}
       </Link>
 
       <div aria-busy={cargando}>
@@ -225,8 +288,13 @@ export function IncidenteDetallePage() {
           <div
             className="detalle-mensaje detalle-error"
             role="alert"
+            data-acceso-denegado={error.accesoDenegado ? 'true' : undefined}
           >
-            <h1>No se pudo consultar el incidente</h1>
+            <h1>
+              {error.accesoDenegado
+                ? 'Acceso denegado'
+                : 'No se pudo consultar el incidente'}
+            </h1>
             <p>{error.mensaje}</p>
 
             {error.permiteReintentar && (
@@ -239,26 +307,30 @@ export function IncidenteDetallePage() {
           <>
             <DatosIncidente incidente={incidente} />
 
-            <div className="detalle-gestion-cuadricula">
-              <AsignacionIncidente
-                key={`asignacion-${incidente.id}`}
-                incidente={incidente}
-                alConfirmar={actualizarAsignacionConfirmada}
-              />
+            {esAdmin && (
+              <>
+                <div className="detalle-gestion-cuadricula">
+                  <AsignacionIncidente
+                    key={`asignacion-${incidente.id}`}
+                    incidente={incidente}
+                    alConfirmar={actualizarAsignacionConfirmada}
+                  />
 
-              <CambioPrioridadIncidente
-                key={`prioridad-${incidente.id}`}
-                incidente={incidente}
-                alConfirmar={actualizarPrioridadConfirmada}
-              />
-            </div>
+                  <CambioPrioridadIncidente
+                    key={`prioridad-${incidente.id}`}
+                    incidente={incidente}
+                    alConfirmar={actualizarPrioridadConfirmada}
+                  />
+                </div>
 
-            <CambioEstadoIncidente
-              key={incidente.id}
-              incidente={incidente}
-              alConfirmar={actualizarEstadoConfirmado}
-              alConflicto={recargarDetalle}
-            />
+                <CambioEstadoIncidente
+                  key={incidente.id}
+                  incidente={incidente}
+                  alConfirmar={actualizarEstadoConfirmado}
+                  alConflicto={recargarDetalle}
+                />
+              </>
+            )}
           </>
         ) : null}
       </div>

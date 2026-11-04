@@ -1,4 +1,10 @@
+import { useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { IncidentMap } from '../../components/map/IncidentMap'
+import {
+  ORIGEN_NAVEGACION_MAPA,
+  construirRutaDetalleIncidente,
+} from '../../components/map/incidentPopup'
 import { useIncidentesMapa } from '../../hooks/useIncidentesMapa'
 import './IncidentMapPage.css'
 
@@ -27,6 +33,7 @@ function resumenIncidentes(
 }
 
 export function IncidentMapPage() {
+  const navigate = useNavigate()
   const {
     marcadores,
     cargando,
@@ -36,6 +43,19 @@ export function IncidentMapPage() {
     totalGeorreferenciados,
     totalOmitidos,
   } = useIncidentesMapa()
+
+  const handleOpenIncidentDetail = useCallback(
+    (incidentId: string) => {
+      const rutaDestino = construirRutaDetalleIncidente(incidentId)
+      if (!rutaDestino) {
+        return
+      }
+      navigate(rutaDestino, {
+        state: { origen: ORIGEN_NAVEGACION_MAPA },
+      })
+    },
+    [navigate],
+  )
 
   const mostrarVacio =
     !cargando && !error && totalGeorreferenciados === 0
@@ -52,7 +72,10 @@ export function IncidentMapPage() {
       </header>
 
       <div className="mapa-tarjeta">
-        <IncidentMap markers={marcadores} />
+        <IncidentMap
+          markers={marcadores}
+          onOpenIncidentDetail={handleOpenIncidentDetail}
+        />
 
         {cargando && (
           <div className="mapa-overlay" role="status" aria-live="polite">
