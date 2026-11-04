@@ -17,6 +17,7 @@ import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.data.session.testSessionManager
 import kotlinx.coroutines.test.runTest
 import okhttp3.ResponseBody
+import cl.uct.ojociudadano.data.remote.dto.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -254,6 +255,38 @@ class RemoteRepositoryTest {
         ): IncidentDto {
             lastCreateRequest = request
             return incident
+        }
+
+        override suspend fun getUsuarios(
+            page: Int?,
+            limit: Int?,
+            rol: String?,
+            expectedSession: TokenSnapshot?
+        ): PaginatedResponseDto<UsuarioDto> {
+            throw NotImplementedError()
+        }
+
+        override suspend fun getIncidentHistory(
+            incidentId: String,
+            expectedSession: TokenSnapshot?
+        ): List<HistorialEstadoDto> {
+            throw NotImplementedError()
+        }
+
+        override suspend fun assignResponsible(
+            incidentId: String,
+            request: AssignResponsibleRequestDto,
+            expectedSession: TokenSnapshot?
+        ): AsignacionDto {
+            throw NotImplementedError()
+        }
+
+        override suspend fun updatePriority(
+            incidentId: String,
+            request: UpdatePriorityRequestDto,
+            expectedSession: TokenSnapshot?
+        ): IncidentDto {
+            throw NotImplementedError()
         }
     }
 
