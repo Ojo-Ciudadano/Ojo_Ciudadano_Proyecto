@@ -24,7 +24,8 @@ data class AdminIncidentsState(
     val filters: IncidentFilters = IncidentFilters(),
     val availableStates: List<IncidentStatus> = emptyList(),
     val availableCommunes: List<String> = emptyList(),
-    val categories: List<Category> = emptyList()
+    val categories: List<Category> = emptyList(),
+    val categoriesFailed: Boolean = false
 )
 
 class AdminIncidentsViewModel(
@@ -33,7 +34,14 @@ class AdminIncidentsViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(AdminIncidentsState())
     val state = _state.asStateFlow()
+
     private var loadJob: Job? = null
+    private var optionsJob: Job? = null
+    private var categoriesJob: Job? = null
+
+    // The selector catalogs are derived from one unfiltered response. Once that response
+    // arrives we stop asking for it again while the ViewModel lives.
+    private var optionsInitialized = false
 
     init {
         loadCategories()
@@ -48,6 +56,7 @@ class AdminIncidentsViewModel(
             try {
                 // General authenticated query; filters are only forwarded for the admin listing.
                 val incidents = incidentRepository.getIncidents(filters)
+                if (filters.isEmpty) optionsInitialized = true
                 _state.update { current ->
                     current.copy(
                         status = if (incidents.isEmpty()) IncidentsUiState.Empty else IncidentsUiState.Success,
@@ -64,6 +73,10 @@ class AdminIncidentsViewModel(
                 _state.update { it.copy(status = IncidentsUiState.Error(exception.incidentMessage()), incidents = emptyList()) }
             }
         }
+        // Selecting a filter before the first unfiltered response arrives cancels the only
+        // query that populates the selectors, so the catalog is rebuilt by a separate job
+        // that filter changes never cancel.
+        if (!filters.isEmpty) ensureOptions()
     }
 
     fun applyFilters(filters: IncidentFilters) {
@@ -81,15 +94,40 @@ class AdminIncidentsViewModel(
 
     fun selectComuna(comuna: String?) = applyFilters(_state.value.filters.copy(comuna = comuna))
 
-    private fun loadCategories() {
-        viewModelScope.launch {
+    /** Loads (or retries) the category catalog without touching the selected filters. */
+    fun loadCategories() {
+        if (categoriesJob?.isActive == true) return
+        categoriesJob = viewModelScope.launch {
             try {
                 val categories = categoryRepository.getCategories()
-                _state.update { it.copy(categories = categories) }
+                _state.update { it.copy(categories = categories, categoriesFailed = false) }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (_: Exception) {
-                // A catalog failure must not block the incident listing.
+                // A catalog failure must not block the incident listing, but it is exposed so
+                // the user can retry it while keeping the filters already selected.
+                _state.update { it.copy(categoriesFailed = true) }
+            }
+        }
+    }
+
+    private fun ensureOptions() {
+        if (optionsInitialized) return
+        if (optionsJob?.isActive == true) return
+        optionsJob = viewModelScope.launch {
+            try {
+                val incidents = incidentRepository.getIncidents(IncidentFilters())
+                optionsInitialized = true
+                _state.update { current ->
+                    current.copy(
+                        availableStates = deriveStates(incidents),
+                        availableCommunes = deriveCommunes(incidents)
+                    )
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                // The listing remains usable; a later filter change retries the catalog.
             }
         }
     }

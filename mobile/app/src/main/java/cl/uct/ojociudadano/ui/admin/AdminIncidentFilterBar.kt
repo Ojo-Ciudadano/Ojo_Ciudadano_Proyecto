@@ -37,6 +37,7 @@ fun AdminIncidentFilterBar(
     onComunaSelected: (String?) -> Unit,
     onCategoriaSelected: (String?) -> Unit,
     onClearFilters: () -> Unit,
+    onRetryCategories: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filters = state.filters
@@ -64,6 +65,22 @@ fun AdminIncidentFilterBar(
             onValueSelected = onComunaSelected,
             modifier = Modifier.fillMaxWidth()
         )
+
+        if (state.categoriesFailed) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "No se pudieron cargar las categorías.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onRetryCategories) { Text("Reintentar") }
+            }
+        }
 
         if (!filters.isEmpty) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

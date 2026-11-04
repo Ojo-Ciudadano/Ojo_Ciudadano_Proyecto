@@ -219,6 +219,56 @@ class AdminIncidentsViewModelTest {
         assertEquals(IncidentsUiState.Success, model.state.value.status)
         assertEquals(listOf(incident), model.state.value.incidents)
         assertTrue(model.state.value.categories.isEmpty())
+        assertTrue(model.state.value.categoriesFailed)
+    }
+
+    @Test fun `filtering before the initial load completes still initializes selectors`() = runTest {
+        val initial = CompletableDeferred<List<Incident>>()
+        val repository = Repository().apply { response = initial }
+        val model = AdminIncidentsViewModel(repository, FakeCategoryRepository())
+        runCurrent()
+
+        // The unfiltered request that populates the selectors is still pending…
+        repository.response = null
+        model.selectCategoria("category")
+        runCurrent()
+
+        // …yet the filter is applied and the selectors are rebuilt by the separate catalog job.
+        assertEquals(IncidentFilters(categoriaId = "category"), model.state.value.filters)
+        assertEquals(listOf(IncidentStatus("status", "Nuevo", 1)), model.state.value.availableStates)
+        assertEquals(listOf("Temuco"), model.state.value.availableCommunes)
+        assertTrue(repository.cancelled)
+
+        // The recovered options make it possible to combine a second filter.
+        repository.requestedFilters.clear()
+        model.selectEstado("status")
+        runCurrent()
+        assertEquals(
+            listOf(IncidentFilters(estadoId = "status", categoriaId = "category")),
+            repository.requestedFilters
+        )
+    }
+
+    @Test fun `category catalog failure can be retried without losing selected filters`() = runTest {
+        val repository = Repository().apply { rows = listOf(incident) }
+        val categories = FakeCategoryRepository(failure = IOException("private host"))
+        val model = AdminIncidentsViewModel(repository, categories)
+        runCurrent()
+        assertTrue(model.state.value.categoriesFailed)
+        assertTrue(model.state.value.categories.isEmpty())
+
+        model.applyFilters(IncidentFilters(estadoId = "status"))
+        runCurrent()
+
+        categories.failure = null
+        categories.rows = listOf(incident.category)
+        model.loadCategories()
+        runCurrent()
+
+        assertEquals(2, categories.calls)
+        assertFalse(model.state.value.categoriesFailed)
+        assertEquals(listOf(incident.category), model.state.value.categories)
+        assertEquals(IncidentFilters(estadoId = "status"), model.state.value.filters)
     }
 
     private class Repository : IncidentRepository {
@@ -260,10 +310,12 @@ class AdminIncidentsViewModelTest {
     }
 
     private class FakeCategoryRepository(
-        private val rows: List<Category> = emptyList(),
-        private val failure: Exception? = null
+        var rows: List<Category> = emptyList(),
+        var failure: Exception? = null
     ) : CategoryRepository {
+        var calls = 0
         override suspend fun getCategories(): List<Category> {
+            calls++
             failure?.let { throw it }
             return rows
         }

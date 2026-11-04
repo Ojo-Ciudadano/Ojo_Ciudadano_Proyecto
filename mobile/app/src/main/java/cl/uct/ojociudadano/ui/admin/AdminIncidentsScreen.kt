@@ -51,7 +51,8 @@ fun AdminIncidentsScreen(onBack: () -> Unit, onIncidentSelected: (String) -> Uni
         onEstadoSelected = model::selectEstado,
         onComunaSelected = model::selectComuna,
         onCategoriaSelected = model::selectCategoria,
-        onClearFilters = model::clearFilters
+        onClearFilters = model::clearFilters,
+        onRetryCategories = model::loadCategories
     )
 }
 
@@ -65,7 +66,8 @@ fun AdminIncidentsContent(
     onEstadoSelected: (String?) -> Unit = {},
     onComunaSelected: (String?) -> Unit = {},
     onCategoriaSelected: (String?) -> Unit = {},
-    onClearFilters: () -> Unit = {}
+    onClearFilters: () -> Unit = {},
+    onRetryCategories: () -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Incidentes", subtitle = "Administrador", onBack = onBack)
@@ -95,7 +97,8 @@ fun AdminIncidentsContent(
                     onEstadoSelected = onEstadoSelected,
                     onComunaSelected = onComunaSelected,
                     onCategoriaSelected = onCategoriaSelected,
-                    onClearFilters = onClearFilters
+                    onClearFilters = onClearFilters,
+                    onRetryCategories = onRetryCategories
                 )
             }
             if (state.status == IncidentsUiState.Success) {
