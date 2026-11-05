@@ -1,6 +1,7 @@
 import { apiClient } from './api'
 import type {
   FiltrosIncidentes,
+  FiltrosMapaIncidentes,
   Incidente,
 } from '../types/incidente'
 import type {
@@ -25,18 +26,37 @@ export function normalizarIncidentes(payload: unknown): Incidente[] | null {
   return payload as Incidente[]
 }
 
+/**
+ * Limpia y normaliza los filtros aplicables al mapa web (#143).
+ */
+export function normalizarFiltrosMapa(
+  filtros?: Partial<FiltrosMapaIncidentes> | null,
+): FiltrosMapaIncidentes {
+  const estadoId =
+    typeof filtros?.estadoId === 'string' ? filtros.estadoId.trim() : ''
+  const categoriaId =
+    typeof filtros?.categoriaId === 'string' ? filtros.categoriaId.trim() : ''
+
+  return {
+    estadoId,
+    categoriaId,
+  }
+}
+
 export async function obtenerIncidentes(
   signal?: AbortSignal,
   filtros: Partial<FiltrosIncidentes> = {},
 ): Promise<Incidente[]> {
   const params: Record<string, string> = {}
 
-  if (filtros.estadoId) {
-    params.estadoId = filtros.estadoId
+  const estadoId = filtros.estadoId?.trim()
+  if (estadoId) {
+    params.estadoId = estadoId
   }
 
-  if (filtros.categoriaId) {
-    params.categoriaId = filtros.categoriaId
+  const categoriaId = filtros.categoriaId?.trim()
+  if (categoriaId) {
+    params.categoriaId = categoriaId
   }
 
   const comuna = filtros.comuna?.trim()
@@ -70,8 +90,14 @@ export async function obtenerIncidentes(
  */
 export function obtenerIncidentesParaMapa(
   signal?: AbortSignal,
+  filtros: Partial<FiltrosMapaIncidentes> = {},
 ): Promise<Incidente[]> {
-  return obtenerIncidentes(signal)
+  const { estadoId, categoriaId } = normalizarFiltrosMapa(filtros)
+
+  return obtenerIncidentes(signal, {
+    estadoId,
+    categoriaId,
+  })
 }
 
 export async function obtenerIncidenteDetalle(
