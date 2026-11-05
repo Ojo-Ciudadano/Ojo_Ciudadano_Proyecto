@@ -152,7 +152,7 @@ fun AdminIncidentDetailContent(
                             DetailSection("Cambiar estado") {
                                 state.availableTransitions.forEach { destination ->
                                     OutlinedButton(onClick = { onSelectStatus(destination) },
-                                        enabled = !state.busy && state.selectedStatus == null) {
+                                        enabled = state.canStartAction) {
                                         Text("Cambiar a $destination")
                                     }
                                 }

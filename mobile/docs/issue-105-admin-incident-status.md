@@ -247,3 +247,111 @@ contra backend remoto. Sigue pendiente E2E del despliegue real con un ADMIN y un
 incidente autorizado, incluyendo la verificación del historial persistido.
 La evidencia local no certifica disponibilidad ni autorización del despliegue.
 No se fusiona el PR hacia integration ni se cierra manualmente #105.
+
+## Revisión posterior a la integración del PR #242 (2026-11-05)
+
+### Base y diagnóstico
+
+- Estado inicial: `feature/105-admin-incident-status`, `a74e1f2`, árbol limpio,
+  sin commits exclusivos respecto de `origin/integration`.
+- Se actualizaron las referencias con `git fetch origin`. El PR #242 está
+  fusionado mediante `94768b2326becec20763ec643b8bd2cdab5a9aed`
+  (GitHub: 2026-11-05 07:00:02 UTC), ancestro de `origin/integration`.
+- La punta remota es `d558418`; contiene 23 commits posteriores a la rama
+  original. Se creó `fix/105-admin-incident-status` directamente desde ella.
+  No hubo merge, conflictos ni cambios locales que sobrescribir. La rama
+  original y sus commits se conservan.
+- Además de #105 ya estaban incorporadas #103/PR #221, #104/PR #228,
+  #116, #117/PR #206 y #162/PR #220. Los PR #252, #253 y #255 añadieron
+  historial, asignación y prioridad sobre el mismo detalle. También se conserva
+  la base reciente de GPS y mapa (#258/#259).
+- Ya funcionaban las transiciones centralizadas, diálogo y observación con trim,
+  PATCH, JWT/ADMIN, carga, exclusión de PATCH duplicados, errores seguros,
+  descarte de sesiones obsoletas, GET posterior y recarga del listado con filtros.
+  Se revisaron los contratos locales de backend y las Issues en GitHub; no se
+  cambiaron DTO, repositorios, interceptores, autenticación ni navegación.
+- La base actualizada pasó `testDebugUnitTest`, `lintDebug`, `assembleDebug`
+  y `compileDebugAndroidTestKotlin` antes de las correcciones.
+
+### Fallos reproducidos y correcciones
+
+Las cinco nuevas pruebas unitarias fallaron primero sobre la implementación
+recibida (`/tmp/issue105-regressions-before.log`); los casos previos de esa suite
+pasaron. Se corrigieron únicamente los problemas de integración del cambio de estado:
+
+1. **Operaciones incompatibles simultáneas.** El estado ocupado ahora incluye
+   asignación; la política compartida `canMutate`/`canStartAction` bloquea
+   asignación, prioridad y estado durante otra escritura, sincronización, error
+   terminal del cambio o fallo de recarga. Los diálogos se excluyen entre sí.
+   Asignación y prioridad publican su bloqueo antes de iniciar la coroutine.
+   Los botones Compose utilizan la misma política que el ViewModel.
+2. **Pérdida de datos ampliados.** Tras el PATCH se adoptan solamente el estado
+   y la fecha confirmados sobre el incidente cargado. Se conservan responsable,
+   prioridad, evidencias e historial mientras llega el GET, y también si falla.
+   El GET exitoso sigue reemplazando el detalle con la respuesta completa.
+3. **Historial visible desactualizado.** Después del PATCH confirmado se cancela
+   cualquier consulta de historial anterior y se solicita el historial nuevo.
+   Un fallo de historial conserva el éxito y el detalle, muestra su error propio
+   y permite reintentar solo esa consulta. Nunca repite la escritura.
+
+Archivos de producción, relativos a `mobile/`:
+
+- `app/src/main/java/cl/uct/ojociudadano/ui/admin/AdminIncidentDetailViewModel.kt`:
+  política de exclusión, conservación del incidente y recarga del historial.
+- `app/src/main/java/cl/uct/ojociudadano/ui/admin/AdminIncidentDetailScreen.kt`:
+  habilitación coherente de acciones de estado.
+- `app/src/main/java/cl/uct/ojociudadano/ui/admin/AdminIncidentAssignmentSection.kt`
+  y `AdminIncidentPrioritySection.kt`: botones bloqueados durante el cambio.
+
+Pruebas modificadas:
+
+- `app/src/test/java/cl/uct/ojociudadano/ui/admin/AdminIncidentDetailViewModelTest.kt`:
+  cinco regresiones de concurrencia, respuesta resumida, historial obsoleto y
+  recuperación de historial sin repetir PATCH.
+- `app/src/androidTest/java/cl/uct/ojociudadano/ui/admin/AdminIncidentDetailScreenTest.kt`:
+  bloqueo visual de acciones durante escrituras, sincronización y errores.
+  También corrige tres aserciones preexistentes: desplaza hasta el título al
+  comprobar que sigue visible y limita al diálogo las búsquedas cuyos textos
+  coinciden con botones del fondo. Los tres fallos se reprodujeron en una copia
+  temporal intacta de `origin/integration` en `/tmp/issue105-base-prz2nzbq/mobile`;
+  evidencia: `/tmp/issue105-base-instrumented.log`. No fueron regresiones de
+  estas correcciones ni requirieron cambios funcionales ajenos al detalle.
+
+### Verificación actual
+
+Comando ejecutado desde `mobile/`:
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin --console=plain
+```
+
+Resultado: BUILD SUCCESSFUL, salida 0. Se ejecutaron 420 casos unitarios:
+417 aprobados, 3 omitidos, 0 fallos y 0 errores. Incluye 37 pruebas del ViewModel
+de detalle y 25 de `AuthenticatedIncidentsFlowTest` (contrato PATCH/JWT, roles,
+400/401/403/404/409/5xx, timeout, desconexión, sesión obsoleta y ausencia de replay).
+Lint: 0 errores y 36 advertencias. APK debug y compilación androidTest correctos.
+Log: `/tmp/issue105-current-validation.log`; base: `/tmp/issue105-current-baseline.log`.
+Tras ajustar las aserciones instrumentadas se repitió el comando, nuevamente
+con salida 0: `/tmp/issue105-current-final-validation.log`.
+
+Verificación conjunta final, también desde `mobile/`:
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug compileDebugAndroidTestKotlin connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.admin.AdminIncidentDetailScreenTest,cl.uct.ojociudadano.ui.admin.AdminIncidentsScreenTest,cl.uct.ojociudadano.ui.startup.RoleNavigationTest,cl.uct.ojociudadano.ui.reports.IncidentBrowsingTest --console=plain
+```
+
+BUILD SUCCESSFUL, salida 0. Las 33 pruebas instrumentadas pasaron en Motorola
+AVD Android 17, sin omisiones ni fallos. Incluyen detalle, observación, matriz,
+diálogos, carga, bloqueo de acciones, listado, navegación ADMIN y regresión
+ciudadana. Evidencia final: `/tmp/issue105-delivery-validation.log`.
+Se verificaron además `git diff --check`, `git diff --cached --check` y la
+ascendencia de `origin/integration`. Un segundo fetch mantuvo la punta `d558418`.
+Los bloqueos iniciales del sandbox para Git, caché Gradle y puerto ADB se
+resolvieron repitiendo las operaciones con los permisos correspondientes.
+
+Las tres omisiones corresponden a integraciones remotas de categorías, consulta
+de incidentes y creación de incidente; requieren habilitación explícita. Sigue
+pendiente la comprobación E2E contra el despliegue con ADMIN e incidente autorizado,
+incluido el historial persistido. No se utilizaron credenciales temporales ni se
+realizaron mutaciones remotas. La Issue #105 continúa abierta en GitHub aunque
+su PR original está fusionado; esta revisión no modifica su estado remoto.

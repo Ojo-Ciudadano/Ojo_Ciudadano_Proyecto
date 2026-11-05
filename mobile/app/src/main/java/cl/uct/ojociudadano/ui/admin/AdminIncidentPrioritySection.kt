@@ -49,6 +49,7 @@ internal fun AdminIncidentPrioritySection(
         }
         OutlinedButton(
             onClick = actions.onOpen,
+            enabled = state.canStartAction,
             modifier = Modifier.testTag("admin_priority_open")
         ) {
             Text("Modificar prioridad")

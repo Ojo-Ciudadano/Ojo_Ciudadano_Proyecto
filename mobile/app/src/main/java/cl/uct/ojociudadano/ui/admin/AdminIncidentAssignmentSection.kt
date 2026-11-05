@@ -58,6 +58,7 @@ internal fun AdminIncidentAssignmentSection(
         }
         OutlinedButton(
             onClick = actions.onOpen,
+            enabled = state.canStartAction,
             modifier = Modifier.fillMaxWidth().testTag("admin_assignment_open")
         ) {
             Text(if (assignment == null) "Asignar responsable" else "Reasignar responsable")

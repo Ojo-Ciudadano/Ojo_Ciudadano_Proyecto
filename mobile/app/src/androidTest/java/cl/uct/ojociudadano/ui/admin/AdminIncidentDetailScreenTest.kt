@@ -10,6 +10,9 @@ import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -163,7 +166,7 @@ class AdminIncidentDetailScreenTest {
                 historyCanRetry = true
             )
         }
-        compose.onNodeWithText(incident.title).assertIsDisplayed()
+        compose.onNodeWithText(incident.title).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("No fue posible cargar el historial.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Reintentar").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, historyRetries) }
@@ -255,6 +258,30 @@ class AdminIncidentDetailScreenTest {
         assertEquals(1, reloads)
     }
 
+    @Test fun accionesAdministrativasSeBloqueanDuranteElCambioYSuSincronizacion() {
+        val initial = AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident)
+        val state = mutableStateOf(initial)
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(state.value, {}, {}, onSelectStatus = {})
+            }
+        }
+        for (blocked in listOf(initial.copy(submitting = true), initial.copy(synchronizing = true),
+            initial.copy(assigning = true), initial.copy(savingPriority = true),
+            initial.copy(syncError = "No se pudo recargar el detalle."), initial.copy(actionsBlocked = true))) {
+            compose.runOnIdle { state.value = blocked }
+            compose.onNodeWithTag("admin_assignment_open").performScrollTo().assertIsNotEnabled()
+            compose.onNodeWithTag("admin_priority_open").performScrollTo().assertIsNotEnabled()
+            if (blocked.availableTransitions.isNotEmpty()) {
+                compose.onNodeWithText("Cambiar a En atención").performScrollTo().assertIsNotEnabled()
+            }
+        }
+        compose.runOnIdle { state.value = initial }
+        compose.onNodeWithTag("admin_assignment_open").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("admin_priority_open").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("Cambiar a En atención").performScrollTo().assertIsEnabled()
+    }
+
     @Test fun assignmentSectionShowsConfirmedResponsibleOrAnAbsentAssignment() {
         val state = mutableStateOf(
             AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident)
@@ -313,8 +340,8 @@ class AdminIncidentDetailScreenTest {
                 )
             }
         }
-        compose.onNodeWithText("Reasignar responsable").assertIsDisplayed()
-        compose.onNodeWithText("Admin Uno").assertIsDisplayed()
+        compose.onNode(hasText("Reasignar responsable") and hasAnyAncestor(isDialog())).assertIsDisplayed()
+        compose.onNode(hasText("Admin Uno") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         compose.onNodeWithText("admin1@uct.cl").assertIsDisplayed()
         compose.onNodeWithText("Admin Dos").assertIsDisplayed()
         compose.onNodeWithTag("admin_assignment_confirm").assertIsNotEnabled()
@@ -396,7 +423,7 @@ class AdminIncidentDetailScreenTest {
         compose.setContent {
             OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}, priorityActions = actions) }
         }
-        compose.onNodeWithText("Modificar prioridad").assertIsDisplayed()
+        compose.onNode(hasText("Modificar prioridad") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         for (level in 1..5) compose.onNodeWithTag("admin_priority_option_$level").assertExists()
         compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
         compose.onNodeWithTag("admin_priority_option_4").performClick()
