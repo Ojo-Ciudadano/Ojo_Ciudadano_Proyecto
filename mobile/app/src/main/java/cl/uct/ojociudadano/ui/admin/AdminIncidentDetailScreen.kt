@@ -11,12 +11,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,7 +28,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Incident
@@ -49,24 +49,30 @@ fun AdminIncidentDetailScreen(id: String?, onBack: () -> Unit) {
         }
     )
     val state by model.state.collectAsState()
-    AdminIncidentDetailContent(
-        state = state,
-        onBack = onBack,
-        onRetry = model::retry,
-        onRetryHistory = model::retryHistory,
-        assignmentActions = AdminIncidentAssignmentActions(
+    val priorityActions = remember(model) {
+        AdminIncidentPriorityActions(
+            onOpen = model::openPriorityDialog,
+            onDismiss = model::dismissPriorityDialog,
+            onSelect = model::selectPriority,
+            onConfirm = model::confirmPriority
+        )
+    }
+    val assignmentActions = remember(model) {
+        AdminIncidentAssignmentActions(
             onOpen = model::openAssignmentPicker,
             onDismiss = model::dismissAssignmentPicker,
             onSelect = model::selectCandidate,
             onConfirm = model::confirmAssignment,
             onRetryCandidates = model::retryCandidates
-        ),
-        onSelectStatus = model::selectStatus,
-        onObservationChanged = model::editObservation,
-        onConfirmChange = model::confirmChange,
-        onCancelChange = model::cancelChange,
-        onRetrySynchronization = model::retrySynchronization
-    )
+        )
+    }
+    AdminIncidentDetailContent(state, onBack, model::retry,
+        priorityActions = priorityActions,
+        assignmentActions = assignmentActions,
+        onRetryHistory = model::retryHistory,
+        onSelectStatus = model::selectStatus, onObservationChanged = model::editObservation,
+        onConfirmChange = model::confirmChange, onCancelChange = model::cancelChange,
+        onRetrySynchronization = model::retrySynchronization)
 }
 
 @Composable
@@ -74,9 +80,10 @@ fun AdminIncidentDetailContent(
     state: AdminIncidentDetailState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
-    onRetryHistory: () -> Unit = {},
+    priorityActions: AdminIncidentPriorityActions = AdminIncidentPriorityActions(),
     modifier: Modifier = Modifier,
     assignmentActions: AdminIncidentAssignmentActions = AdminIncidentAssignmentActions(),
+    onRetryHistory: () -> Unit = {},
     onSelectStatus: ((String) -> Unit)? = null,
     onObservationChanged: (String) -> Unit = {},
     onConfirmChange: () -> Unit = {},
@@ -158,6 +165,7 @@ fun AdminIncidentDetailContent(
                         state = state,
                         actions = assignmentActions
                     )
+                    AdminIncidentPrioritySection(state, priorityActions)
                     AdminIncidentHistorySection(
                         status = state.historyStatus,
                         history = state.history,
@@ -168,6 +176,7 @@ fun AdminIncidentDetailContent(
                 IncidentsUiState.Empty -> Unit
             }
         }
+        PriorityPickerDialog(state, priorityActions)
     }
 }
 

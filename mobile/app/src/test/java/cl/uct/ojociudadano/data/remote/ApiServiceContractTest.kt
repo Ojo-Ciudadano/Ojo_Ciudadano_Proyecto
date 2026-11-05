@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -80,6 +81,24 @@ class ApiServiceContractTest {
             .any { it is Body }
 
         assertTrue(hasBody)
+    }
+
+    @Test
+    fun `updatePriority uses incident priority endpoint with body and session tag`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "updatePriority" }
+
+        val patch = requireNotNull(method.getAnnotation(PATCH::class.java))
+
+        assertEquals("api/v1/incidentes/{id}/prioridad", patch.value)
+
+        val path = method.parameterAnnotations[0]
+            .filterIsInstance<Path>()
+            .single()
+
+        assertEquals("id", path.value)
+        assertTrue(method.parameterAnnotations[1].any { it is Body })
+        assertTrue(method.parameterAnnotations[2].any { it is Tag })
     }
 
     @Test

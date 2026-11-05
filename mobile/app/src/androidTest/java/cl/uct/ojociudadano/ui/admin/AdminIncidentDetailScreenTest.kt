@@ -363,6 +363,93 @@ class AdminIncidentDetailScreenTest {
         compose.onNodeWithText(incident.title).assertIsDisplayed()
     }
 
+    @Test fun prioritySectionShowsCurrentLevelOrExplicitAbsence() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 3))
+        )
+        compose.setContent {
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}) }
+        }
+        compose.onNodeWithText("Prioridad actual").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Nivel 3 de 5").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Modificar prioridad").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Prioridad actualizada correctamente.").assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(incident = incident) }
+        compose.onNodeWithText("Sin prioridad registrada").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun priorityDialogListsAllowedLevelsAndRequiresSelection() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 3), priorityDialogVisible = true
+            )
+        )
+        var selected = -1
+        var confirmed = 0
+        val actions = AdminIncidentPriorityActions(
+            onSelect = {
+                selected = it
+                state.value = state.value.copy(selectedPriority = it)
+            },
+            onConfirm = { confirmed++ }
+        )
+        compose.setContent {
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}, priorityActions = actions) }
+        }
+        compose.onNodeWithText("Modificar prioridad").assertIsDisplayed()
+        for (level in 1..5) compose.onNodeWithTag("admin_priority_option_$level").assertExists()
+        compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
+        compose.onNodeWithTag("admin_priority_option_4").performClick()
+        compose.runOnIdle { assertEquals(4, selected) }
+        compose.onNodeWithTag("admin_priority_confirm").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, confirmed) }
+        compose.onNodeWithTag("admin_priority_option_3").performClick()
+        compose.runOnIdle { assertEquals(3, selected) }
+        compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
+    }
+
+    @Test fun priorityDialogShowsSavingAndRetryableError() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident, priorityDialogVisible = true,
+                selectedPriority = 2, savingPriority = true
+            )
+        )
+        compose.setContent {
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}) }
+        }
+        compose.onNodeWithText("Guardando prioridad…").assertIsDisplayed()
+        compose.onNodeWithTag("admin_priority_cancel").assertIsNotEnabled()
+        compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
+        compose.runOnIdle {
+            state.value = state.value.copy(
+                savingPriority = false,
+                priorityError = "El servicio de incidentes no está disponible (HTTP 503). Intenta más tarde.",
+                priorityCanRetry = true
+            )
+        }
+        compose.onNodeWithText("El servicio de incidentes no está disponible (HTTP 503). Intenta más tarde.")
+            .assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").assertIsDisplayed()
+        compose.onNodeWithTag("admin_priority_confirm").assertIsEnabled()
+        compose.onNodeWithTag("admin_priority_cancel").assertIsEnabled()
+    }
+
+    @Test fun priorityUpdatedMessageAppearsAfterConfirmation() {
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    AdminIncidentDetailState(
+                        incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 4), priorityUpdated = true
+                    ),
+                    {}, {}
+                )
+            }
+        }
+        compose.onNodeWithText("Nivel 4 de 5").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Prioridad actualizada correctamente.").performScrollTo().assertIsDisplayed()
+    }
+
     private val incident = Incident(
         "d0000000-0000-4000-8000-000000000004", "Luminaria apagada", "Sin iluminación en la plaza",
         Category("category", "Alumbrado", "", 1, false, null),

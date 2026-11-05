@@ -553,6 +553,150 @@ class AdminIncidentDetailViewModelTest {
         assertFalse(failure!!.canRetry)
     }
 
+    @Test fun `priority is confirmed only after the backend responds`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openPriorityDialog()
+        assertTrue(model.state.value.priorityDialogVisible)
+        model.selectPriority(4)
+        assertEquals(4, model.state.value.selectedPriority)
+
+        val pending = CompletableDeferred<Incident>()
+        repository.priorityPending = pending
+        model.confirmPriority()
+        runCurrent()
+        assertEquals(listOf(4), repository.priorityLevels)
+        assertTrue(model.state.value.savingPriority)
+        assertNull(model.state.value.currentPriority)
+        assertTrue(model.state.value.priorityDialogVisible)
+
+        pending.complete(incident.copy(priorityLevel = 4))
+        runCurrent()
+        assertEquals(4, model.state.value.currentPriority)
+        assertFalse(model.state.value.priorityDialogVisible)
+        assertTrue(model.state.value.priorityUpdated)
+        assertFalse(model.state.value.savingPriority)
+        assertNull(model.state.value.priorityError)
+    }
+
+    @Test fun `priority failure keeps the previous value and can be retried`() = runTest {
+        val repository = Repository().apply { this.result = prioritizedIncident }
+        repository.priorityFailure = http(503)
+        val model = AdminIncidentDetailViewModel(repository, prioritizedIncident.id)
+        runCurrent()
+        assertEquals(3, model.state.value.currentPriority)
+
+        model.openPriorityDialog()
+        model.selectPriority(5)
+        model.confirmPriority()
+        runCurrent()
+        assertEquals(listOf(5), repository.priorityLevels)
+        assertEquals(3, model.state.value.currentPriority)
+        assertTrue(model.state.value.priorityDialogVisible)
+        assertEquals(
+            "El servicio de incidentes no está disponible (HTTP 503). Intenta más tarde.",
+            model.state.value.priorityError
+        )
+        assertTrue(model.state.value.priorityCanRetry)
+
+        repository.priorityFailure = null
+        model.confirmPriority()
+        runCurrent()
+        assertEquals(listOf(5, 5), repository.priorityLevels)
+        assertEquals(5, model.state.value.currentPriority)
+        assertFalse(model.state.value.priorityDialogVisible)
+    }
+
+    @Test fun `invalid unchanged and unselected priorities are never sent`() = runTest {
+        val repository = Repository().apply { this.result = prioritizedIncident }
+        val model = AdminIncidentDetailViewModel(repository, prioritizedIncident.id)
+        runCurrent()
+        model.openPriorityDialog()
+
+        model.confirmPriority()
+        runCurrent()
+        model.selectPriority(0)
+        assertNull(model.state.value.selectedPriority)
+        model.selectPriority(6)
+        assertNull(model.state.value.selectedPriority)
+        model.selectPriority(3)
+        assertEquals(3, model.state.value.selectedPriority)
+        assertFalse(model.state.value.canConfirmPriority)
+        model.confirmPriority()
+        runCurrent()
+        assertTrue(repository.priorityLevels.isEmpty())
+        assertEquals(3, model.state.value.currentPriority)
+    }
+
+    @Test fun `confirmed priority from the backend wins over the requested one`() = runTest {
+        val repository = Repository().apply { this.priorityResult = 5 }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openPriorityDialog()
+        model.selectPriority(2)
+        model.confirmPriority()
+        runCurrent()
+        assertEquals(listOf(2), repository.priorityLevels)
+        assertEquals(5, model.state.value.currentPriority)
+    }
+
+    @Test fun `session change while saving priority is terminal`() = runTest {
+        val repository = Repository().apply { this.priorityFailure = SessionRequiredException() }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openPriorityDialog()
+        model.selectPriority(4)
+        model.confirmPriority()
+        runCurrent()
+        assertNull(model.state.value.currentPriority)
+        assertEquals(
+            "La sesión no está disponible o cambió. Inicia sesión nuevamente.",
+            model.state.value.priorityError
+        )
+        assertFalse(model.state.value.priorityCanRetry)
+        assertTrue(model.state.value.priorityDialogVisible)
+        assertFalse(model.state.value.savingPriority)
+    }
+
+    @Test fun `priority dialog is not dismissed nor duplicated while saving`() = runTest {
+        val pending = CompletableDeferred<Incident>()
+        val repository = Repository().apply { this.priorityPending = pending }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openPriorityDialog()
+        model.selectPriority(1)
+        model.confirmPriority()
+        runCurrent()
+        model.dismissPriorityDialog()
+        assertTrue(model.state.value.priorityDialogVisible)
+        model.confirmPriority()
+        runCurrent()
+        assertEquals(1, repository.priorityLevels.size)
+        pending.complete(incident.copy(priorityLevel = 1))
+        runCurrent()
+        assertEquals(1, model.state.value.currentPriority)
+    }
+
+    @Test fun `priority update keeps the rest of the incident untouched`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openPriorityDialog()
+        model.selectPriority(4)
+        model.confirmPriority()
+        runCurrent()
+        val updated = model.state.value.incident!!
+        assertEquals(4, updated.priorityLevel)
+        assertEquals(incident.status, updated.status)
+        assertEquals(incident.category, updated.category)
+        assertEquals(incident.location, updated.location)
+        assertEquals(incident.history, updated.history)
+        assertEquals(incident.activeAssignment, updated.activeAssignment)
+        assertEquals(incident.evidences, updated.evidences)
+        assertEquals(incident.createdAt, updated.createdAt)
+    }
+
     private class Repository : IncidentRepository {
         val ids = mutableListOf<String>()
         val historyIds = mutableListOf<String>()
@@ -571,6 +715,11 @@ class AdminIncidentDetailViewModelTest {
         var assignFailure: Exception? = null
         var assignPending: CompletableDeferred<IncidentAssignment>? = null
         val assignments = mutableListOf<Pair<String, String>>()
+
+        val priorityLevels = mutableListOf<Int>()
+        var priorityFailure: Exception? = null
+        var priorityPending: CompletableDeferred<Incident>? = null
+        var priorityResult: Int? = null
 
         val changes = mutableListOf<Triple<String, String, String>>()
         var updatePending: CompletableDeferred<Incident>? = null
@@ -619,7 +768,12 @@ class AdminIncidentDetailViewModelTest {
         override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> = error("Must not query photos")
         override suspend fun getEvidenceById(id: String): Evidence = error("Unused")
         override suspend fun downloadEvidenceFile(id: String): ResponseBody = error("Unused")
-        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
+            priorityLevels += priorityLevel
+            priorityPending?.await()
+            priorityFailure?.let { throw it }
+            return result.copy(priorityLevel = priorityResult ?: priorityLevel)
+        }
     }
 
     private fun http(code: Int) = ApiException.Http(code, listOf("private host"), null, null)
@@ -655,6 +809,8 @@ class AdminIncidentDetailViewModelTest {
             true
         )
         val assignedIncident = incident.copy(activeAssignment = assignment)
+
+        val prioritizedIncident = incident.copy(priorityLevel = 3)
 
         fun history(id: String, date: String, observation: String? = "Se inicia la evaluación") =
             IncidentStateHistory(

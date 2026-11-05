@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
+/** Priority levels accepted by `PATCH /api/v1/incidentes/:id/prioridad` (#124). */
+internal val ADMIN_PRIORITY_LEVELS = 1..5
+
 /** Administradores habilitados para ser responsables; [Ready] con lista vacía es un estado válido. */
 sealed interface AssignmentCandidates {
     data object Loading : AssignmentCandidates
@@ -54,14 +57,19 @@ data class AdminIncidentDetailState(
     val actionsBlocked: Boolean = false,
     val historyStatus: IncidentsUiState = IncidentsUiState.Loading,
     val history: List<IncidentStateHistory> = emptyList(),
-    val historyCanRetry: Boolean = false
+    val historyCanRetry: Boolean = false,
+    val priorityDialogVisible: Boolean = false,
+    val selectedPriority: Int? = null,
+    val savingPriority: Boolean = false,
+    val priorityError: String? = null,
+    val priorityCanRetry: Boolean = false,
+    val priorityUpdated: Boolean = false
 ) {
     val currentStatus get() = incident?.status
-
     val availableTransitions get() = if (actionsBlocked || syncError != null) emptyList()
         else IncidentStatusTransitions.availableFrom(currentStatus?.name.orEmpty())
-
-    val busy get() = submitting || synchronizing
+    val busy get() = submitting || synchronizing || savingPriority
+    val currentPriority get() = incident?.priorityLevel
 
     /** Temporary UI selection; it is never the persisted responsible. */
     val selectedCandidate get() = (candidates as? AssignmentCandidates.Ready)
@@ -72,6 +80,15 @@ data class AdminIncidentDetailState(
         (candidates as? AssignmentCandidates.Ready)
             ?.users?.firstOrNull { it.id == assignment.assignedUserId }?.name
     }
+
+    /** A write is only possible with a loaded incident and a different valid level. */
+    val canConfirmPriority: Boolean
+        get() = status is IncidentsUiState.Success &&
+            incident != null &&
+            !savingPriority &&
+            selectedPriority != null &&
+            selectedPriority != currentPriority &&
+            (priorityError == null || priorityCanRetry)
 }
 
 class AdminIncidentDetailViewModel(
@@ -84,19 +101,9 @@ class AdminIncidentDetailViewModel(
     private var candidatesJob: Job? = null
     private var assignmentJob: Job? = null
     private var historyJob: Job? = null
+    private var priorityJob: Job? = null
 
     init { load() }
-
-    fun retry() {
-        if (_state.value.canRetry) load()
-    }
-
-    fun retryHistory() {
-        if (!_state.value.historyCanRetry) return
-        val incidentId = id ?: return
-        if (!hasValidId()) return
-        loadHistory(incidentId)
-    }
 
     fun openAssignmentPicker() {
         if (_state.value.assigning) return
@@ -162,6 +169,17 @@ class AdminIncidentDetailViewModel(
         }
     }
 
+    fun retry() {
+        if (_state.value.canRetry) load()
+    }
+
+    fun retryHistory() {
+        if (!_state.value.historyCanRetry) return
+        val incidentId = id ?: return
+        if (!hasValidId()) return
+        loadHistory(incidentId)
+    }
+
     fun selectStatus(destination: String) {
         val current = _state.value
         if (current.busy || current.selectedStatus != null || destination !in current.availableTransitions) return
@@ -213,6 +231,82 @@ class AdminIncidentDetailViewModel(
         if (_state.value.busy || _state.value.syncError == null) return
         _state.value = _state.value.copy(synchronizing = true)
         viewModelScope.launch { synchronize() }
+    }
+
+    fun openPriorityDialog() {
+        val current = _state.value
+        if (current.status !is IncidentsUiState.Success || current.incident == null) return
+        if (current.savingPriority) return
+        _state.update {
+            it.copy(
+                priorityDialogVisible = true,
+                selectedPriority = null,
+                priorityError = null,
+                priorityCanRetry = false,
+                priorityUpdated = false
+            )
+        }
+    }
+
+    fun dismissPriorityDialog() {
+        if (_state.value.savingPriority) return
+        _state.update {
+            it.copy(
+                priorityDialogVisible = false,
+                selectedPriority = null,
+                priorityError = null,
+                priorityCanRetry = false
+            )
+        }
+    }
+
+    fun selectPriority(level: Int) {
+        val current = _state.value
+        if (level !in ADMIN_PRIORITY_LEVELS || current.savingPriority) return
+        _state.update {
+            it.copy(selectedPriority = level, priorityError = null, priorityCanRetry = false)
+        }
+    }
+
+    fun confirmPriority() {
+        val current = _state.value
+        val level = current.selectedPriority ?: return
+        if (!current.canConfirmPriority) return
+        if (priorityJob?.isActive == true) return
+        val incident = current.incident ?: return
+        if (level !in ADMIN_PRIORITY_LEVELS) return
+        priorityJob = viewModelScope.launch {
+            _state.update {
+                it.copy(savingPriority = true, priorityError = null, priorityCanRetry = false, priorityUpdated = false)
+            }
+            try {
+                val confirmed = repository.updatePriority(incident.id, level)
+                // The PATCH response omits history and the active assignment, so keep the
+                // loaded incident and only adopt the confirmed priority.
+                _state.update { snapshot ->
+                    val base = snapshot.incident ?: incident
+                    snapshot.copy(
+                        incident = base.copy(priorityLevel = confirmed.priorityLevel ?: level),
+                        priorityDialogVisible = false,
+                        selectedPriority = null,
+                        savingPriority = false,
+                        priorityError = null,
+                        priorityCanRetry = false,
+                        priorityUpdated = true
+                    )
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _state.update {
+                    it.copy(
+                        savingPriority = false,
+                        priorityError = exception.priorityMessage(),
+                        priorityCanRetry = exception.isRetryable()
+                    )
+                }
+            }
+        }
     }
 
     private suspend fun synchronize() {
@@ -382,6 +476,21 @@ private fun Throwable.statusChangeMessage(): String = when (this) {
     is ApiException.Network, is IOException -> if (this is SessionRequiredException) incidentMessage()
         else "No se pudo confirmar el resultado. Revisa tu conexión y vuelve a abrir el detalle antes de reintentar."
     else -> "No se pudo confirmar el resultado del cambio. Vuelve a abrir el detalle para consultar el estado actual."
+}
+
+private fun Throwable.priorityMessage(): String = when (this) {
+    is SessionRequiredException -> message.orEmpty()
+    is ApiException.Http -> when (statusCode) {
+        400 -> "El nivel de prioridad seleccionado no es válido."
+        401 -> "Tu sesión expiró. Inicia sesión nuevamente."
+        403 -> "No tienes autorización para modificar la prioridad."
+        404 -> "El incidente ya no está disponible."
+        408, 429 -> "El servidor está ocupado. Intenta nuevamente en unos segundos."
+        in 500..599 -> "El servicio de incidentes no está disponible (HTTP $statusCode). Intenta más tarde."
+        else -> "No se pudo actualizar la prioridad (HTTP $statusCode). Intenta nuevamente."
+    }
+    is ApiException.Network, is IOException -> "No fue posible conectar de forma segura con el servidor. Revisa tu conexión e intenta nuevamente."
+    else -> "La respuesta del servidor no se pudo interpretar. Intenta nuevamente."
 }
 
 /** Never expose backend diagnostics; the assignment contract uses distinct wording from queries. */
