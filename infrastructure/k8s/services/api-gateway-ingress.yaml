@@ -1,4 +1,4 @@
-# Ingress del host publico de la Web (Single-Host Path Routing).
+# Ingress del host publico de la Web (Frontend Reverse Proxy).
 #
 # `https://ojociudadano.dev.censei.cl` es el UNICO hostname que la Web debe
 # consumir, y la API se sirve en el mismo origen bajo /api. Esto evita CORS y
@@ -6,9 +6,10 @@
 # este host). El cliente Android NO usa este Ingress: entra por
 # api-ojociudadano.dev.censei.cl (backend-ingress.yaml).
 #
-# Rutas:
-#   /api  -> api-gateway-svc:3000  (el path completo /api/v1/... se conserva)
-#   /     -> web-frontend-svc:80   (SPA estatica servida por nginx)
+# Todo el trafico externo entra por path '/' hacia Nginx (web-frontend-svc:80).
+# Nginx redirige internamente /api/ hacia http://api-gateway-svc:3000 (conservando
+# el prefijo /api/v1/...) para cumplir con la politica del webhook de admision
+# (rke2-edu-ingress-hostname) del cluster de la UCT.
 #
 # Aprovisionamiento reproducible del Secret TLS (no versionado en Git):
 # 1. Generar par de claves autofirmado con CN y SAN para ojociudadano.dev.censei.cl:
@@ -43,15 +44,7 @@ spec:
   - host: ojociudadano.dev.censei.cl
     http:
       paths:
-      # La API se sirve en el mismo origen; el Gateway conserva /api/v1/...
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: api-gateway-svc
-            port:
-              number: 3000
-      # Todo lo demas lo sirve nginx del frontend (SPA + fallback).
+      # Todo el trafico lo sirve Nginx del frontend (quien hace el proxy de /api/ internamente).
       - path: /
         pathType: Prefix
         backend:
