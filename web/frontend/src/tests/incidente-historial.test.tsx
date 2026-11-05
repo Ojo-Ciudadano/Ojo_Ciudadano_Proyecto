@@ -65,6 +65,26 @@ describe('Normalización y servicio de historial de incidentes (#149)', () => {
     )
   })
 
+  it('rechaza campos usados por la interfaz cuando tienen tipos incorrectos', () => {
+    const camposMalformados: Array<Record<string, unknown>> = [
+      { observacion: 123 },
+      { usuarioId: 123 },
+      { tipo: 123 },
+      { tipoEvento: 123 },
+      { estado: { nombre: 123 } },
+    ]
+
+    for (const campo of camposMalformados) {
+      assert.equal(
+        normalizarHistorialIncidente(
+          [{ ...REGISTROS_BASE[0], ...campo }],
+          INCIDENTE_A,
+        ),
+        null,
+      )
+    }
+  })
+
   it('clasifica cambios de estado, asignaciones y reasignaciones (#123)', () => {
     assert.equal(clasificarMovimiento(REGISTROS_BASE[0]), 'cambio-estado')
     assert.equal(clasificarMovimiento(REGISTROS_BASE[1]), 'asignacion')
@@ -74,6 +94,25 @@ describe('Normalización y servicio de historial de incidentes (#149)', () => {
         observacion: 'Reasignado de usr-admin-2 a usr-admin-3',
       }),
       'reasignacion',
+    )
+  })
+
+  it('prioriza tipos explícitos conocidos sobre el texto de la observación', () => {
+    assert.equal(
+      clasificarMovimiento({
+        ...REGISTROS_BASE[0],
+        tipo: 'CAMBIO_ESTADO',
+        observacion: 'Asignado a usr-admin-2',
+      }),
+      'cambio-estado',
+    )
+    assert.equal(
+      clasificarMovimiento({
+        ...REGISTROS_BASE[0],
+        tipoEvento: 'ASIGNACION',
+        observacion: 'Reporte creado',
+      }),
+      'asignacion',
     )
   })
 

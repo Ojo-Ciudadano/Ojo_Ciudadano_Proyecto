@@ -34,12 +34,12 @@ const PATRON_REASIGNACION = /^Reasignado de\s+\S+\s+a\s+\S+/i
 export function clasificarMovimiento(
   registro: RegistroHistorialIncidente,
 ): TipoMovimientoHistorial {
-  const tipoExplicito = (
-    registro.tipo ??
-    registro.tipoEvento ??
-    ''
-  )
-    .trim()
+  const tipoExplicito = [
+    registro.tipo,
+    registro.tipoEvento,
+  ]
+    .find((tipo) => typeof tipo === 'string' && tipo.trim())
+    ?.trim()
     .toUpperCase()
 
   if (tipoExplicito === 'REASIGNACION') {
@@ -50,7 +50,14 @@ export function clasificarMovimiento(
     return 'asignacion'
   }
 
-  const observacion = registro.observacion?.trim() ?? ''
+  if (tipoExplicito === 'CAMBIO_ESTADO') {
+    return 'cambio-estado'
+  }
+
+  const observacion =
+    typeof registro.observacion === 'string'
+      ? registro.observacion.trim()
+      : ''
 
   if (PATRON_REASIGNACION.test(observacion)) {
     return 'reasignacion'

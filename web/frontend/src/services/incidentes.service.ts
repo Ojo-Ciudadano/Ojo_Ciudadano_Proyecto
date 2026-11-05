@@ -274,6 +274,51 @@ export function normalizarHistorialIncidente(
     ) {
       return null
     }
+
+    const camposTextoOpcionales = [
+      registro.usuarioId,
+      registro.observacion,
+      registro.fecha,
+      registro.tipo,
+      registro.tipoEvento,
+    ]
+
+    if (
+      camposTextoOpcionales.some(
+        (valor) =>
+          valor !== undefined &&
+          valor !== null &&
+          typeof valor !== 'string',
+      )
+    ) {
+      return null
+    }
+
+    if (registro.estado !== undefined && registro.estado !== null) {
+      if (typeof registro.estado !== 'object') {
+        return null
+      }
+
+      const camposEstado = [
+        registro.estado.id,
+        registro.estado.nombre,
+        registro.estado.orden,
+      ]
+
+      if (
+        camposEstado.slice(0, 2).some(
+          (valor) =>
+            valor !== undefined &&
+            valor !== null &&
+            typeof valor !== 'string',
+        ) ||
+        (camposEstado[2] !== undefined &&
+          camposEstado[2] !== null &&
+          typeof camposEstado[2] !== 'number')
+      ) {
+        return null
+      }
+    }
   }
 
   return payload as RegistroHistorialIncidente[]
