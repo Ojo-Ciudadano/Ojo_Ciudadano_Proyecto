@@ -1,0 +1,31 @@
+$kind: http-request
+name: 6.3 Rechazo 403 al Cambiar Estado de Incidente como Ciudadano (403 Forbidden)
+url: "{{baseUrl}}/incidentes/{{incidenteId}}/estado"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "estado": "En atención",
+      "observacion": "Intento de cambio de estado por Ciudadano"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{ciudadanoToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 403 Forbidden', function () {
+          pm.response.to.have.status(403);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Respuesta contiene ErrorResponseFormat para falta de permisos ADMIN', function () {
+          pm.expect(jsonData).to.have.property('statusCode', 403);
+          pm.expect(jsonData).to.have.property('error', 'Forbidden');
+          pm.expect(jsonData).to.have.property('message');
+      });
+    language: text/javascript
+order: 3000

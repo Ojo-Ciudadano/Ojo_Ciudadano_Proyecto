@@ -12,6 +12,15 @@ export const ROLES: Record<RoleName, RoleName> = {
   CIUDADANO: 'CIUDADANO',
 }
 
+/**
+ * Roles autorizados para consultar la vista de detalle `/incidentes/:id` (#133, #142).
+ * Las acciones administrativas dentro de la vista permanecen restringidas a ADMIN.
+ */
+export const INCIDENT_DETAIL_ALLOWED_ROLES: readonly RoleName[] = [
+  ROLES.CIUDADANO,
+  ROLES.ADMIN,
+] as const
+
 export function getInitialRouteForRoles(
   roles?: string[] | null,
 ): string {
