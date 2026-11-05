@@ -89,13 +89,10 @@ export function useUsuarios(): UseUsuariosResult {
         } else if (
           typeof err === 'object' &&
           err !== null &&
-          'message' in err
+          'message' in err &&
+          typeof err.message === 'string'
         ) {
-          const mensajeError = err.message
-
-          if (typeof mensajeError === 'string') {
-            mensaje = mensajeError
-          }
+          mensaje = err.message
         }
 
         setError(mensaje)
@@ -167,23 +164,43 @@ export function useUsuarios(): UseUsuariosResult {
       return true
     } catch (err: unknown) {
       let mensaje = 'No fue posible actualizar el rol del usuario.'
+      let statusCode: number | undefined
 
+      // Reconocer errores originales de Axios
       if (axios.isAxiosError(err)) {
-        if (err.response?.status === 403) {
-          mensaje =
-            'No tienes permisos para cambiar este rol.'
-        } else if (err.response?.status === 404) {
-          mensaje = 'El usuario ya no existe.'
-        } else if (err.response?.status === 400) {
-          mensaje = 'El rol solicitado no es válido.'
-        }
-      } else if (err instanceof Error && err.message) {
+        statusCode = err.response?.status
+      }
+      // Reconocer ApiError transformado por el interceptor HTTP
+      else if (
+        typeof err === 'object' &&
+        err !== null &&
+        'statusCode' in err &&
+        typeof err.statusCode === 'number'
+      ) {
+        statusCode = err.statusCode
+      }
+
+      // Mensajes específicos según el código HTTP
+      if (statusCode === 403) {
+        mensaje = 'No tienes permisos para cambiar este rol.'
+      } else if (statusCode === 404) {
+        mensaje = 'El usuario ya no existe.'
+      } else if (statusCode === 400) {
+        mensaje = 'El rol solicitado no es válido.'
+      } else if (
+        typeof err === 'object' &&
+        err !== null &&
+        'message' in err &&
+        typeof err.message === 'string' &&
+        err.message.trim()
+      ) {
         mensaje = err.message
       }
 
       setErrorRol(mensaje)
       return false
     } finally {
+      // Liberar bloqueo incluso cuando ocurre un error
       actualizandoRef.current = null
       setActualizandoRolId(null)
     }
