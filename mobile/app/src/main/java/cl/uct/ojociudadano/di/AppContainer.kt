@@ -4,6 +4,7 @@ import android.content.Context
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
+import cl.uct.ojociudadano.data.location.DefaultLocationClient
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.remote.ApiService
@@ -20,7 +21,9 @@ import cl.uct.ojociudadano.data.session.DefaultSessionManager
 import cl.uct.ojociudadano.data.session.EncryptedSharedPreferencesSessionStorage
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionStorage
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import coil3.ImageLoader
+import com.google.android.gms.location.LocationServices
 
 class AppContainer(
     context: Context,
@@ -47,6 +50,19 @@ class AppContainer(
 
     val evidencePhotoStore: EvidencePhotoFileStore by lazy {
         CacheEvidencePhotoFileStore(context.applicationContext)
+    }
+
+    /**
+     * Fuente única de ubicación del dispositivo. Los ViewModels consumen esta
+     * abstracción y nunca acceden directamente a los servicios de Google Play.
+     */
+    val locationClient: LocationClient by lazy {
+        DefaultLocationClient(
+            context = context.applicationContext,
+            client = LocationServices.getFusedLocationProviderClient(
+                context.applicationContext
+            )
+        )
     }
 
     val apiService: ApiService by lazy {

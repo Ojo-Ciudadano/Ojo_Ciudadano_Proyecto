@@ -7,6 +7,7 @@ import cl.uct.ojociudadano.data.media.PhotoImportFailure
 import cl.uct.ojociudadano.data.media.TEMP_EVIDENCE_MAX_AGE_MILLIS
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.Incident
@@ -16,11 +17,12 @@ import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.data.model.Paginated
-import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
+import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
@@ -158,12 +160,143 @@ class CreateReportViewModelTest {
         assertEquals("Poste dañado", input.title)
         assertEquals("El poste bloquea la vereda", input.description)
         assertEquals(sampleCategory.id, input.categoryId)
-        assertEquals(-38.7359, input.location.latitude, 0.0)
-        assertEquals(-72.5904, input.location.longitude, 0.0)
-        assertEquals("Ubicación de prueba Sprint 1", input.location.referenceAddress)
-        assertEquals("Temuco", input.location.commune)
-        assertEquals("La Araucanía", input.location.region)
-        assertEquals("Centro", input.location.sector)
+        assertEquals(GPS_LATITUDE, input.location.latitude, 0.0)
+        assertEquals(GPS_LONGITUDE, input.location.longitude, 0.0)
+        assertEquals("Ubicación GPS del dispositivo", input.location.referenceAddress)
+        assertEquals("No determinada", input.location.commune)
+        assertEquals("No determinada", input.location.region)
+        assertEquals("No determinado", input.location.sector)
+    }
+
+    @Test
+    fun `reuses the location obtained when the form was opened`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(
+            LocationResult.Success(latitude = -33.4489, longitude = -70.6693)
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient
+        )
+
+        viewModel.fillValidForm()
+        viewModel.createReport()
+
+        val input = incidentRepository.createInputs.single()
+        assertEquals(-33.4489, input.location.latitude, 0.0)
+        assertEquals(-70.6693, input.location.longitude, 0.0)
+        assertEquals(1, locationClient.requests)
+    }
+
+    @Test
+    fun `does not create the incident when there is no valid location`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient
+        )
+
+        viewModel.fillValidForm()
+        viewModel.createReport()
+
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertFalse(viewModel.formState.hasValidLocation)
+        assertEquals(
+            CreateReportLocationErrors.NOT_AVAILABLE,
+            viewModel.formState.locationError
+        )
+    }
+
+    @Test
+    fun `requests the location again and submits when it becomes available`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient
+        )
+
+        viewModel.fillValidForm()
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = -36.8269,
+            longitude = -73.0503
+        )
+
+        viewModel.createReport()
+
+        val input = incidentRepository.createInputs.single()
+        assertEquals(-36.8269, input.location.latitude, 0.0)
+        assertEquals(-73.0503, input.location.longitude, 0.0)
+        assertTrue(viewModel.formState.hasValidLocation)
+        assertNull(viewModel.formState.locationError)
+    }
+
+    @Test
+    fun `reports a denied location permission without creating the incident`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = FakeLocationClient(LocationResult.MissingPermissions)
+        )
+
+        viewModel.fillValidForm()
+        viewModel.createReport()
+        viewModel.onLocationPermissionDenied()
+
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertEquals(LocationResult.MissingPermissions, viewModel.formState.location)
+        assertEquals(
+            CreateReportLocationErrors.MISSING_PERMISSIONS,
+            viewModel.formState.locationError
+        )
+    }
+
+    @Test
+    fun `handles an unexpected location failure without creating the incident`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(
+            failure = IllegalStateException("GPS no disponible")
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient
+        )
+
+        viewModel.fillValidForm()
+        viewModel.createReport()
+
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertEquals("GPS no disponible", viewModel.formState.locationError)
+        assertEquals(
+            LocationResult.Error("GPS no disponible"),
+            viewModel.formState.location
+        )
+    }
+
+    @Test
+    fun `keeps form validation errors when location is unavailable`() = runTest {
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = locationClient
+        )
+
+        viewModel.createReport()
+
+        assertEquals("El título es obligatorio", viewModel.formState.titleError)
+        assertEquals("La descripción es obligatoria", viewModel.formState.descriptionError)
+        assertEquals("La categoría es obligatoria", viewModel.formState.categoryError)
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertEquals(1, locationClient.requests)
     }
 
     @Test
@@ -879,7 +1012,8 @@ class CreateReportViewModelTest {
         val factory = CreateReportViewModelFactory(
             categoryRepository = FakeCategoryRepository(),
             incidentRepository = FakeIncidentRepository(),
-            photoFileStore = photoFileStore
+            photoFileStore = photoFileStore,
+            locationClient = FakeLocationClient()
         )
         val viewModel = ViewModelProvider(viewModelStore, factory)
             .get(CreateReportViewModel::class.java)
@@ -903,7 +1037,8 @@ class CreateReportViewModelTest {
         val factory = CreateReportViewModelFactory(
             categoryRepository = FakeCategoryRepository(),
             incidentRepository = incidentRepository,
-            photoFileStore = photoFileStore
+            photoFileStore = photoFileStore,
+            locationClient = FakeLocationClient()
         )
         val viewModel = ViewModelProvider(viewModelStore, factory)
             .get(CreateReportViewModel::class.java)
@@ -951,7 +1086,7 @@ class CreateReportViewModelTest {
                 title = "Poste dañado",
                 description = "El poste bloquea la vereda",
                 categoryId = sampleCategory.id,
-                location = Sprint1TemporaryLocation.incidentLocation
+                location = GPS_INCIDENT_LOCATION
             ),
             incidentRepository.createInputs.single()
         )
@@ -1743,13 +1878,33 @@ private fun createViewModel(
     categoryRepository: CategoryRepository,
     incidentRepository: IncidentRepository = FakeIncidentRepository(),
     photoFileStore: EvidencePhotoFileStore = FakeEvidencePhotoFileStore(),
+    locationClient: LocationClient = FakeLocationClient(),
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ): CreateReportViewModel = CreateReportViewModel(
     categoryRepository = categoryRepository,
     incidentRepository = incidentRepository,
     photoFileStore = photoFileStore,
+    locationClient = locationClient,
     ioDispatcher = ioDispatcher
 )
+
+private class FakeLocationClient(
+    var resultToReturn: LocationResult = LocationResult.Success(
+        GPS_LATITUDE,
+        GPS_LONGITUDE
+    ),
+    private val failure: Throwable? = null
+) : LocationClient {
+
+    var requests = 0
+        private set
+
+    override suspend fun getCurrentLocation(): LocationResult {
+        requests++
+        failure?.let { throw it }
+        return resultToReturn
+    }
+}
 
 private fun CreateReportViewModel.seedPhoto(photo: IncidentPhotoEvidence) {
     val token = onPhotoCaptureStarted()
@@ -1954,6 +2109,18 @@ private fun sampleIncident(input: CreateIncidentInput) = Incident(
     priorityLevel = null,
     createdAt = "2026-09-30T00:00:00.000Z",
     updatedAt = "2026-09-30T00:00:00.000Z"
+)
+
+private const val GPS_LATITUDE = -38.7396
+private const val GPS_LONGITUDE = -72.5984
+
+private val GPS_INCIDENT_LOCATION = CreateIncidentLocationInput(
+    latitude = GPS_LATITUDE,
+    longitude = GPS_LONGITUDE,
+    referenceAddress = "Ubicación GPS del dispositivo",
+    commune = "No determinada",
+    region = "No determinada",
+    sector = "No determinado"
 )
 
 private val sampleCategory = Category(

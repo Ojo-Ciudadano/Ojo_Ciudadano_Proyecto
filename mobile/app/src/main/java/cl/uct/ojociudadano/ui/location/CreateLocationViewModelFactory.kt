@@ -2,7 +2,7 @@ package cl.uct.ojociudadano.ui.location
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import cl.uct.ojociudadano.data.location.LocationClient
+import cl.uct.ojociudadano.domain.repository.LocationClient
 
 class CreateLocationViewModelFactory(
     private val locationClient: LocationClient

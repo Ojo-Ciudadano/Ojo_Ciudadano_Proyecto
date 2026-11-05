@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.ui.report
 
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+import cl.uct.ojociudadano.domain.model.LocationResult
 
 /**
  * Cantidad máxima de fotografías que el formulario acepta como evidencia.
@@ -28,6 +29,9 @@ data class CreateReportFormState(
     val selectedCategory: Category? = null,
     val evidencePhotos: List<IncidentPhotoEvidence> = emptyList(),
     val activePhotoOperation: PhotoOperation? = null,
+    val location: LocationResult = LocationResult.NotAvailable,
+    val isLoadingLocation: Boolean = false,
+    val locationError: String? = null,
     val titleError: String? = null,
     val descriptionError: String? = null,
     val categoryError: String? = null,
@@ -43,6 +47,13 @@ data class CreateReportFormState(
     val evidencePhoto: IncidentPhotoEvidence?
         get() = evidencePhotos.firstOrNull()
 
+    /**
+     * Indica si el formulario conserva coordenadas listas para asociarse al
+     * incidente que se enviará.
+     */
+    val hasValidLocation: Boolean
+        get() = location is LocationResult.Success
+
     fun updateTitle(title: String): CreateReportFormState =
         copy(title = title, titleError = null)
 
@@ -51,6 +62,24 @@ data class CreateReportFormState(
 
     fun updateCategory(category: Category): CreateReportFormState =
         copy(selectedCategory = category, categoryError = null)
+
+    /**
+     * Marca el inicio de una consulta de ubicación y limpia el error previo.
+     */
+    fun startLocationRequest(): CreateReportFormState =
+        copy(isLoadingLocation = true, locationError = null)
+
+    /**
+     * Conserva el resultado del GPS en el formulario hasta que el incidente se
+     * cree. Un resultado sin coordenadas deja un mensaje accionable para el
+     * usuario y nunca se reemplaza por una ubicación inventada.
+     */
+    fun updateLocation(location: LocationResult): CreateReportFormState =
+        copy(
+            location = location,
+            isLoadingLocation = false,
+            locationError = CreateReportLocationErrors.messageFor(location)
+        )
 
     /**
      * Marca el inicio de una operación de fotografía y limpia el error previo.
