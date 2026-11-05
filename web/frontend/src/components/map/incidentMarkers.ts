@@ -95,6 +95,9 @@ export function mapearIncidenteAMarcador(
       typeof incidente.nivelPrioridad === 'number'
         ? incidente.nivelPrioridad
         : null,
+    categoria: textoOpcional(incidente.categoria?.nombre),
+    estado: textoOpcional(incidente.estado?.nombre),
+    fechaCreacion: textoOpcional(incidente.fechaCreacion),
   }
 }
 

@@ -1,10 +1,15 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import { useIncidenteDetalle } from '../../hooks/useIncidenteDetalle'
 import type { IncidenteDetalle } from '../../types/incidenteDetalle'
 import { AsignacionIncidente } from './AsignacionIncidente'
 import { CambioPrioridadIncidente } from './CambioPrioridadIncidente'
 import { CambioEstadoIncidente } from './CambioEstadoIncidente'
 import { HistorialIncidente } from './HistorialIncidente'
+import {
+  puedeGestionarIncidente,
+  resolverEnlaceRetornoDetalle,
+} from './detalleIncidenteAcceso'
 import './IncidenteDetallePage.css'
 
 function texto(valor?: string | null): string {
@@ -193,6 +198,11 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
 
 export function IncidenteDetallePage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const { user } = useAuth()
+
+  const esAdmin = puedeGestionarIncidente(user?.roles)
+  const retorno = resolverEnlaceRetornoDetalle(location.state, user?.roles)
 
   const {
     incidente,
@@ -211,8 +221,8 @@ export function IncidenteDetallePage() {
       className="detalle-pagina"
       aria-label="Detalle del incidente"
     >
-      <Link className="detalle-volver" to="/incidentes">
-        ← Volver a la tabla de incidentes
+      <Link className="detalle-volver" to={retorno.destino}>
+        {retorno.etiqueta}
       </Link>
 
       <div aria-busy={cargando}>
@@ -231,8 +241,13 @@ export function IncidenteDetallePage() {
           <div
             className="detalle-mensaje detalle-error"
             role="alert"
+            data-acceso-denegado={error.accesoDenegado ? 'true' : undefined}
           >
-            <h1>No se pudo consultar el incidente</h1>
+            <h1>
+              {error.accesoDenegado
+                ? 'Acceso denegado'
+                : 'No se pudo consultar el incidente'}
+            </h1>
             <p>{error.mensaje}</p>
 
             {error.permiteReintentar && (
@@ -245,26 +260,30 @@ export function IncidenteDetallePage() {
           <>
             <DatosIncidente incidente={incidente} />
 
-            <div className="detalle-gestion-cuadricula">
-              <AsignacionIncidente
-                key={`asignacion-${incidente.id}`}
-                incidente={incidente}
-                alConfirmar={actualizarAsignacionConfirmada}
-              />
+            {esAdmin && (
+              <>
+                <div className="detalle-gestion-cuadricula">
+                  <AsignacionIncidente
+                    key={`asignacion-${incidente.id}`}
+                    incidente={incidente}
+                    alConfirmar={actualizarAsignacionConfirmada}
+                  />
 
-              <CambioPrioridadIncidente
-                key={`prioridad-${incidente.id}`}
-                incidente={incidente}
-                alConfirmar={actualizarPrioridadConfirmada}
-              />
-            </div>
+                  <CambioPrioridadIncidente
+                    key={`prioridad-${incidente.id}`}
+                    incidente={incidente}
+                    alConfirmar={actualizarPrioridadConfirmada}
+                  />
+                </div>
 
-            <CambioEstadoIncidente
-              key={incidente.id}
-              incidente={incidente}
-              alConfirmar={actualizarEstadoConfirmado}
-              alConflicto={recargarDetalle}
-            />
+                <CambioEstadoIncidente
+                  key={incidente.id}
+                  incidente={incidente}
+                  alConfirmar={actualizarEstadoConfirmado}
+                  alConflicto={recargarDetalle}
+                />
+              </>
+            )}
           </>
         ) : null}
       </div>

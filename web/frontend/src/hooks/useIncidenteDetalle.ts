@@ -6,9 +6,10 @@ import type {
   IncidenteDetalle,
 } from '../types/incidenteDetalle'
 
-interface ErrorDetalle {
+export interface ErrorDetalle {
   mensaje: string
   permiteReintentar: boolean
+  accesoDenegado?: boolean
 }
 
 interface ResultadoConsulta {
@@ -18,16 +19,22 @@ interface ResultadoConsulta {
   noEncontrado: boolean
 }
 
-function interpretarError(error: unknown): {
+export function interpretarErrorDetalleIncidente(error: unknown): {
   error: ErrorDetalle | null
   noEncontrado: boolean
 } {
-  const statusCode =
-    typeof error === 'object' &&
-    error !== null &&
-    'statusCode' in error
-      ? Number(error.statusCode)
-      : undefined
+  const candidato =
+    typeof error === 'object' && error !== null
+      ? (error as {
+          statusCode?: unknown
+          status?: unknown
+          response?: { status?: unknown } | null
+        })
+      : null
+
+  const statusCode = Number(
+    candidato?.statusCode ?? candidato?.response?.status ?? candidato?.status,
+  )
 
   if (statusCode === 404) {
     return {
@@ -61,6 +68,7 @@ function interpretarError(error: unknown): {
       error: {
         mensaje: 'No tienes permisos para consultar este incidente.',
         permiteReintentar: false,
+        accesoDenegado: true,
       },
       noEncontrado: false,
     }
@@ -80,18 +88,19 @@ export function useIncidenteDetalle(id: string | undefined) {
   const [resultado, setResultado] =
     useState<ResultadoConsulta | null>(null)
 
-  const claveConsulta = JSON.stringify([id ?? '', intento])
+  const idNormalizado = id?.trim() ?? ''
+  const claveConsulta = JSON.stringify([idNormalizado, intento])
 
   useEffect(() => {
     const controller = new AbortController()
 
     async function cargarDetalle() {
-      if (!id) {
+      if (!idNormalizado) {
         setResultado({
           clave: claveConsulta,
           incidente: null,
           error: {
-            mensaje: 'Falta el identificador del incidente.',
+            mensaje: 'El identificador del incidente no es válido.',
             permiteReintentar: false,
           },
           noEncontrado: false,
@@ -101,7 +110,7 @@ export function useIncidenteDetalle(id: string | undefined) {
 
       try {
         const incidente = await obtenerIncidenteDetalle(
-          id,
+          idNormalizado,
           controller.signal,
         )
 
@@ -116,7 +125,7 @@ export function useIncidenteDetalle(id: string | undefined) {
       } catch (error: unknown) {
         if (controller.signal.aborted) return
 
-        const fallo = interpretarError(error)
+        const fallo = interpretarErrorDetalleIncidente(error)
 
         setResultado({
           clave: claveConsulta,
@@ -129,7 +138,7 @@ export function useIncidenteDetalle(id: string | undefined) {
     void cargarDetalle()
 
     return () => controller.abort()
-  }, [id, claveConsulta])
+  }, [idNormalizado, claveConsulta])
 
   const resultadoActual =
     resultado?.clave === claveConsulta ? resultado : null
@@ -240,11 +249,11 @@ export function useIncidenteDetalle(id: string | undefined) {
   }
 
   async function recargarDetalle(): Promise<void> {
-    if (!id) {
+    if (!idNormalizado) {
       throw new Error('Falta el identificador del incidente.')
     }
 
-    const actualizado = await obtenerIncidenteDetalle(id)
+    const actualizado = await obtenerIncidenteDetalle(idNormalizado)
 
     setResultado((actual) => {
       if (
