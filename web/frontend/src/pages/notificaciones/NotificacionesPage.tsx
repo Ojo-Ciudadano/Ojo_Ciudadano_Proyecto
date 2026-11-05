@@ -1,27 +1,11 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotificaciones } from '../../hooks/useNotificaciones'
+import {
+  interpretarFecha,
+  mostrarFecha,
+  texto,
+} from '../../utils/notificacionesFormato'
 import './NotificacionesPage.css'
-
-function texto(valor: unknown): string {
-  return typeof valor === 'string' ? valor.trim() : ''
-}
-
-function interpretarFecha(valor: unknown): Date | null {
-  const contenido = texto(valor)
-
-  if (!contenido) return null
-
-  const fecha = new Date(contenido)
-
-  return Number.isNaN(fecha.getTime()) ? null : fecha
-}
-
-function mostrarFecha(fecha: Date): string {
-  return new Intl.DateTimeFormat('es-CL', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(fecha)
-}
 
 export function NotificacionesPage() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -61,8 +45,7 @@ export function NotificacionesPage() {
         <div>
           <h1 id="notificaciones-titulo">Notificaciones</h1>
           <p>
-            Consulta los avisos y las actualizaciones
-            asociados a tu cuenta.
+            Consulta los avisos y las actualizaciones asociados a tu cuenta.
           </p>
         </div>
       </header>

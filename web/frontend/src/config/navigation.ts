@@ -1,4 +1,3 @@
-
 import type { RoleName } from '../types'
 
 export interface NavigationRule {
@@ -36,7 +35,10 @@ export function hasKnownRole(roles?: string[] | null): boolean {
     return false
   }
 
-  return roles.includes(ROLES.ADMIN) || roles.includes(ROLES.CIUDADANO)
+  return (
+    roles.includes(ROLES.ADMIN) ||
+    roles.includes(ROLES.CIUDADANO)
+  )
 }
 
 export function isRoleAuthorized(
@@ -54,7 +56,8 @@ export function isRoleAuthorized(
  * Reglas centralizadas de rutas y menú Web.
  *
  * Issue #130: Protección y navegación según roles.
- * Issue #147: Incorporar listado de usuarios para ADMIN.
+ * Issue #145: Notificaciones para Ciudadano y Administrador.
+ * Issue #147: Listado de usuarios para Administrador.
  */
 export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
@@ -93,7 +96,7 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
     allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
     section: 'main',
   },
-    {
+  {
     path: '/notificaciones',
     label: 'Notificaciones',
     allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
