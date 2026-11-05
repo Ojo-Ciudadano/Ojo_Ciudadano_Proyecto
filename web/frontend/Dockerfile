@@ -23,9 +23,9 @@ RUN if [ "${VITE_API_URL}" = "https://api-ojociudadano.dev.censei.cl" ]; then \
     esac
 
 COPY package.json package-lock.json ./
-# `typescript` ya viene en devDependencies (lo usa `tsc -b`); no hace falta
-# instalarlo globalmente y se evita una segunda descarga desde npm.
-RUN npm install
+# Se fuerza --include=dev y typescript global para garantizar que `tsc -b`
+# este siempre disponible en PATH durante `npm run build`.
+RUN npm install --include=dev && npm install -g typescript
 
 COPY . .
 RUN npm run build
