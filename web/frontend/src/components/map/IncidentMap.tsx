@@ -15,6 +15,11 @@ import {
   type IncidentMapMarker,
 } from './mapConfig'
 import {
+  crearContenidoPopup,
+  crearContenidoTooltip,
+  resolverIncidenteNavegacion,
+} from './incidentPopup'
+import {
   debeCerrarPopupMapa,
   sincronizarIncidenteSeleccionado,
 } from './incidentMarkers'
@@ -33,6 +38,11 @@ interface IncidentMapProps {
    * el efecto solo sincroniza el `LayerGroup`.
    */
   markers?: readonly IncidentMapMarker[]
+  /**
+   * Acción invocada cuando el usuario solicita abrir el detalle del incidente
+   * desde el popup del marcador seleccionado (#142).
+   */
+  onOpenIncidentDetail?: (incidentId: string) => void
   /** Identificador opcional del incidente cuyo popup se encuentra activo. */
   selectedMarkerId?: string | null
   /** Notifica cuando se abre o cierra el popup de un marcador. */
@@ -42,6 +52,7 @@ interface IncidentMapProps {
 
 export function IncidentMap({
   markers = EMPTY_MARKERS,
+  onOpenIncidentDetail,
   selectedMarkerId,
   onSelectMarker,
   className,
@@ -52,12 +63,17 @@ export function IncidentMap({
   const openPopupIncidentIdRef = useRef<string | null>(null)
   const isSyncingLayersRef = useRef(false)
   const onSelectMarkerRef = useRef(onSelectMarker)
+  const onOpenDetailRef = useRef(onOpenIncidentDetail)
   const [tileError, setTileError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     onSelectMarkerRef.current = onSelectMarker
   }, [onSelectMarker])
+
+  useEffect(() => {
+    onOpenDetailRef.current = onOpenIncidentDetail
+  }, [onOpenIncidentDetail])
 
   const handleRetry = useCallback(() => {
     setTileError(false)
@@ -214,29 +230,25 @@ export function IncidentMap({
 
       // La identidad queda disponible en la capa para futuras interacciones.
       circle.incidentId = marcador.id
-      const tooltip = document.createElement('span')
-      tooltip.textContent = marcador.titulo
-
-      circle.bindTooltip(tooltip, {
+      circle.bindTooltip(crearContenidoTooltip(marcador, document), {
         direction: 'top',
         offset: [0, -8],
       })
 
-      // Se construye el popup con nodos de texto para evitar inyección de HTML.
-      const popup = document.createElement('div')
-      popup.className = 'incident-map__popup'
-
-      const titulo = document.createElement('strong')
-      titulo.textContent = marcador.titulo
-      popup.appendChild(titulo)
-
-      if (marcador.descripcion) {
-        const descripcion = document.createElement('p')
-        descripcion.textContent = marcador.descripcion
-        popup.appendChild(descripcion)
-      }
-
-      circle.bindPopup(popup)
+      // El popup usa `textContent` en todos sus campos (sin `innerHTML`).
+      circle.bindPopup(
+        crearContenidoPopup(marcador, document, {
+          onVerDetalle: (incidenteSolicitadoId) => {
+            const idDestino = resolverIncidenteNavegacion(
+              { incidenteSeleccionadoId: openPopupIncidentIdRef.current },
+              incidenteSolicitadoId,
+            )
+            if (idDestino) {
+              onOpenDetailRef.current?.(idDestino)
+            }
+          },
+        }),
+      )
 
       circle.on('popupopen', () => {
         openPopupIncidentIdRef.current = marcador.id
