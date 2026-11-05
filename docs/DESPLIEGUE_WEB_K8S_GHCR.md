@@ -234,6 +234,8 @@ Tras cualquier rollback, repetir las verificaciones de la sección 5.
 | `Pending` por cuota | Recursos mayores a la `ResourceQuota` | Mantener `requests 25m/64Mi` y `limits 50m/128Mi`; usar `maxSurge: 0`. |
 | `CrashLoopBackOff` | Configuración de Nginx inválida | Revisar `kubectl logs`; validar con `docker run --rm <imagen> nginx -t`. |
 | La Web muestra datos de localhost | Imagen construida sin el `--build-arg` | Reconstruir con `VITE_API_URL=https://ojociudadano.dev.censei.cl`. |
+| La Web carga pero el login/API falla | El bundle apunta al host de API (`api-ojociudadano...`) en vez del host de la Web | Reconstruir con `VITE_API_URL=https://ojociudadano.dev.censei.cl` (same-origin) y confirmar la ruta `/api` en `api-gateway-ingress.yaml`. El `Dockerfile` aborta el build si se usa el host de API o una URL con `/` final. |
+| `404` en `/api/v1/...` | `proxy_pass` de nginx con URI (`...:3000/`) borra el prefijo `/api` | Usar `proxy_pass http://api-gateway-svc:3000;` (sin `/` final) o dejar que el Ingress enrute `/api` directo al gateway. |
 
 Comandos útiles de diagnóstico:
 

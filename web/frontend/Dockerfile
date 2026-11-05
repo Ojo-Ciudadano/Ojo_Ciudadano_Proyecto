@@ -10,9 +10,26 @@ WORKDIR /app
 ARG VITE_API_URL=https://ojociudadano.dev.censei.cl
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Guarda de configuracion: el SPA debe consumir la API en su MISMO origen
+# (https://ojociudadano.dev.censei.cl/api/v1). El certificado autofirmado del
+# Ingress solo cubre ese host; apuntar al host de API rompe las llamadas del
+# navegador (CORS/TLS) y es un error que ya ocurrio con la imagen v1.0.2.
+RUN if [ "${VITE_API_URL}" = "https://api-ojociudadano.dev.censei.cl" ]; then \
+        echo "ERROR: VITE_API_URL debe ser el host de la Web (same-origin), no el host de la API." >&2; \
+        exit 1; \
+    fi; \
+    case "${VITE_API_URL}" in \
+        */) echo "ERROR: VITE_API_URL no debe terminar en '/' (api.ts agrega /api/v1)." >&2; exit 1;; \
+    esac
+
 COPY package.json package-lock.json ./
-RUN npm install
-RUN npm install -g typescript
+# Se usa npm ci --no-audit --no-fund con reintentos de red para evitar saturar
+# el resolver DNS de Alpine (EAI_AGAIN) y garantizar que node_modules/.bin/tsc
+# quede instalado de forma determinista desde package-lock.json.
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci --no-audit --no-fund
 
 COPY . .
 RUN npm run build

@@ -5,20 +5,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
@@ -114,6 +118,141 @@ class AdminIncidentDetailScreenTest {
         }
     }
 
+    @Test fun historySectionCoversEntriesEmptyErrorAndRetryWithoutHidingTheIncident() {
+        val entries = listOf(
+            history("h1", "2026-11-02T12:00:00Z", "Se inicia la evaluación"),
+            history("h2", "2026-11-03T12:00:00Z", null)
+        )
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident,
+                historyStatus = IncidentsUiState.Success, history = entries
+            )
+        )
+        var historyRetries = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    state.value,
+                    onBack = {},
+                    onRetry = { error("The detail must not reload when only the history fails") },
+                    onRetryHistory = { historyRetries++ }
+                )
+            }
+        }
+        compose.onNodeWithText("Historial de cambios").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Se inicia la evaluación").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Sin observación").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("Estado: En revisión").assertCountEquals(3)
+        compose.onAllNodesWithText("Usuario: ${entries.first().userId}").assertCountEquals(2)
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident, historyStatus = IncidentsUiState.Empty
+            )
+        }
+        compose.onNodeWithText("Este incidente aún no registra cambios de estado.")
+            .performScrollTo().assertIsDisplayed()
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident,
+                historyStatus = IncidentsUiState.Error("No fue posible cargar el historial."),
+                historyCanRetry = true
+            )
+        }
+        compose.onNodeWithText(incident.title).assertIsDisplayed()
+        compose.onNodeWithText("No fue posible cargar el historial.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, historyRetries) }
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident,
+                historyStatus = IncidentsUiState.Error("Tu sesión expiró."),
+                historyCanRetry = false
+            )
+        }
+        compose.onNodeWithText("Tu sesión expiró.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").assertDoesNotExist()
+    }
+
+    @Test fun onlyOfficialTransitionsAreShownAndClosedOrUnknownHaveNoActions() {
+        val state = mutableStateOf(AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident))
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(state.value, {}, {}, onSelectStatus = {})
+            }
+        }
+        val matrix = mapOf("Nuevo" to listOf("En revisión"), "En revisión" to listOf("En atención"),
+            "En atención" to listOf("Resuelto"), "Resuelto" to listOf("En atención", "Cerrado"),
+            "Cerrado" to emptyList(), "unknown" to emptyList())
+        for ((source, allowed) in matrix) {
+            compose.runOnIdle {
+                state.value = state.value.copy(incident = incident.copy(status = incident.status.copy(name = source)))
+            }
+            for (destination in listOf("Nuevo", "En revisión", "En atención", "Resuelto", "Cerrado")) {
+                val node = compose.onNodeWithText("Cambiar a $destination")
+                if (destination in allowed) node.performScrollTo().assertIsDisplayed() else node.assertDoesNotExist()
+            }
+            if (allowed.isEmpty()) compose.onNodeWithText("Cambiar estado").assertDoesNotExist()
+        }
+    }
+
+    @Test fun confirmationRequiresObservationCanCancelAndDisablesActionsWhileSubmitting() {
+        val state = mutableStateOf(AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident))
+        var confirmations = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(state.value, {}, {},
+                    onSelectStatus = { state.value = state.value.copy(selectedStatus = it) },
+                    onObservationChanged = { state.value = state.value.copy(observation = it) },
+                    onCancelChange = { state.value = state.value.copy(selectedStatus = null, observation = "") },
+                    onConfirmChange = {
+                        confirmations++
+                        state.value = state.value.copy(submitting = true)
+                    })
+            }
+        }
+        compose.onNodeWithText("Cambiar a En atención").performScrollTo().performClick()
+        compose.onNodeWithText("Estado actual: En revisión").assertIsDisplayed()
+        compose.onNodeWithText("Nuevo estado: En atención").assertIsDisplayed()
+        compose.onNodeWithText("Confirmar").assertIsNotEnabled()
+        compose.onNodeWithText("Cancelar").performClick()
+        compose.onNodeWithText("Confirmar cambio de estado").assertDoesNotExist()
+        compose.onNodeWithText("Cambiar a En atención").performClick()
+        compose.onNodeWithText("Observación obligatoria").performTextInput("  ")
+        compose.onNodeWithText("Confirmar").assertIsNotEnabled()
+        compose.onNodeWithText("Observación obligatoria").performTextInput("Inspección realizada")
+        compose.onNodeWithText("Confirmar").assertIsEnabled().performClick()
+        compose.onNodeWithText("Enviando cambio…").assertIsDisplayed()
+        compose.onNodeWithText("Confirmar").assertIsNotEnabled()
+        compose.onNodeWithText("Cancelar").assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(1, confirmations) }
+        compose.runOnIdle {
+            state.value = state.value.copy(submitting = false, selectedStatus = null,
+                incident = incident.copy(status = incident.status.copy(name = "En atención")))
+        }
+        compose.onNodeWithText("Cambiar a En atención").assertDoesNotExist()
+        compose.onNodeWithText("Cambiar a Resuelto").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun confirmedChangeWithSyncFailureOffersReloadWithoutAnotherStatusAction() {
+        val state = mutableStateOf(AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident,
+            successMessage = "Estado actualizado correctamente.", syncError = "El cambio fue confirmado, pero no se pudo recargar el detalle."))
+        var reloads = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(state.value, {}, {}, onSelectStatus = {},
+                    onRetrySynchronization = { reloads++ })
+            }
+        }
+        compose.onNodeWithText("Estado actualizado correctamente.").assertIsDisplayed()
+        compose.onNodeWithText("Recargar detalle").performClick()
+        compose.onNodeWithText("Cambiar estado").assertDoesNotExist()
+        assertEquals(1, reloads)
+    }
+
     @Test fun prioritySectionShowsCurrentLevelOrExplicitAbsence() {
         val state = mutableStateOf(
             AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 3))
@@ -207,5 +346,14 @@ class AdminIncidentDetailScreenTest {
         IncidentStatus("status", "En revisión", 2),
         IncidentLocation("location", -38.7, -72.5, "Plaza", "Temuco", "Araucanía", "Centro"),
         "another-citizen", null, "2026-11-02T12:00:00Z", "2026-11-03T13:00:00Z"
+    )
+
+    private fun history(id: String, date: String, observation: String?) = IncidentStateHistory(
+        id = id,
+        incidenteId = incident.id,
+        status = IncidentStatus("status-$id", "En revisión", 2),
+        userId = "b0000000-0000-4000-8000-000000000012",
+        observation = observation,
+        date = date
     )
 }

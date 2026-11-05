@@ -10,6 +10,7 @@ import cl.uct.ojociudadano.data.remote.dto.NotificationDto
 import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
+import cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
@@ -30,6 +31,13 @@ import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
 import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
 
 interface ApiService {
+
+    @PATCH("api/v1/incidentes/{id}/estado")
+    suspend fun updateIncidentStatus(
+        @Path("id") incidentId: String,
+        @Body request: UpdateIncidentStatusRequestDto,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): IncidentDto
 
     @POST("api/v1/auth/register")
     suspend fun register(
