@@ -11,12 +11,14 @@ import cl.uct.ojociudadano.data.media.PhotoImportException
 import cl.uct.ojociudadano.data.media.PhotoImportFailure
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
-import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import kotlinx.coroutines.CancellationException
@@ -30,6 +32,7 @@ class CreateReportViewModel(
     private val categoryRepository: CategoryRepository,
     private val incidentRepository: IncidentRepository,
     private val photoFileStore: EvidencePhotoFileStore,
+    private val locationClient: LocationClient,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val formValidator: CreateReportFormValidator = CreateReportFormValidator()
 ) : ViewModel() {
@@ -55,8 +58,15 @@ class CreateReportViewModel(
     private val photoOperationLock = Any()
     private var activePhotoToken: PhotoOperationToken? = null
 
+    /**
+     * Indica que el usuario ya solicitó crear el reporte y que el envío debe
+     * continuar en cuanto el GPS entregue una ubicación válida.
+     */
+    private var submitAfterLocation = false
+
     init {
         loadCategories()
+        refreshLocation()
         cleanupExpiredPhotoFiles()
     }
 
@@ -286,12 +296,68 @@ class CreateReportViewModel(
             return
         }
 
-        val selectedCategory = requireNotNull(formState.selectedCategory)
+        if (!formState.hasValidLocation) {
+            createReportWhenLocationIsAvailable()
+            return
+        }
+
+        submitReport()
+    }
+
+    /**
+     * Solicita la ubicación GPS actual y conserva el resultado en el formulario.
+     *
+     * Si el usuario ya intentó crear el reporte, el envío continúa en cuanto
+     * exista una ubicación válida. Si el GPS falla o no hay permisos, no se
+     * construye ninguna solicitud con coordenadas inventadas.
+     */
+    fun refreshLocation() {
+        if (formState.isLoadingLocation) return
+
+        formState = formState.startLocationRequest()
+
+        viewModelScope.launch {
+            val result = try {
+                locationClient.getCurrentLocation()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                LocationResult.Error(
+                    exception.message ?: CreateReportLocationErrors.UNKNOWN
+                )
+            }
+
+            formState = formState.updateLocation(result)
+
+            if (submitAfterLocation) {
+                submitAfterLocation = false
+
+                if (result is LocationResult.Success) {
+                    createReport()
+                }
+            }
+        }
+    }
+
+    private fun createReportWhenLocationIsAvailable() {
+        submitAfterLocation = true
+        submissionState = CreateReportSubmissionState.Idle
+        refreshLocation()
+    }
+
+    /**
+     * Construye la solicitud con las coordenadas que ya están asociadas al
+     * formulario. La capa de networking solo recibe el resultado mediante
+     * [CreateIncidentInput]; no consulta el GPS.
+     */
+    private fun submitReport() {
+        val selectedCategory = formState.selectedCategory ?: return
+        val location = formState.location as? LocationResult.Success ?: return
         val input = CreateIncidentInput(
             title = formState.title,
             description = formState.description,
             categoryId = selectedCategory.id,
-            location = Sprint1TemporaryLocation.incidentLocation
+            location = location.toIncidentLocationInput()
         )
         val photos = formState.evidencePhotos.toList()
 
@@ -637,6 +703,7 @@ class CreateReportViewModel(
         synchronized(photoOperationLock) {
             activePhotoToken = null
         }
+        submitAfterLocation = false
 
         val pendingEvidence =
             (submissionState as? CreateReportSubmissionState.EvidenceUploadFailed)
@@ -752,6 +819,22 @@ class CreateReportViewModel(
     private fun deleteEvidenceFile(fileName: String) {
         runCatching { photoFileStore.delete(fileName) }
     }
+
+    /**
+     * La geocodificación inversa está fuera del alcance de esta tarea. Se
+     * conservan las coordenadas reales y se completan los campos descriptivos
+     * obligatorios del contrato con valores explícitos, sin reutilizar la
+     * ubicación temporal de Sprint 1.
+     */
+    private fun LocationResult.Success.toIncidentLocationInput() =
+        CreateIncidentLocationInput(
+            latitude = latitude,
+            longitude = longitude,
+            referenceAddress = "Ubicación GPS del dispositivo",
+            commune = "No determinada",
+            region = "No determinada",
+            sector = "No determinado"
+        )
 
     private fun PhotoImportException.toUserMessage(): String = when (failure) {
         PhotoImportFailure.NOT_AN_IMAGE -> PhotoSelectionErrors.NOT_AN_IMAGE

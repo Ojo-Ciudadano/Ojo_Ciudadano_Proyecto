@@ -10,6 +10,8 @@ import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
 import cl.uct.ojociudadano.data.session.DefaultSessionManager
 import cl.uct.ojociudadano.data.session.TestSessionStorage
 import cl.uct.ojociudadano.data.session.testSession
+import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.ui.report.CreateReportSubmissionState
 import cl.uct.ojociudadano.ui.report.CreateReportViewModel
 import cl.uct.ojociudadano.ui.report.EvidenceUploadFailureKind
@@ -275,6 +277,13 @@ class EvidenceUploadFlowTest {
             categoryRepository = FakeCategoryRepository(listOf(category)),
             incidentRepository = RemoteIncidentRepository(api, manager),
             photoFileStore = photoStore,
+            locationClient = object : LocationClient {
+                override suspend fun getCurrentLocation(): LocationResult =
+                    LocationResult.Success(
+                        latitude = -38.7359,
+                        longitude = -72.5904
+                    )
+            },
             ioDispatcher = Dispatchers.Unconfined
         )
     }

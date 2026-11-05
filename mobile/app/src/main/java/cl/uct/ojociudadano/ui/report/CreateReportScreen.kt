@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.domain.model.LocationResult
 import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
@@ -94,7 +95,8 @@ fun CreateReportScreen(
     onConfirmRetry: () -> Unit,
     onFinishWithoutPendingEvidence: () -> Unit,
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onRefreshLocation: () -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -180,28 +182,10 @@ fun CreateReportScreen(
             onPhotoPreviewError = onPhotoPreviewError
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Ubicación",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text("Ubicación pendiente", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
+        ReportLocationSection(
+            state = state,
+            onRefreshLocation = onRefreshLocation
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -315,6 +299,73 @@ fun CreateReportScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ReportLocationSection(
+    state: CreateReportFormState,
+    onRefreshLocation: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Ubicación",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Filled.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    when {
+                        state.isLoadingLocation -> Text(
+                            text = "Obteniendo ubicación GPS...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        state.location is LocationResult.Success -> {
+                            val location = state.location
+                            Text(
+                                text = "Ubicación GPS obtenida",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Lat: ${location.latitude}, Lng: ${location.longitude}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        else -> Text(
+                            text = state.locationError ?: "Ubicación no disponible",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                if (!state.isLoadingLocation && !state.hasValidLocation) {
+                    TextButton(onClick = onRefreshLocation) {
+                        Text("Reintentar")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -522,7 +573,8 @@ fun CreateReportScreen(
             CreateReportViewModelFactory(
                 categoryRepository = application.container.categoryRepository,
                 incidentRepository = application.container.incidentRepository,
-                photoFileStore = fileStore
+                photoFileStore = fileStore,
+                locationClient = application.container.locationClient
             )
         }
     )
@@ -575,7 +627,8 @@ fun CreateReportScreen(
         onConfirmRetry = viewModel::confirmRetryAfterPossibleDuplicate,
         onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
-        onBack = onBack
+        onBack = onBack,
+        onRefreshLocation = viewModel::refreshLocation
     )
 }
 

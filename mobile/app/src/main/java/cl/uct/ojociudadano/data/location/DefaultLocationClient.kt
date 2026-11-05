@@ -7,20 +7,14 @@ import android.location.LocationManager
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult as GmsLocationResult
 import com.google.android.gms.location.Priority
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
-
-interface LocationClient {
-    suspend fun getCurrentLocation(): LocationResult
-}
 
 class DefaultLocationClient(
     private val context: Context,

@@ -5,11 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.domain.repository.LocationClient
 
 class CreateReportViewModelFactory(
     private val categoryRepository: CategoryRepository,
     private val incidentRepository: IncidentRepository,
-    private val photoFileStore: EvidencePhotoFileStore
+    private val photoFileStore: EvidencePhotoFileStore,
+    private val locationClient: LocationClient
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -18,7 +20,8 @@ class CreateReportViewModelFactory(
             return CreateReportViewModel(
                 categoryRepository = categoryRepository,
                 incidentRepository = incidentRepository,
-                photoFileStore = photoFileStore
+                photoFileStore = photoFileStore,
+                locationClient = locationClient
             ) as T
         }
 
