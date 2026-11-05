@@ -1,54 +1,57 @@
 package cl.uct.ojociudadano.ui.login
 
-import cl.uct.ojociudadano.ui.components.CitizenAuthProgress
-import cl.uct.ojociudadano.ui.components.CitizenAuthLayout
-import cl.uct.ojociudadano.ui.components.CitizenMessage
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.TextButton
+import cl.uct.ojociudadano.R
+import cl.uct.ojociudadano.ui.components.CitizenAuthProgress
+import cl.uct.ojociudadano.ui.components.CitizenMessage
+import cl.uct.ojociudadano.ui.theme.CitizenRed
 
 object LoginTestTags {
     const val EMAIL_FIELD = "login_email_field"
@@ -57,6 +60,7 @@ object LoginTestTags {
     const val LOADING_INDICATOR = "login_loading_indicator"
     const val AUTH_ERROR_MESSAGE = "login_auth_error_message"
     const val AUTH_SUCCESS_MESSAGE = "login_auth_success_message"
+    const val BRAND_LOGO = "login_brand_logo"
 }
 
 /**
@@ -125,23 +129,31 @@ private fun LoginScreenContent(
     val isLoading = authState is AuthUiState.Loading
 
     fun attemptLogin() {
+        if (isLoading) return
         keyboardController?.hide()
         focusManager.clearFocus()
         onLoginClick()
     }
 
-    CitizenAuthLayout(modifier) {
-        Spacer(modifier = Modifier.size(12.dp))
-
+    LoginBrandLayout(modifier, logo = {
+        Image(
+            painter = painterResource(R.drawable.login_brand_logo),
+            contentDescription = "Ojo Ciudadano",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth().aspectRatio(416f / 160f)
+                .testTag(LoginTestTags.BRAND_LOGO)
+        )
+    }) {
         Text(
-            text = "Iniciar sesión",
-            style = MaterialTheme.typography.headlineMedium,
+            text = "Bienvenido de nuevo",
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "Ingresa con tu correo electrónico y contraseña.",
+            text = "Inicia sesión para continuar",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -178,6 +190,7 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.EMAIL_FIELD),
             label = { Text("Correo electrónico") },
             singleLine = true,
+            shape = RoundedCornerShape(12.dp),
             enabled = !isLoading,
             isError = state.emailError != null,
             leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
@@ -201,11 +214,12 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.PASSWORD_FIELD),
             label = { Text("Contraseña") },
             singleLine = true,
+            shape = RoundedCornerShape(12.dp),
             enabled = !isLoading,
             isError = state.passwordError != null,
             leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
             trailingIcon = {
-                IconButton(onClick = onPasswordVisibilityToggle) {
+                IconButton(onClick = onPasswordVisibilityToggle, enabled = !isLoading) {
                     val contentDescription = if (state.isPasswordVisible) {
                         "Ocultar contraseña"
                     } else {
@@ -237,8 +251,11 @@ private fun LoginScreenContent(
         Button(
             onClick = ::attemptLogin,
             enabled = !isLoading,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = CitizenRed, contentColor = Color.White),
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 56.dp)
                 .testTag(LoginTestTags.SUBMIT_BUTTON)
         ) {
             Text("Iniciar sesión")
@@ -250,8 +267,16 @@ private fun LoginScreenContent(
             )
         }
         onRegister?.let { register ->
-            TextButton(onClick = register, enabled = !isLoading) {
-                Text("Crear cuenta")
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("¿No tienes una cuenta?", modifier = Modifier.padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = register, enabled = !isLoading) {
+                    Text("Crear cuenta", fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
