@@ -43,7 +43,15 @@ fun AdminIncidentDetailScreen(id: String?, onBack: () -> Unit) {
         }
     )
     val state by model.state.collectAsState()
-    AdminIncidentDetailContent(state, onBack, model::retry)
+    val priorityActions = remember(model) {
+        AdminIncidentPriorityActions(
+            onOpen = model::openPriorityDialog,
+            onDismiss = model::dismissPriorityDialog,
+            onSelect = model::selectPriority,
+            onConfirm = model::confirmPriority
+        )
+    }
+    AdminIncidentDetailContent(state, onBack, model::retry, priorityActions)
 }
 
 @Composable
@@ -51,6 +59,7 @@ fun AdminIncidentDetailContent(
     state: AdminIncidentDetailState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    priorityActions: AdminIncidentPriorityActions = AdminIncidentPriorityActions(),
     modifier: Modifier = Modifier
 ) {
     Column(modifier.fillMaxSize()) {
@@ -67,10 +76,14 @@ fun AdminIncidentDetailContent(
                         OutlinedButton(onClick = onRetry) { Text("Reintentar") }
                     }
                 }
-                IncidentsUiState.Success -> state.incident?.let { AdminIncidentInformation(it) }
+                IncidentsUiState.Success -> state.incident?.let {
+                    AdminIncidentInformation(it)
+                    AdminIncidentPrioritySection(state, priorityActions)
+                }
                 IncidentsUiState.Empty -> Unit
             }
         }
+        PriorityPickerDialog(state, priorityActions)
     }
 }
 
@@ -108,8 +121,12 @@ private fun AdminIncidentInformation(incident: Incident) {
 }
 
 @Composable
-private fun DetailSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
+internal fun DetailSection(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    OutlinedCard(modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 title,
@@ -124,7 +141,7 @@ private fun DetailSection(title: String, content: @Composable ColumnScope.() -> 
 }
 
 @Composable
-private fun DetailField(label: String, value: String) {
+internal fun DetailField(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value.ifBlank { "No disponible" }, style = MaterialTheme.typography.bodyMedium)
