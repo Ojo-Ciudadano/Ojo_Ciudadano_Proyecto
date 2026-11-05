@@ -67,6 +67,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
@@ -96,7 +97,9 @@ fun CreateReportScreen(
     onFinishWithoutPendingEvidence: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
-    onRefreshLocation: () -> Unit = {}
+    onRefreshLocation: () -> Unit = {},
+    onRequestLocationPermission: () -> Unit = {},
+    onOpenLocationSettings: () -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -184,7 +187,9 @@ fun CreateReportScreen(
 
         ReportLocationSection(
             state = state,
-            onRefreshLocation = onRefreshLocation
+            onRefreshLocation = onRefreshLocation,
+            onRequestLocationPermission = onRequestLocationPermission,
+            onOpenLocationSettings = onOpenLocationSettings
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -305,7 +310,9 @@ fun CreateReportScreen(
 @Composable
 private fun ReportLocationSection(
     state: CreateReportFormState,
-    onRefreshLocation: () -> Unit
+    onRefreshLocation: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
+    onOpenLocationSettings: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -360,8 +367,18 @@ private fun ReportLocationSection(
                 }
 
                 if (!state.isLoadingLocation && !state.hasValidLocation) {
-                    TextButton(onClick = onRefreshLocation) {
-                        Text("Reintentar")
+                    val action = when (state.location) {
+                        LocationResult.MissingPermissions ->
+                            "Dar permiso" to onRequestLocationPermission
+
+                        LocationResult.NotAvailable ->
+                            "Activar ubicación" to onOpenLocationSettings
+
+                        else -> "Reintentar" to onRefreshLocation
+                    }
+
+                    TextButton(onClick = action.second) {
+                        Text(action.first)
                     }
                 }
             }
@@ -579,6 +596,29 @@ fun CreateReportScreen(
         }
     )
 
+    var hasRequestedLocationPermission by rememberSaveable { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLocationPermissionLauncher(
+        onPermissionResult = { granted ->
+            if (granted) {
+                viewModel.refreshLocation()
+            } else {
+                viewModel.onLocationPermissionDenied()
+            }
+        },
+        onReturnFromSettings = viewModel::refreshLocation
+    )
+
+    LaunchedEffect(viewModel) {
+        if (
+            !hasRequestedLocationPermission &&
+            !locationPermissionLauncher.isGranted()
+        ) {
+            hasRequestedLocationPermission = true
+            locationPermissionLauncher.request()
+        }
+    }
+
     val currentOnExitRiskChanged by rememberUpdatedState(onExitRiskChanged)
     val exitRisk = CreateReportExitPolicy.riskOf(
         state = viewModel.submissionState,
@@ -628,7 +668,9 @@ fun CreateReportScreen(
         onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
         onBack = onBack,
-        onRefreshLocation = viewModel::refreshLocation
+        onRefreshLocation = viewModel::refreshLocation,
+        onRequestLocationPermission = locationPermissionLauncher::request,
+        onOpenLocationSettings = locationPermissionLauncher::openLocationSettings
     )
 }
 

@@ -9,10 +9,11 @@ import cl.uct.ojociudadano.domain.model.LocationResult
 object CreateReportLocationErrors {
 
     const val NOT_AVAILABLE =
-        "No fue posible obtener tu ubicación. Activa el GPS e inténtalo nuevamente."
+        "La ubicación del dispositivo está desactivada. Actívala para continuar."
 
     const val MISSING_PERMISSIONS =
-        "Se requieren permisos de ubicación para crear el reporte."
+        "Se requieren permisos de ubicación para crear el reporte. " +
+            "Si el sistema no vuelve a solicitarlos, habilítalos desde Ajustes."
 
     const val UNKNOWN =
         "No fue posible obtener tu ubicación. Inténtalo nuevamente."

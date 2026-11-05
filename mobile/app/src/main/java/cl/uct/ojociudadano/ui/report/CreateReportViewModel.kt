@@ -339,6 +339,15 @@ class CreateReportViewModel(
         }
     }
 
+    /**
+     * Refleja una denegación del permiso de ubicación sin dejar pendiente un
+     * envío que ya no puede completarse.
+     */
+    fun onLocationPermissionDenied() {
+        submitAfterLocation = false
+        formState = formState.updateLocation(LocationResult.MissingPermissions)
+    }
+
     private fun createReportWhenLocationIsAvailable() {
         submitAfterLocation = true
         submissionState = CreateReportSubmissionState.Idle

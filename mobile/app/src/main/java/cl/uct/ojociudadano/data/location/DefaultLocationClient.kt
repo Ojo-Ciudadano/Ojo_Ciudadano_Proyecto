@@ -14,6 +14,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult as GmsLocationResult
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 class DefaultLocationClient(
@@ -47,46 +48,84 @@ class DefaultLocationClient(
             return LocationResult.NotAvailable
         }
 
-        // 3. Obtener ubicación de forma segura
-        return suspendCancellableCoroutine { continuation ->
-            client.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    continuation.resume(
-                        LocationResult.Success(
-                            latitude = location.latitude,
-                            longitude = location.longitude
-                        )
-                    )
-                } else {
-                    // Si la última ubicación es nula, solicitamos una actualización única
-                    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000L)
-                        .setWaitForAccurateLocation(false)
-                        .setMaxUpdates(1)
-                        .build()
+        // 3. Obtener ubicación de forma segura y con un límite de espera para
+        // que el formulario no quede bloqueado si el dispositivo nunca entrega
+        // una lectura.
+        return withTimeoutOrNull(LOCATION_TIMEOUT_MILLIS) {
+            suspendCancellableCoroutine { continuation ->
+                client.lastLocation.addOnSuccessListener { location ->
+                    if (!continuation.isActive) return@addOnSuccessListener
 
-                    val callback = object : LocationCallback() {
-                        override fun onLocationResult(result: GmsLocationResult) {
-                            client.removeLocationUpdates(this)
-                            val loc = result.lastLocation
-                            if (loc != null) {
+                    if (location != null) {
+                        continuation.resume(
+                            LocationResult.Success(
+                                latitude = location.latitude,
+                                longitude = location.longitude
+                            )
+                        )
+                    } else {
+                        // Si la última ubicación es nula, solicitamos una actualización única
+                        val request = LocationRequest.Builder(
+                            Priority.PRIORITY_HIGH_ACCURACY,
+                            LOCATION_UPDATE_INTERVAL_MILLIS
+                        )
+                            .setWaitForAccurateLocation(false)
+                            .setMaxUpdates(1)
+                            .build()
+
+                        val callback = object : LocationCallback() {
+                            override fun onLocationResult(result: GmsLocationResult) {
+                                client.removeLocationUpdates(this)
+                                if (!continuation.isActive) return
+
+                                val loc = result.lastLocation
+                                if (loc != null) {
+                                    continuation.resume(
+                                        LocationResult.Success(loc.latitude, loc.longitude)
+                                    )
+                                } else {
+                                    continuation.resume(LocationResult.NotAvailable)
+                                }
+                            }
+                        }
+
+                        continuation.invokeOnCancellation {
+                            client.removeLocationUpdates(callback)
+                        }
+
+                        try {
+                            client.requestLocationUpdates(
+                                request,
+                                callback,
+                                Looper.getMainLooper()
+                            )
+                        } catch (e: Exception) {
+                            if (continuation.isActive) {
                                 continuation.resume(
-                                    LocationResult.Success(loc.latitude, loc.longitude)
+                                    LocationResult.Error(
+                                        e.localizedMessage ?: "Error desconocido"
+                                    )
                                 )
-                            } else {
-                                continuation.resume(LocationResult.NotAvailable)
                             }
                         }
                     }
-
-                    try {
-                        client.requestLocationUpdates(request, callback, Looper.getMainLooper())
-                    } catch (e: Exception) {
-                        continuation.resume(LocationResult.Error(e.localizedMessage ?: "Error desconocido"))
+                }.addOnFailureListener { exception ->
+                    if (continuation.isActive) {
+                        continuation.resume(
+                            LocationResult.Error(
+                                exception.localizedMessage ?: "Error al obtener ubicación"
+                            )
+                        )
                     }
                 }
-            }.addOnFailureListener { exception ->
-                continuation.resume(LocationResult.Error(exception.localizedMessage ?: "Error al obtener ubicación"))
             }
-        }
+        } ?: LocationResult.Error(LOCATION_TIMEOUT_MESSAGE)
+    }
+
+    private companion object {
+        const val LOCATION_TIMEOUT_MILLIS = 15_000L
+        const val LOCATION_UPDATE_INTERVAL_MILLIS = 10_000L
+        const val LOCATION_TIMEOUT_MESSAGE =
+            "No fue posible obtener una ubicación GPS a tiempo"
     }
 }

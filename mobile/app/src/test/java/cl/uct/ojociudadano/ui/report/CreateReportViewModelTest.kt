@@ -237,6 +237,28 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `reports a denied location permission without creating the incident`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = FakeLocationClient(LocationResult.MissingPermissions)
+        )
+
+        viewModel.fillValidForm()
+        viewModel.createReport()
+        viewModel.onLocationPermissionDenied()
+
+        assertTrue(incidentRepository.createInputs.isEmpty())
+        assertEquals(CreateReportSubmissionState.Idle, viewModel.submissionState)
+        assertEquals(LocationResult.MissingPermissions, viewModel.formState.location)
+        assertEquals(
+            CreateReportLocationErrors.MISSING_PERMISSIONS,
+            viewModel.formState.locationError
+        )
+    }
+
+    @Test
     fun `handles an unexpected location failure without creating the incident`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val locationClient = FakeLocationClient(
