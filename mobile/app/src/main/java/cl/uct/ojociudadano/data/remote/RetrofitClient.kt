@@ -40,6 +40,7 @@ object RetrofitClient {
         val httpClient = OkHttpClient.Builder()
             .configureEnvironmentTls(normalizedBaseUrl)
             .addInterceptor(RegistrationRequestInterceptor())
+            .addInterceptor(StatusPatchInterceptor())
             .apply {
                 tokenProvider?.let {
                     addInterceptor(

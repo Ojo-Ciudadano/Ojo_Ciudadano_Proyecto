@@ -147,7 +147,172 @@ class AdminIncidentDetailViewModelTest {
         assertEquals(AdminIncidentDetailState(incident.id), model.state.value)
     }
 
+    @Test fun `matrix covers every source and destination including terminal and unknown statuses`() = runTest {
+        val matrix = mapOf("Nuevo" to listOf("En revisión"), "En revisión" to listOf("En atención"),
+            "En atención" to listOf("Resuelto"), "Resuelto" to listOf("En atención", "Cerrado"),
+            "Cerrado" to emptyList(), "En revision" to emptyList(), "unknown" to emptyList())
+        for ((source, allowed) in matrix) {
+            val row = incident.copy(status = incident.status.copy(name = source))
+            val repository = Repository().apply { result = row }
+            val model = AdminIncidentDetailViewModel(repository, row.id)
+            runCurrent()
+            assertEquals(allowed, model.state.value.availableTransitions)
+            for (destination in matrix.keys) {
+                model.selectStatus(destination)
+                assertEquals(if (destination in allowed) destination else null, model.state.value.selectedStatus)
+                model.cancelChange()
+            }
+            assertTrue(repository.changes.isEmpty())
+        }
+    }
+
+    @Test fun `blank observation blocks request and cancellation preserves confirmed incident`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.selectStatus("En atención")
+        model.selectStatus("Resuelto")
+        assertEquals("En atención", model.state.value.selectedStatus)
+        for (blank in listOf("", " ", "\n\t")) {
+            model.editObservation(blank)
+            model.confirmChange()
+            runCurrent()
+            assertNotNull(model.state.value.validationError)
+            assertTrue(repository.changes.isEmpty())
+        }
+        model.cancelChange()
+        model.confirmChange()
+        runCurrent()
+        assertNull(model.state.value.selectedStatus)
+        assertEquals(incident, model.state.value.incident)
+        assertTrue(repository.changes.isEmpty())
+    }
+
+    @Test fun `valid confirmation sends correct fields once and waits for backend before changing status`() = runTest {
+        val confirmed = incident.copy(status = incident.status.copy(name = "En atención"))
+        val repository = Repository().apply { updatePending = CompletableDeferred() }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.selectStatus("En atención")
+        model.editObservation("  Inspección técnica  ")
+        repeat(3) { model.confirmChange() }
+        assertTrue(model.state.value.submitting)
+        model.cancelChange()
+        model.editObservation("ignored")
+        runCurrent()
+        assertEquals(listOf(Triple(incident.id, "En atención", "Inspección técnica")), repository.changes)
+        assertEquals(incident, model.state.value.incident)
+        assertEquals("  Inspección técnica  ", model.state.value.observation)
+        repository.result = confirmed
+        repository.updatePending?.complete(confirmed)
+        runCurrent()
+        assertEquals(confirmed, model.state.value.incident)
+        assertEquals(listOf("Resuelto"), model.state.value.availableTransitions)
+        assertFalse(model.state.value.busy)
+        assertNull(model.state.value.selectedStatus)
+        assertEquals("", model.state.value.observation)
+        assertNotNull(model.state.value.successMessage)
+        assertEquals(2, repository.ids.size)
+    }
+
+    @Test fun `rejected requests and connectivity failures retain last confirmed state and safe errors`() = runTest {
+        for (failure in listOf(http(400), http(401), http(403), http(404), http(409), http(500), http(503),
+            ApiException.Network(IOException("private host")), SocketTimeoutException(),
+            ApiException.Unexpected(IllegalStateException("private host")), SessionRequiredException())) {
+            val repository = Repository().apply { updateFailure = failure }
+            val model = AdminIncidentDetailViewModel(repository, incident.id)
+            runCurrent()
+            model.selectStatus("En atención")
+            model.editObservation("Verificado")
+            model.confirmChange()
+            runCurrent()
+            assertEquals(incident, model.state.value.incident)
+            assertFalse(model.state.value.busy)
+            assertNull(model.state.value.successMessage)
+            assertNotNull(model.state.value.changeError)
+            assertFalse(model.state.value.changeError.orEmpty().contains("private host"))
+            assertEquals("Verificado", model.state.value.observation)
+            assertEquals(1, repository.ids.size)
+            if (failure is SessionRequiredException || failure is ApiException.Http && failure.statusCode in setOf(401, 403, 404)) {
+                assertTrue(model.state.value.availableTransitions.isEmpty())
+                model.confirmChange()
+                runCurrent()
+                assertEquals(1, repository.changes.size)
+            } else {
+                repository.updateFailure = null
+                model.confirmChange()
+                runCurrent()
+                assertEquals(2, repository.changes.size)
+                assertNotNull(model.state.value.successMessage)
+            }
+        }
+    }
+
+    @Test fun `successful patch and failed refresh keep confirmed result and retry GET only`() = runTest {
+        val confirmed = incident.copy(status = incident.status.copy(name = "Resuelto"))
+        val repository = Repository()
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.selectStatus("En atención")
+        model.editObservation("Observación")
+        repository.updateResult = confirmed
+        repository.failure = IOException("private host")
+        model.confirmChange()
+        runCurrent()
+        assertEquals(confirmed, model.state.value.incident)
+        assertNotNull(model.state.value.successMessage)
+        assertNotNull(model.state.value.syncError)
+        assertNull(model.state.value.changeError)
+        assertTrue(model.state.value.availableTransitions.isEmpty())
+        repository.failure = null
+        repository.pending = CompletableDeferred()
+        repeat(3) { model.retrySynchronization() }
+        assertTrue(model.state.value.synchronizing)
+        runCurrent()
+        assertEquals(3, repository.ids.size)
+        assertEquals(1, repository.changes.size)
+        repository.pending?.complete(confirmed)
+        runCurrent()
+        assertNull(model.state.value.syncError)
+        assertEquals(listOf("En atención", "Cerrado"), model.state.value.availableTransitions)
+        assertFalse(model.state.value.busy)
+    }
+
+    @Test fun `leaving detail cancels pending change without publishing success or reloading`() = runTest {
+        val repository = Repository().apply { updatePending = CompletableDeferred() }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        val store = ViewModelStore().apply { put("detail", model) }
+        runCurrent()
+        model.selectStatus("En atención")
+        model.editObservation("Verificado")
+        model.confirmChange()
+        runCurrent()
+        store.clear()
+        runCurrent()
+        repository.updatePending?.complete(incident.copy(status = incident.status.copy(name = "En atención")))
+        runCurrent()
+        assertEquals(incident, model.state.value.incident)
+        assertNull(model.state.value.successMessage)
+        assertEquals(1, repository.ids.size)
+        assertEquals(1, repository.changes.size)
+    }
+
     private class Repository : IncidentRepository {
+        override suspend fun getIncidentHistory(incidentId: String): List<cl.uct.ojociudadano.data.model.IncidentStateHistory> = error("Unused")
+        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): cl.uct.ojociudadano.data.model.IncidentAssignment = error("Unused")
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
+        override suspend fun getCandidates(page: Int?, limit: Int?): cl.uct.ojociudadano.data.model.Paginated<cl.uct.ojociudadano.data.model.CandidateUser> = error("Unused")
+        val changes = mutableListOf<Triple<String, String, String>>()
+        var updatePending: CompletableDeferred<Incident>? = null
+        var updateFailure: Exception? = null
+        var updateResult: Incident? = null
+        var result: Incident = incident
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident {
+            changes += Triple(incidentId, status, observation)
+            updateFailure?.let { throw it }
+            return updatePending?.await() ?: updateResult ?: result.copy(status = result.status.copy(name = status))
+        }
+
         val ids = mutableListOf<String>()
         var failure: Exception? = null
         var pending: CompletableDeferred<Incident>? = null
@@ -156,7 +321,7 @@ class AdminIncidentDetailViewModelTest {
             ids += id
             failure?.let { throw it }
             return try {
-                pending?.await() ?: incident
+                pending?.await() ?: result
             } catch (exception: kotlin.coroutines.cancellation.CancellationException) {
                 cancelled = true
                 throw exception
@@ -169,10 +334,6 @@ class AdminIncidentDetailViewModelTest {
         override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> = error("Must not query photos")
         override suspend fun getEvidenceById(id: String): Evidence = error("Unused")
         override suspend fun downloadEvidenceFile(id: String): ResponseBody = error("Unused")
-        override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> = error("Unused")
-        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): IncidentAssignment = error("Unused")
-        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
-        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> = error("Unused")
     }
 
     private fun http(code: Int) = ApiException.Http(code, listOf("private host"), null, null)
