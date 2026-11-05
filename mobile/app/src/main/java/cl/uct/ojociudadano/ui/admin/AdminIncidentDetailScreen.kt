@@ -8,10 +8,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,6 +27,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Incident
@@ -47,13 +53,19 @@ fun AdminIncidentDetailScreen(id: String?, onBack: () -> Unit) {
         state = state,
         onBack = onBack,
         onRetry = model::retry,
+        onRetryHistory = model::retryHistory,
         assignmentActions = AdminIncidentAssignmentActions(
             onOpen = model::openAssignmentPicker,
             onDismiss = model::dismissAssignmentPicker,
             onSelect = model::selectCandidate,
             onConfirm = model::confirmAssignment,
             onRetryCandidates = model::retryCandidates
-        )
+        ),
+        onSelectStatus = model::selectStatus,
+        onObservationChanged = model::editObservation,
+        onConfirmChange = model::confirmChange,
+        onCancelChange = model::cancelChange,
+        onRetrySynchronization = model::retrySynchronization
     )
 }
 
@@ -62,9 +74,43 @@ fun AdminIncidentDetailContent(
     state: AdminIncidentDetailState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onRetryHistory: () -> Unit = {},
+    modifier: Modifier = Modifier,
     assignmentActions: AdminIncidentAssignmentActions = AdminIncidentAssignmentActions(),
-    modifier: Modifier = Modifier
+    onSelectStatus: ((String) -> Unit)? = null,
+    onObservationChanged: (String) -> Unit = {},
+    onConfirmChange: () -> Unit = {},
+    onCancelChange: () -> Unit = {},
+    onRetrySynchronization: () -> Unit = {}
 ) {
+    if (state.selectedStatus != null && onSelectStatus != null) {
+        AlertDialog(
+            onDismissRequest = { if (!state.busy) onCancelChange() },
+            properties = DialogProperties(dismissOnBackPress = !state.busy, dismissOnClickOutside = !state.busy),
+            title = { Text("Confirmar cambio de estado") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Estado actual: ${state.currentStatus?.name.orEmpty()}")
+                    Text("Nuevo estado: ${state.selectedStatus}")
+                    OutlinedTextField(value = state.observation, onValueChange = onObservationChanged,
+                        label = { Text("Observación obligatoria") }, enabled = !state.busy,
+                        isError = state.validationError != null, modifier = Modifier.fillMaxWidth())
+                    state.validationError?.let { CitizenMessage(it, isError = true) }
+                    state.changeError?.let { CitizenMessage(it, isError = true) }
+                    if (state.submitting) {
+                        CircularProgressIndicator()
+                        Text("Enviando cambio…")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = onConfirmChange,
+                    enabled = !state.busy && state.observation.isNotBlank() &&
+                        state.selectedStatus in state.availableTransitions) { Text("Confirmar") }
+            },
+            dismissButton = { TextButton(onClick = onCancelChange, enabled = !state.busy) { Text("Cancelar") } }
+        )
+    }
     Column(modifier.fillMaxSize()) {
         CitizenHeader("Detalle del incidente", subtitle = "Administrador", onBack = onBack)
         Column(
@@ -79,12 +125,44 @@ fun AdminIncidentDetailContent(
                         OutlinedButton(onClick = onRetry) { Text("Reintentar") }
                     }
                 }
-                IncidentsUiState.Success -> state.incident?.let { incident ->
-                    AdminIncidentInformation(incident)
+                IncidentsUiState.Success -> state.incident?.let {
+                    if (onSelectStatus != null) {
+                        state.successMessage?.let { message -> CitizenMessage(message) }
+                        state.syncError?.let { message ->
+                            CitizenMessage(message, isError = true)
+                            OutlinedButton(onClick = onRetrySynchronization, enabled = !state.busy) {
+                                Text("Recargar detalle")
+                            }
+                        }
+                        if (state.synchronizing) {
+                            CircularProgressIndicator()
+                            Text("Actualizando detalle…")
+                        }
+                        if (state.selectedStatus == null) state.changeError?.let { message ->
+                            CitizenMessage(message, isError = true)
+                        }
+                        if (state.availableTransitions.isNotEmpty()) {
+                            DetailSection("Cambiar estado") {
+                                state.availableTransitions.forEach { destination ->
+                                    OutlinedButton(onClick = { onSelectStatus(destination) },
+                                        enabled = !state.busy && state.selectedStatus == null) {
+                                        Text("Cambiar a $destination")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    AdminIncidentInformation(it)
                     AdminIncidentAssignmentSection(
-                        assignment = incident.activeAssignment,
+                        assignment = it.activeAssignment,
                         state = state,
                         actions = assignmentActions
+                    )
+                    AdminIncidentHistorySection(
+                        status = state.historyStatus,
+                        history = state.history,
+                        canRetry = state.historyCanRetry,
+                        onRetry = onRetryHistory
                     )
                 }
                 IncidentsUiState.Empty -> Unit

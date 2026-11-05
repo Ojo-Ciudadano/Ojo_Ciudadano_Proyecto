@@ -13,6 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +46,15 @@ fun AdminIncidentsScreen(onBack: () -> Unit, onIncidentSelected: (String) -> Uni
             categoryRepository = application.container.categoryRepository
         )
     })
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, model) {
+        val observer = LifecycleEventObserver { _, event ->
+            // Returning from detail refreshes server state while preserving active filters.
+            if (event == Lifecycle.Event.ON_RESUME) model.loadIncidents()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val state by model.state.collectAsState()
     AdminIncidentsContent(
         state = state,

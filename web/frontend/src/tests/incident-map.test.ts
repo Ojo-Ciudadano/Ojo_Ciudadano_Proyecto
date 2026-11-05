@@ -29,15 +29,43 @@ import {
   tieneFiltrosMapaActivos,
 } from '../components/map/incidentMarkers'
 import {
+  ESTADO_SELECCION_INICIAL,
+  ORIGEN_NAVEGACION_MAPA,
+  TEXTO_ACCION_DETALLE,
+  TEXTO_CATEGORIA_DESCONOCIDA,
+  TEXTO_ESTADO_DESCONOCIDO,
+  TEXTO_FECHA_DESCONOCIDA,
+  construirResumenIncidente,
+  construirRutaDetalleIncidente,
+  crearContenidoPopup,
+  crearContenidoTooltip,
+  formatearFechaCreacion,
+  reducirSeleccionPopup,
+  resolverIncidenteNavegacion,
+  type DocumentoPopup,
+} from '../components/map/incidentPopup'
+import {
   crearControladorIncidentesMapa,
 } from '../hooks/useIncidentesMapa'
 import {
   normalizarFiltrosMapa,
   normalizarIncidentes,
+  obtenerIncidenteDetalle,
   obtenerIncidentesParaMapa,
 } from '../services/incidentes.service'
+import { interpretarErrorDetalleIncidente } from '../hooks/useIncidenteDetalle'
+import {
+  puedeGestionarIncidente,
+  resolverEnlaceRetornoDetalle,
+} from '../pages/incidentes/detalleIncidenteAcceso'
 import { apiClient } from '../services/api'
-import { NAVIGATION_RULES, ROLES, getVisibleNavigation } from '../config/navigation'
+import {
+  INCIDENT_DETAIL_ALLOWED_ROLES,
+  NAVIGATION_RULES,
+  ROLES,
+  getVisibleNavigation,
+  isRoleAuthorized,
+} from '../config/navigation'
 import type { Incidente } from '../types/incidente'
 
 const almacenamiento = new Map<string, string>()
@@ -75,6 +103,7 @@ const incidenteBase: Incidente = {
   id: 'INC-1',
   titulo: 'Incendio forestal',
   descripcion: 'Humo visible en el cerro',
+  fechaCreacion: '2026-11-03T15:12:00.000Z',
   nivelPrioridad: 1,
   estadoId: ESTADO_NUEVO_ID,
   categoriaId: CATEGORIA_INCENDIO_ID,
@@ -122,7 +151,65 @@ const marcadorBase: IncidentMapMarker = {
   latitud: -38.7359,
   longitud: -72.5904,
   titulo: 'Incendio forestal',
+  descripcion: 'Humo visible en el cerro',
+  categoria: 'Incendios',
+  estado: 'Reportado',
+  fechaCreacion: '2026-11-03T15:12:00.000Z',
   prioridad: 1,
+}
+
+interface ElementoFalso {
+  tagName: string
+  className: string
+  textContent: string
+  atributos: Record<string, string>
+  hijos: ElementoFalso[]
+  listeners: Record<string, Array<() => void>>
+  appendChild(hijo: ElementoFalso): void
+  setAttribute(nombre: string, valor: string): void
+  addEventListener(evento: string, handler: () => void): void
+  click(): void
+}
+
+function crearElementoFalso(tagName: string): ElementoFalso {
+  const elemento: ElementoFalso = {
+    tagName,
+    className: '',
+    textContent: '',
+    atributos: {},
+    hijos: [],
+    listeners: {},
+    appendChild(hijo: ElementoFalso) {
+      elemento.hijos.push(hijo)
+    },
+    setAttribute(nombre: string, valor: string) {
+      elemento.atributos[nombre] = valor
+    },
+    addEventListener(evento: string, handler: () => void) {
+      if (!elemento.listeners[evento]) {
+        elemento.listeners[evento] = []
+      }
+      elemento.listeners[evento].push(handler)
+    },
+    click() {
+      for (const handler of elemento.listeners.click ?? []) {
+        handler()
+      }
+    },
+  }
+  return elemento
+}
+
+function crearDocumentoFalso(): DocumentoPopup {
+  return {
+    createElement(tagName: string): HTMLElement {
+      return crearElementoFalso(tagName) as unknown as HTMLElement
+    },
+  }
+}
+
+function comoElementoFalso(elemento: HTMLElement): ElementoFalso {
+  return elemento as unknown as ElementoFalso
 }
 
 describe('Configuración del mapa de incidentes (#139)', () => {
@@ -231,6 +318,9 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
     assert.equal(marcador.longitud, -72.5904)
     assert.equal(marcador.titulo, 'Incendio forestal')
     assert.equal(marcador.descripcion, 'Humo visible en el cerro')
+    assert.equal(marcador.categoria, 'Incendio forestal')
+    assert.equal(marcador.estado, 'Nuevo')
+    assert.equal(marcador.fechaCreacion, '2026-11-03T15:12:00.000Z')
     assert.equal(marcador.prioridad, 1)
   })
 
@@ -310,6 +400,261 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
     const red = interpretarErrorMapa(new Error('network error'))
     assert.equal(red.permiteReintentar, true)
     assert.match(red.mensaje, /Inténtalo nuevamente/i)
+  })
+})
+
+describe('Popup resumen del marcador (#141)', () => {
+  it('resume título, categoría, estado y fecha de creación', () => {
+    const resumen = construirResumenIncidente(marcadorBase)
+    assert.equal(resumen.incidentId, 'INC-1')
+    assert.equal(resumen.titulo, 'Incendio forestal')
+    assert.equal(resumen.categoria, 'Incendios')
+    assert.equal(resumen.estado, 'Reportado')
+    assert.notEqual(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+    assert.match(resumen.fechaCreacion, /2026/)
+  })
+
+  it('conserva los campos de resumen en el recorrido incidente -> mapear -> normalizar -> resumen', () => {
+    const mapeado = mapearIncidenteAMarcador(incidenteBase)
+    assert.ok(mapeado)
+    const [normalizado] = normalizarMarcadores([mapeado])
+    assert.ok(normalizado)
+    const resumen = construirResumenIncidente(normalizado)
+
+    assert.equal(resumen.incidentId, 'INC-1')
+    assert.equal(resumen.titulo, 'Incendio forestal')
+    assert.equal(resumen.categoria, 'Incendio forestal')
+    assert.equal(resumen.estado, 'Nuevo')
+    assert.notEqual(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+  })
+
+  it('usa respaldos legibles cuando faltan datos o la fecha es inválida', () => {
+    const resumen = construirResumenIncidente({
+      ...marcadorBase,
+      titulo: '   ',
+      categoria: null,
+      estado: '',
+      fechaCreacion: 'no-es-fecha',
+    })
+    assert.equal(resumen.titulo, 'Incidente INC-1')
+    assert.equal(resumen.categoria, TEXTO_CATEGORIA_DESCONOCIDA)
+    assert.equal(resumen.estado, TEXTO_ESTADO_DESCONOCIDO)
+    assert.equal(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+    assert.equal(formatearFechaCreacion(null), TEXTO_FECHA_DESCONOCIDA)
+    assert.equal(formatearFechaCreacion(undefined), TEXTO_FECHA_DESCONOCIDA)
+  })
+
+  it('construye el popup con nodos de texto, conserva el id y expone el botón Ver detalle', () => {
+    const documento = crearDocumentoFalso()
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorBase, documento),
+    )
+    assert.equal(contenido.className, 'incident-map__popup')
+    assert.equal(contenido.atributos['data-incident-id'], 'INC-1')
+    const [titulo, datos, boton] = contenido.hijos
+    assert.equal(titulo.tagName, 'strong')
+    assert.equal(titulo.textContent, 'Incendio forestal')
+    assert.equal(datos.tagName, 'dl')
+    assert.deepEqual(
+      datos.hijos.map((hijo) => `${hijo.tagName}:${hijo.textContent}`),
+      [
+        'dt:Categoría',
+        'dd:Incendios',
+        'dt:Estado',
+        'dd:Reportado',
+        'dt:Fecha de creación',
+        `dd:${construirResumenIncidente(marcadorBase).fechaCreacion}`,
+      ],
+    )
+    assert.equal(boton.tagName, 'button')
+    assert.equal(boton.textContent, TEXTO_ACCION_DETALLE)
+    assert.equal(boton.atributos['data-incident-id'], 'INC-1')
+  })
+
+  it('trata un título con HTML como texto literal en popup y tooltip, sin interpretarlo', () => {
+    const documento = crearDocumentoFalso()
+    const marcadorXss = {
+      ...marcadorBase,
+      titulo: '<img src=x onerror=alert(1)>',
+    }
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorXss, documento),
+    )
+    const tooltip = comoElementoFalso(
+      crearContenidoTooltip(marcadorXss, documento),
+    )
+    assert.equal(
+      contenido.hijos[0].textContent,
+      '<img src=x onerror=alert(1)>',
+    )
+    assert.equal(tooltip.textContent, '<img src=x onerror=alert(1)>')
+  })
+
+  it('reemplaza la selección al cambiar de marcador y solo limpia al cerrar el seleccionado', () => {
+    let estado = reducirSeleccionPopup(ESTADO_SELECCION_INICIAL, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-1',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-1')
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-2',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-2')
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-1',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-2')
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-2',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, null)
+    estado = reducirSeleccionPopup(
+      { incidenteSeleccionadoId: 'INC-3' },
+      { tipo: 'limpiar' },
+    )
+    assert.equal(estado.incidenteSeleccionadoId, null)
+  })
+})
+
+describe('Navegación desde un marcador al detalle del incidente Web (#142)', () => {
+  it('invoca la acción de detalle con el identificador real del marcador seleccionado', () => {
+    const documento = crearDocumentoFalso()
+    const abiertos: string[] = []
+
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorBase, documento, {
+        onVerDetalle: (id) => abiertos.push(id),
+      }),
+    )
+
+    const boton = contenido.hijos.find((hijo) => hijo.tagName === 'button')
+    assert.ok(boton)
+    boton.click()
+
+    assert.deepEqual(abiertos, ['INC-1'])
+    assert.equal(construirRutaDetalleIncidente(abiertos[0]), '/incidentes/INC-1')
+  })
+
+  it('evita abrir un incidente anterior cuando el usuario selecciona varios marcadores antes de navegar', () => {
+    let estado = reducirSeleccionPopup(ESTADO_SELECCION_INICIAL, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-1',
+    })
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-2',
+    })
+    // Aunque llegue un cierre tardío de INC-1 o un clic residual de INC-1, el destino activo es INC-2
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-1',
+    })
+
+    const idResuelto = resolverIncidenteNavegacion(estado, 'INC-1')
+    assert.equal(idResuelto, 'INC-2')
+    assert.equal(construirRutaDetalleIncidente(idResuelto), '/incidentes/INC-2')
+  })
+
+  it('rechaza identificadores vacíos o inválidos al construir la ruta del detalle', () => {
+    assert.equal(construirRutaDetalleIncidente(''), null)
+    assert.equal(construirRutaDetalleIncidente('   '), null)
+    assert.equal(construirRutaDetalleIncidente(null), null)
+    assert.equal(construirRutaDetalleIncidente(undefined), null)
+    assert.equal(
+      construirRutaDetalleIncidente('INC/42'),
+      '/incidentes/INC%2F42',
+    )
+  })
+
+  it('autoriza el acceso a la ruta del detalle para CIUDADANO y ADMIN pero restringe las acciones administrativas a ADMIN', () => {
+    assert.equal(
+      isRoleAuthorized([ROLES.CIUDADANO], INCIDENT_DETAIL_ALLOWED_ROLES),
+      true,
+    )
+    assert.equal(
+      isRoleAuthorized([ROLES.ADMIN], INCIDENT_DETAIL_ALLOWED_ROLES),
+      true,
+    )
+    assert.equal(isRoleAuthorized([], INCIDENT_DETAIL_ALLOWED_ROLES), false)
+
+    assert.equal(puedeGestionarIncidente([ROLES.CIUDADANO]), false)
+    assert.equal(puedeGestionarIncidente([ROLES.ADMIN]), true)
+    assert.equal(puedeGestionarIncidente(null), false)
+  })
+
+  it('ofrece retorno al mapa cuando el detalle se abre desde el mapa y conserva el retorno por rol en otros orígenes', () => {
+    const desdeMapaCiudadano = resolverEnlaceRetornoDetalle(
+      { origen: ORIGEN_NAVEGACION_MAPA },
+      [ROLES.CIUDADANO],
+    )
+    assert.deepEqual(desdeMapaCiudadano, {
+      destino: '/mapa',
+      etiqueta: '← Volver al mapa',
+    })
+
+    const desdeMapaAdmin = resolverEnlaceRetornoDetalle(
+      { origen: ORIGEN_NAVEGACION_MAPA },
+      [ROLES.ADMIN],
+    )
+    assert.deepEqual(desdeMapaAdmin, {
+      destino: '/mapa',
+      etiqueta: '← Volver al mapa',
+    })
+
+    const desdeTablaAdmin = resolverEnlaceRetornoDetalle(null, [ROLES.ADMIN])
+    assert.deepEqual(desdeTablaAdmin, {
+      destino: '/incidentes',
+      etiqueta: '← Volver a la tabla de incidentes',
+    })
+  })
+
+  it('representa de forma controlada acceso denegado (403), inexistente (404) e identificador inválido (400)', () => {
+    const denegado = interpretarErrorDetalleIncidente({ statusCode: 403 })
+    assert.equal(denegado.noEncontrado, false)
+    assert.equal(denegado.error?.accesoDenegado, true)
+    assert.equal(denegado.error?.permiteReintentar, false)
+    assert.match(denegado.error?.mensaje ?? '', /permisos/i)
+
+    const noEncontrado = interpretarErrorDetalleIncidente({ statusCode: 404 })
+    assert.equal(noEncontrado.noEncontrado, true)
+    assert.equal(noEncontrado.error, null)
+
+    const idInvalido = interpretarErrorDetalleIncidente({ statusCode: 400 })
+    assert.equal(idInvalido.noEncontrado, false)
+    assert.equal(idInvalido.error?.permiteReintentar, false)
+    assert.match(idInvalido.error?.mensaje ?? '', /identificador/i)
+  })
+
+  it('reutiliza obtenerIncidenteDetalle (#133) consultando el incidente elegido por su id real', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    let urlConsultada = ''
+
+    apiClient.defaults.adapter = async (config) => {
+      urlConsultada = config.url ?? ''
+      return {
+        data: {
+          ...incidenteBase,
+          id: 'INC-1',
+          estadoId: 'EST-1',
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      const detalle = await obtenerIncidenteDetalle('INC-1')
+      assert.equal(urlConsultada, '/incidentes/INC-1')
+      assert.equal(detalle.id, 'INC-1')
+      assert.equal(detalle.titulo, 'Incendio forestal')
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
   })
 })
 
