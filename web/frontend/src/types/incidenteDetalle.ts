@@ -1,3 +1,5 @@
+import type { EvidenciaIncidente } from './evidenciaIncidente'
+
 export interface AsignacionActiva {
   id: string
   incidenteId: string
@@ -58,4 +60,5 @@ export interface IncidenteDetalle {
   asignacionActiva?: AsignacionActiva | null
   historial?: RegistroHistorialIncidente[] | null
   historialVersion?: number
+  evidencias?: EvidenciaIncidente[] | null
 }
