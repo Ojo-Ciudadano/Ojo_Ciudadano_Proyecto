@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentLocation
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.IncidentStatus
 import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
@@ -114,6 +117,65 @@ class AdminIncidentDetailScreenTest {
         }
     }
 
+    @Test fun historySectionCoversEntriesEmptyErrorAndRetryWithoutHidingTheIncident() {
+        val entries = listOf(
+            history("h1", "2026-11-02T12:00:00Z", "Se inicia la evaluación"),
+            history("h2", "2026-11-03T12:00:00Z", null)
+        )
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident,
+                historyStatus = IncidentsUiState.Success, history = entries
+            )
+        )
+        var historyRetries = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    state.value,
+                    onBack = {},
+                    onRetry = { error("The detail must not reload when only the history fails") },
+                    onRetryHistory = { historyRetries++ }
+                )
+            }
+        }
+        compose.onNodeWithText("Historial de cambios").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Se inicia la evaluación").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Sin observación").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("Estado: En revisión").assertCountEquals(3)
+        compose.onAllNodesWithText("Usuario: ${entries.first().userId}").assertCountEquals(2)
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident, historyStatus = IncidentsUiState.Empty
+            )
+        }
+        compose.onNodeWithText("Este incidente aún no registra cambios de estado.")
+            .performScrollTo().assertIsDisplayed()
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident,
+                historyStatus = IncidentsUiState.Error("No fue posible cargar el historial."),
+                historyCanRetry = true
+            )
+        }
+        compose.onNodeWithText(incident.title).assertIsDisplayed()
+        compose.onNodeWithText("No fue posible cargar el historial.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, historyRetries) }
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident,
+                historyStatus = IncidentsUiState.Error("Tu sesión expiró."),
+                historyCanRetry = false
+            )
+        }
+        compose.onNodeWithText("Tu sesión expiró.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").assertDoesNotExist()
+    }
+
     @Test fun onlyOfficialTransitionsAreShownAndClosedOrUnknownHaveNoActions() {
         val state = mutableStateOf(AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident))
         compose.setContent {
@@ -196,5 +258,14 @@ class AdminIncidentDetailScreenTest {
         IncidentStatus("status", "En revisión", 2),
         IncidentLocation("location", -38.7, -72.5, "Plaza", "Temuco", "Araucanía", "Centro"),
         "another-citizen", null, "2026-11-02T12:00:00Z", "2026-11-03T13:00:00Z"
+    )
+
+    private fun history(id: String, date: String, observation: String?) = IncidentStateHistory(
+        id = id,
+        incidenteId = incident.id,
+        status = IncidentStatus("status-$id", "En revisión", 2),
+        userId = "b0000000-0000-4000-8000-000000000012",
+        observation = observation,
+        date = date
     )
 }
