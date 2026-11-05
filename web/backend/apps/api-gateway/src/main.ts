@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ApiGatewayModule } from './api-gateway.module';
@@ -25,7 +25,9 @@ async function bootstrap() {
   app.enableCors(buildCorsOptions(configService));
 
   // Prefijo global de la API pública v1 (MM-06 / ADR #126)
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', {
+    exclude: [{ path: 'health', method: RequestMethod.GET }],
+  });
 
   // Publicar documentación OpenAPI en /api/docs (#156)
   setupSwagger(app);

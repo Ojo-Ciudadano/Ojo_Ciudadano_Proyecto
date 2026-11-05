@@ -39,6 +39,28 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3001
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
@@ -124,6 +146,28 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3002
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
@@ -186,6 +230,28 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3003
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
@@ -239,6 +305,28 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3000
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
