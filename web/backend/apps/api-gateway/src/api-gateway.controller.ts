@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ApiGatewayService } from './api-gateway.service';
 
 @Controller()
@@ -11,6 +12,7 @@ export class ApiGatewayController {
   }
 
   @Get('health')
+  @ApiExcludeEndpoint()
   health(): { status: 'ok' } {
     return { status: 'ok' };
   }

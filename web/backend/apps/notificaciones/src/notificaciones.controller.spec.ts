@@ -62,6 +62,7 @@ describe('NotificacionesController', () => {
     expect(notificacionesController.health()).toEqual({ status: 'ok' });
   });
 
+
   describe('create (#113)', () => {
     it('persiste y retorna la notificacion creada con fecha y referencia al incidente', async () => {
       const fechaCreacion = new Date('2026-10-30T00:00:00.000Z');
