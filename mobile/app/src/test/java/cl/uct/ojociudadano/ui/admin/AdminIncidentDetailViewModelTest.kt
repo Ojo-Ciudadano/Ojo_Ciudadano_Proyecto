@@ -46,15 +46,10 @@ class AdminIncidentDetailViewModelTest {
         runCurrent()
         assertEquals(listOf(incident.id), repository.ids)
         assertEquals(listOf(incident.id), repository.historyIds)
-        assertEquals(
-            AdminIncidentDetailState(
-                incident.id,
-                IncidentsUiState.Success,
-                incident,
-                historyStatus = IncidentsUiState.Empty
-            ),
-            model.state.value
-        )
+        assertEquals(IncidentsUiState.Success, model.state.value.status)
+        assertEquals(incident, model.state.value.incident)
+        assertEquals(IncidentsUiState.Empty, model.state.value.historyStatus)
+        assertEquals(AssignmentCandidates.Ready(emptyList(), 0), model.state.value.candidates)
         assertEquals(incident.status, model.state.value.currentStatus)
         model.retry()
         runCurrent()
@@ -72,6 +67,7 @@ class AdminIncidentDetailViewModelTest {
             assertFalse(model.state.value.canRetry)
             assertTrue(repository.ids.isEmpty())
             assertTrue(repository.historyIds.isEmpty())
+            assertEquals(0, repository.candidateCalls)
         }
     }
 
@@ -154,10 +150,9 @@ class AdminIncidentDetailViewModelTest {
         assertTrue(repository.cancelled)
         pending.complete(incident)
         runCurrent()
-        assertEquals(
-            AdminIncidentDetailState(incident.id, historyStatus = IncidentsUiState.Empty),
-            model.state.value
-        )
+        assertEquals(incident.id, model.state.value.incidentId)
+        assertNull(model.state.value.incident)
+        assertFalse(model.state.value.status is IncidentsUiState.Error)
     }
 
     @Test fun `history is requested with the same id and published in chronological order`() = runTest {
@@ -399,29 +394,188 @@ class AdminIncidentDetailViewModelTest {
         assertEquals(1, repository.changes.size)
     }
 
-    private class Repository : IncidentRepository {
-        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): cl.uct.ojociudadano.data.model.IncidentAssignment = error("Unused")
-        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
-        override suspend fun getCandidates(page: Int?, limit: Int?): cl.uct.ojociudadano.data.model.Paginated<cl.uct.ojociudadano.data.model.CandidateUser> = error("Unused")
-        val changes = mutableListOf<Triple<String, String, String>>()
-        var updatePending: CompletableDeferred<Incident>? = null
-        var updateFailure: Exception? = null
-        var updateResult: Incident? = null
-        var result: Incident = incident
-        override suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident {
-            changes += Triple(incidentId, status, observation)
-            updateFailure?.let { throw it }
-            return updatePending?.await() ?: updateResult ?: result.copy(status = result.status.copy(name = status))
+    @Test fun `preloaded catalog resolves the confirmed responsible name`() = runTest {
+        val repository = Repository().apply {
+            result = assignedIncident
+            candidatePage = page(listOf(admin))
         }
+        val model = AdminIncidentDetailViewModel(repository, assignedIncident.id)
+        runCurrent()
+        assertEquals(admin.name, model.state.value.responsibleName)
+        assertEquals(assignment, model.state.value.incident?.activeAssignment)
+        assertEquals(AssignmentCandidates.Ready(listOf(admin), 1), model.state.value.candidates)
+        assertEquals(1, repository.candidateCalls)
+    }
 
+    @Test fun `picker selection is temporary and dismissing restores the persisted assignment`() = runTest {
+        val repository = Repository().apply {
+            result = assignedIncident
+            candidatePage = page(listOf(admin, otherAdmin))
+        }
+        val model = AdminIncidentDetailViewModel(repository, assignedIncident.id)
+        runCurrent()
+        model.openAssignmentPicker()
+        runCurrent()
+        assertTrue(model.state.value.pickerVisible)
+        assertNull(model.state.value.assignmentError)
+
+        model.selectCandidate(otherAdmin.id)
+        assertEquals(otherAdmin, model.state.value.selectedCandidate)
+        // The pending selection never replaces the confirmed responsible.
+        assertEquals(assignment, model.state.value.incident?.activeAssignment)
+        assertEquals(assignedIncident, model.state.value.incident)
+
+        model.dismissAssignmentPicker()
+        assertFalse(model.state.value.pickerVisible)
+        assertNull(model.state.value.selectedCandidateId)
+        assertEquals(assignment, model.state.value.incident?.activeAssignment)
+        assertTrue(repository.assignments.isEmpty())
+    }
+
+    @Test fun `confirming assigns the selected administrator and reflects only the backend response`() = runTest {
+        val repository = Repository().apply { candidatePage = page(listOf(admin)) }
+        val confirmed = assignment.copy(id = "a2", assignedUserId = admin.id)
+        val pending = CompletableDeferred<IncidentAssignment>()
+        repository.assignPending = pending
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openAssignmentPicker()
+        runCurrent()
+        model.selectCandidate(admin.id)
+        model.confirmAssignment()
+        runCurrent()
+
+        assertEquals(listOf(incident.id to admin.id), repository.assignments)
+        assertTrue(model.state.value.assigning)
+        assertTrue(model.state.value.pickerVisible)
+        // Not confirmed until the backend answers.
+        assertNull(model.state.value.incident?.activeAssignment)
+        assertFalse(model.state.value.assignmentCompleted)
+
+        pending.complete(confirmed)
+        runCurrent()
+        assertFalse(model.state.value.assigning)
+        assertFalse(model.state.value.pickerVisible)
+        assertTrue(model.state.value.assignmentCompleted)
+        assertEquals(confirmed, model.state.value.incident?.activeAssignment)
+        assertNull(model.state.value.assignmentError)
+    }
+
+    @Test fun `failed assignment keeps the previous responsible and reports a retryable error`() = runTest {
+        val repository = Repository().apply {
+            candidatePage = page(listOf(admin))
+            assignFailure = http(503)
+            result = assignedIncident
+        }
+        val model = AdminIncidentDetailViewModel(repository, assignedIncident.id)
+        runCurrent()
+        model.openAssignmentPicker()
+        runCurrent()
+        model.selectCandidate(admin.id)
+        model.confirmAssignment()
+        runCurrent()
+
+        assertFalse(model.state.value.assigning)
+        assertTrue(model.state.value.pickerVisible)
+        assertTrue(model.state.value.assignmentCompleted.not())
+        assertEquals(assignment, model.state.value.incident?.activeAssignment)
+        val failure = model.state.value.assignmentError
+        assertNotNull(failure)
+        assertTrue(failure!!.canRetry)
+        assertFalse(failure.message.contains("private host"))
+
+        repository.assignFailure = null
+        model.confirmAssignment()
+        runCurrent()
+        assertEquals(2, repository.assignments.size)
+        assertEquals(assignment.copy(assignedUserId = admin.id), model.state.value.incident?.activeAssignment)
+    }
+
+    @Test fun `candidate catalog failure is controlled and retryable`() = runTest {
+        val repository = Repository().apply {
+            candidateFailure = ApiException.Network(IOException("private host"))
+        }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        assertEquals(IncidentsUiState.Success, model.state.value.status)
+        val failed = model.state.value.candidates
+        assertTrue(failed is AssignmentCandidates.Failed)
+        assertTrue((failed as AssignmentCandidates.Failed).canRetry)
+        assertFalse(failed.message.contains("private host"))
+        assertNull(model.state.value.responsibleName)
+
+        model.openAssignmentPicker()
+        assertTrue(model.state.value.pickerVisible)
+
+        repository.candidateFailure = null
+        repository.candidatePage = page(listOf(admin))
+        model.retryCandidates()
+        runCurrent()
+        assertEquals(AssignmentCandidates.Ready(listOf(admin), 1), model.state.value.candidates)
+        assertNull(model.state.value.assignmentError)
+        assertEquals(IncidentsUiState.Success, model.state.value.status)
+    }
+
+    @Test fun `empty administrator catalog is valid and blocks confirmation`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.openAssignmentPicker()
+        runCurrent()
+        assertEquals(AssignmentCandidates.Ready(emptyList(), 0), model.state.value.candidates)
+        assertTrue(model.state.value.pickerVisible)
+        assertNull(model.state.value.selectedCandidateId)
+
+        model.confirmAssignment()
+        runCurrent()
+        assertTrue(repository.assignments.isEmpty())
+        assertFalse(model.state.value.assigning)
+    }
+
+    @Test fun `session change during confirmation is terminal and never reported as confirmed`() = runTest {
+        val repository = Repository().apply {
+            candidatePage = page(listOf(admin))
+            assignFailure = SessionRequiredException()
+            result = assignedIncident
+        }
+        val model = AdminIncidentDetailViewModel(repository, assignedIncident.id)
+        runCurrent()
+        model.openAssignmentPicker()
+        runCurrent()
+        model.selectCandidate(admin.id)
+        model.confirmAssignment()
+        runCurrent()
+
+        assertEquals(assignment, model.state.value.incident?.activeAssignment)
+        assertFalse(model.state.value.assignmentCompleted)
+        val failure = model.state.value.assignmentError
+        assertNotNull(failure)
+        assertFalse(failure!!.canRetry)
+    }
+
+    private class Repository : IncidentRepository {
         val ids = mutableListOf<String>()
         val historyIds = mutableListOf<String>()
         var failure: Exception? = null
         var pending: CompletableDeferred<Incident>? = null
         var cancelled = false
+        var result: Incident = incident
+
         var historyFailure: Exception? = null
         var historyPending: CompletableDeferred<List<IncidentStateHistory>>? = null
         var historyRows: List<IncidentStateHistory> = emptyList()
+
+        var candidatePage: Paginated<CandidateUser> = Paginated(emptyList(), 1, 100, 0, 0)
+        var candidateFailure: Exception? = null
+        var candidateCalls = 0
+        var assignFailure: Exception? = null
+        var assignPending: CompletableDeferred<IncidentAssignment>? = null
+        val assignments = mutableListOf<Pair<String, String>>()
+
+        val changes = mutableListOf<Triple<String, String, String>>()
+        var updatePending: CompletableDeferred<Incident>? = null
+        var updateFailure: Exception? = null
+        var updateResult: Incident? = null
 
         override suspend fun getIncidentById(id: String): Incident {
             ids += id
@@ -440,6 +594,24 @@ class AdminIncidentDetailViewModelTest {
             return historyPending?.await() ?: historyRows
         }
 
+        override suspend fun assignResponsible(incidentId: String, assignedUserId: String): IncidentAssignment {
+            assignments += incidentId to assignedUserId
+            assignFailure?.let { throw it }
+            return assignPending?.await() ?: assignment.copy(assignedUserId = assignedUserId)
+        }
+
+        override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {
+            candidateCalls += 1
+            candidateFailure?.let { throw it }
+            return candidatePage
+        }
+
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident {
+            changes += Triple(incidentId, status, observation)
+            updateFailure?.let { throw it }
+            return updatePending?.await() ?: updateResult ?: result.copy(status = result.status.copy(name = status))
+        }
+
         override suspend fun getIncidents(filters: IncidentFilters): List<Incident> = error("Must not query list")
         override suspend fun getCurrentUserIncidents(): List<Incident> = error("Must not query own incidents")
         override suspend fun createIncident(input: CreateIncidentInput): Incident = error("Unused")
@@ -447,11 +619,26 @@ class AdminIncidentDetailViewModelTest {
         override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> = error("Must not query photos")
         override suspend fun getEvidenceById(id: String): Evidence = error("Unused")
         override suspend fun downloadEvidenceFile(id: String): ResponseBody = error("Unused")
+        override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident = error("Unused")
     }
 
     private fun http(code: Int) = ApiException.Http(code, listOf("private host"), null, null)
 
+    private fun page(users: List<CandidateUser>) = Paginated(users, 1, 100, users.size, 1)
+
     private companion object {
+        val admin = CandidateUser(
+            "c0000000-0000-4000-8000-000000000001",
+            "Admin Uno",
+            "admin1@uct.cl",
+            listOf("ADMIN")
+        )
+        val otherAdmin = CandidateUser(
+            "c0000000-0000-4000-8000-000000000002",
+            "Admin Dos",
+            "admin2@uct.cl",
+            listOf("ADMIN")
+        )
         val incident = Incident(
             "d0000000-0000-4000-8000-000000000004", "Luminaria", "Sin iluminación",
             Category("category", "Alumbrado", "", 1, false, null),
@@ -459,6 +646,15 @@ class AdminIncidentDetailViewModelTest {
             IncidentLocation("location", -38.7, -72.5, "Plaza", "Temuco", "Araucanía", "Centro"),
             "another-citizen", null, "2026-11-02T12:00:00Z", "2026-11-03T12:00:00Z"
         )
+        val assignment = IncidentAssignment(
+            "a0000000-0000-4000-8000-000000000001",
+            incident.id,
+            admin.id,
+            "a0000000-0000-4000-8000-0000000000aa",
+            "2026-11-03T10:00:00Z",
+            true
+        )
+        val assignedIncident = incident.copy(activeAssignment = assignment)
 
         fun history(id: String, date: String, observation: String? = "Se inicia la evaluación") =
             IncidentStateHistory(
