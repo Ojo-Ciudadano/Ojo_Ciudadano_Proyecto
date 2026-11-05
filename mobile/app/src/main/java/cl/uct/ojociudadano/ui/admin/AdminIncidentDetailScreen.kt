@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.window.DialogProperties
@@ -33,6 +32,7 @@ import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
+import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.IncidentLoadState
 import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.reports.incidentDate
@@ -105,8 +105,7 @@ fun AdminIncidentDetailContent(
                     state.validationError?.let { CitizenMessage(it, isError = true) }
                     state.changeError?.let { CitizenMessage(it, isError = true) }
                     if (state.submitting) {
-                        CircularProgressIndicator()
-                        Text("Enviando cambio…")
+                        LoadingContent(message = "Enviando cambio…", modifier = Modifier.fillMaxWidth())
                     }
                 }
             },
@@ -120,7 +119,9 @@ fun AdminIncidentDetailContent(
     }
     Column(modifier.fillMaxSize()) {
         CitizenHeader("Detalle del incidente", subtitle = "Administrador", onBack = onBack)
-        Column(
+        if (state.status == IncidentsUiState.Loading) {
+            LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
+        } else Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -142,8 +143,7 @@ fun AdminIncidentDetailContent(
                             }
                         }
                         if (state.synchronizing) {
-                            CircularProgressIndicator()
-                            Text("Actualizando detalle…")
+                            LoadingContent(message = "Actualizando detalle…", modifier = Modifier.fillMaxWidth())
                         }
                         if (state.selectedStatus == null) state.changeError?.let { message ->
                             CitizenMessage(message, isError = true)

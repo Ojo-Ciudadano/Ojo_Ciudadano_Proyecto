@@ -164,7 +164,7 @@ private fun MapStatusOverlay(
 ) {
     Box(
         modifier = modifier,
-        contentAlignment = Alignment.TopCenter
+        contentAlignment = if (state == MapUiState.Loading) Alignment.Center else Alignment.TopCenter
     ) {
         when (state) {
             MapUiState.Loading -> MapStatusCard(Modifier.testTag(MapTestTags.LOADING)) {

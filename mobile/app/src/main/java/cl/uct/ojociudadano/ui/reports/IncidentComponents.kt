@@ -10,6 +10,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.ui.components.CitizenMessage
+import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.evidence.IncidentEvidenceGallery
 import java.time.Instant
 import java.time.ZoneId
@@ -43,14 +44,7 @@ fun IncidentLoadState(state: IncidentsUiState, onRetry: () -> Unit, emptyMessage
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (state) {
             IncidentsUiState.Loading -> {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator(Modifier.size(28.dp))
-                    Text("Cargando incidentes…")
-                }
+                LoadingContent(message = "Cargando incidentes…", modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp))
             }
             IncidentsUiState.Empty -> CitizenMessage(emptyMessage)
             is IncidentsUiState.Error -> {
