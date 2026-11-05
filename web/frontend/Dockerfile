@@ -10,9 +10,22 @@ WORKDIR /app
 ARG VITE_API_URL=https://ojociudadano.dev.censei.cl
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Guarda de configuracion: el SPA debe consumir la API en su MISMO origen
+# (https://ojociudadano.dev.censei.cl/api/v1). El certificado autofirmado del
+# Ingress solo cubre ese host; apuntar al host de API rompe las llamadas del
+# navegador (CORS/TLS) y es un error que ya ocurrio con la imagen v1.0.2.
+RUN if [ "${VITE_API_URL}" = "https://api-ojociudadano.dev.censei.cl" ]; then \
+        echo "ERROR: VITE_API_URL debe ser el host de la Web (same-origin), no el host de la API." >&2; \
+        exit 1; \
+    fi; \
+    case "${VITE_API_URL}" in \
+        */) echo "ERROR: VITE_API_URL no debe terminar en '/' (api.ts agrega /api/v1)." >&2; exit 1;; \
+    esac
+
 COPY package.json package-lock.json ./
+# `typescript` ya viene en devDependencies (lo usa `tsc -b`); no hace falta
+# instalarlo globalmente y se evita una segunda descarga desde npm.
 RUN npm install
-RUN npm install -g typescript
 
 COPY . .
 RUN npm run build
