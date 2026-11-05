@@ -7,8 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -109,6 +112,93 @@ class AdminIncidentDetailScreenTest {
         for (text in listOf("null", "undefined", row.location.id, row.category.id, row.status.id)) {
             compose.onNodeWithText(text).assertDoesNotExist()
         }
+    }
+
+    @Test fun prioritySectionShowsCurrentLevelOrExplicitAbsence() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 3))
+        )
+        compose.setContent {
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}) }
+        }
+        compose.onNodeWithText("Prioridad actual").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Nivel 3 de 5").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Modificar prioridad").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Prioridad actualizada correctamente.").assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(incident = incident) }
+        compose.onNodeWithText("Sin prioridad registrada").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun priorityDialogListsAllowedLevelsAndRequiresSelection() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 3), priorityDialogVisible = true
+            )
+        )
+        var selected = -1
+        var confirmed = 0
+        val actions = AdminIncidentPriorityActions(
+            onSelect = {
+                selected = it
+                state.value = state.value.copy(selectedPriority = it)
+            },
+            onConfirm = { confirmed++ }
+        )
+        compose.setContent {
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}, actions) }
+        }
+        compose.onNodeWithText("Modificar prioridad").assertIsDisplayed()
+        for (level in 1..5) compose.onNodeWithTag("admin_priority_option_$level").assertExists()
+        compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
+        compose.onNodeWithTag("admin_priority_option_4").performClick()
+        compose.runOnIdle { assertEquals(4, selected) }
+        compose.onNodeWithTag("admin_priority_confirm").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, confirmed) }
+        compose.onNodeWithTag("admin_priority_option_3").performClick()
+        compose.runOnIdle { assertEquals(3, selected) }
+        compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
+    }
+
+    @Test fun priorityDialogShowsSavingAndRetryableError() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id, IncidentsUiState.Success, incident, priorityDialogVisible = true,
+                selectedPriority = 2, savingPriority = true
+            )
+        )
+        compose.setContent {
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}) }
+        }
+        compose.onNodeWithText("Guardando prioridad…").assertIsDisplayed()
+        compose.onNodeWithTag("admin_priority_cancel").assertIsNotEnabled()
+        compose.onNodeWithTag("admin_priority_confirm").assertIsNotEnabled()
+        compose.runOnIdle {
+            state.value = state.value.copy(
+                savingPriority = false,
+                priorityError = "El servicio de incidentes no está disponible (HTTP 503). Intenta más tarde.",
+                priorityCanRetry = true
+            )
+        }
+        compose.onNodeWithText("El servicio de incidentes no está disponible (HTTP 503). Intenta más tarde.")
+            .assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").assertIsDisplayed()
+        compose.onNodeWithTag("admin_priority_confirm").assertIsEnabled()
+        compose.onNodeWithTag("admin_priority_cancel").assertIsEnabled()
+    }
+
+    @Test fun priorityUpdatedMessageAppearsAfterConfirmation() {
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    AdminIncidentDetailState(
+                        incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 4), priorityUpdated = true
+                    ),
+                    {}, {}
+                )
+            }
+        }
+        compose.onNodeWithText("Nivel 4 de 5").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Prioridad actualizada correctamente.").performScrollTo().assertIsDisplayed()
     }
 
     private val incident = Incident(
