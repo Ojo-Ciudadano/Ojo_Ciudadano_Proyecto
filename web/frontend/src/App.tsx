@@ -12,8 +12,13 @@ import { UsuariosPage } from './pages/usuarios/UsuariosPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { RoleGuard } from './components/auth/RoleGuard'
-import { ROLES, getInitialRouteForRoles } from './config/navigation'
+import {
+  INCIDENT_DETAIL_ALLOWED_ROLES,
+  ROLES,
+  getInitialRouteForRoles,
+} from './config/navigation'
 import { NuevoIncidentePage } from './pages/reportes/NuevoIncidentePage'
+import { NotificacionesPage } from './pages/notificaciones/NotificacionesPage'
 
 /**
  * Destino inicial según el rol:
@@ -94,11 +99,14 @@ function AppRoutes() {
           }
         />
 
-        {/* Detalle del incidente: exclusivo para ADMIN - Issue #133 */}
+        {/* Detalle del incidente: consulta para CIUDADANO y ADMIN; gestión exclusiva para ADMIN (#133, #142) */}
         <Route
           path="incidentes/:id"
           element={
-            <RoleGuard allowedRoles={[ROLES.ADMIN]} redirectTo="/">
+            <RoleGuard
+              allowedRoles={INCIDENT_DETAIL_ALLOWED_ROLES}
+              redirectTo="/"
+            >
               <IncidenteDetallePage />
             </RoleGuard>
           }
@@ -110,6 +118,16 @@ function AppRoutes() {
           element={
             <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
               <IncidentMapPage />
+            </RoleGuard>
+          }
+        />
+
+        {/* Notificaciones: disponibles para ambos roles - Issue #145 */}
+        <Route
+          path="notificaciones"
+          element={
+            <RoleGuard allowedRoles={[ROLES.CIUDADANO, ROLES.ADMIN]}>
+              <NotificacionesPage />
             </RoleGuard>
           }
         />

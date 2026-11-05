@@ -2,6 +2,8 @@ package cl.uct.ojociudadano.data.repository
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
+import cl.uct.ojociudadano.data.model.IncidentFilters
+import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.dto.CategoryDto
 import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
@@ -12,6 +14,7 @@ import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
 import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.remote.dto.NotificationDto
 import cl.uct.ojociudadano.data.session.TokenSnapshot
 import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.data.session.testSessionManager
@@ -50,7 +53,7 @@ class RemoteRepositoryTest {
         )
         val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
-        val incidents = repository.getIncidents()
+        val incidents = repository.getIncidents(IncidentFilters())
 
         assertNull(apiService.lastReporterUserId)
         assertEquals(1, incidents.size)
@@ -65,6 +68,32 @@ class RemoteRepositoryTest {
         assertEquals("image/jpeg", evidence.mimeType)
         assertEquals(2048L, evidence.size)
         assertEquals("/evidencias/evidencia-1/archivo", evidence.fileUrl)
+    }
+
+    @Test
+    fun `getIncidents forwards selected filters and omits unselected criteria`() = runTest {
+        val apiService = FakeApiService(incidents = listOf(sampleIncidentDto()))
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+
+        repository.getIncidents(IncidentFilters(estadoId = "estado-1", categoriaId = "cat-1", comuna = "Temuco"))
+
+        assertNull(apiService.lastReporterUserId)
+        assertEquals("estado-1", apiService.lastEstadoId)
+        assertEquals("cat-1", apiService.lastCategoriaId)
+        assertEquals("Temuco", apiService.lastComuna)
+    }
+
+    @Test
+    fun `getIncidents with empty filters sends null criteria`() = runTest {
+        val apiService = FakeApiService(incidents = listOf(sampleIncidentDto()))
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+
+        repository.getIncidents(IncidentFilters())
+
+        assertNull(apiService.lastReporterUserId)
+        assertNull(apiService.lastEstadoId)
+        assertNull(apiService.lastCategoriaId)
+        assertNull(apiService.lastComuna)
     }
 
     @Test
@@ -85,7 +114,7 @@ class RemoteRepositoryTest {
         val api = FakeApiService(incidents = listOf(mine, other))
         val repository = RemoteIncidentRepository(api, testSessionManager())
         assertEquals(listOf(mine.id), repository.getCurrentUserIncidents().map { it.id })
-        assertEquals(2, repository.getIncidents().size)
+        assertEquals(2, repository.getIncidents(IncidentFilters()).size)
     }
 
     @Test
@@ -183,10 +212,42 @@ class RemoteRepositoryTest {
         assertNull(category.officialContactChannel)
     }
 
+    @Test
+    fun `getNotifications forwards session token and maps response`() = runTest {
+        val apiService = FakeApiService(
+            notifications = listOf(sampleNotificationDto())
+        )
+        val repository = RemoteNotificationRepository(apiService, testSessionManager())
+
+        val notifications = repository.getNotifications()
+
+        assertEquals(testSession().accessToken, apiService.lastNotificationsSession?.value)
+        assertEquals(1, notifications.size)
+
+        val notification = notifications.single()
+        assertEquals("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", notification.id)
+        assertEquals("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", notification.userId)
+        assertEquals("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", notification.incidentId)
+        assertEquals("Su incidente cambió de estado", notification.message)
+        assertEquals(false, notification.isRead)
+        assertEquals("2026-09-24T01:00:00.000Z", notification.createdAt)
+    }
+
+    @Test
+    fun `getNotifications maps empty response to empty list`() = runTest {
+        val apiService = FakeApiService(notifications = emptyList())
+        val repository = RemoteNotificationRepository(apiService, testSessionManager())
+
+        val notifications = repository.getNotifications()
+
+        assertEquals(emptyList<Notification>(), notifications)
+    }
+
     private class FakeApiService(
         private val incidents: List<IncidentDto> = emptyList(),
         private val incident: IncidentDto = sampleIncidentDto(),
         private val categories: List<CategoryDto> = emptyList(),
+        private val notifications: List<NotificationDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
         override suspend fun updateIncidentStatus(incidentId: String, request: cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto, expectedSession: cl.uct.ojociudadano.data.session.TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.IncidentDto = error("Unused")
@@ -225,6 +286,15 @@ class RemoteRepositoryTest {
         var lastReporterUserId: String? = null
             private set
 
+        var lastEstadoId: String? = null
+            private set
+
+        var lastCategoriaId: String? = null
+            private set
+
+        var lastComuna: String? = null
+            private set
+
         var lastIncidentId: String? = null
             private set
 
@@ -233,9 +303,15 @@ class RemoteRepositoryTest {
 
         override suspend fun getIncidents(
             usuarioReportaId: String?,
+            estadoId: String?,
+            categoriaId: String?,
+            comuna: String?,
             expectedSession: TokenSnapshot?
         ): List<IncidentDto> {
             lastReporterUserId = usuarioReportaId
+            lastEstadoId = estadoId
+            lastCategoriaId = categoriaId
+            lastComuna = comuna
             return incidents
         }
 
@@ -257,6 +333,14 @@ class RemoteRepositoryTest {
         ): IncidentDto {
             lastCreateRequest = request
             return incident
+        }
+
+        var lastNotificationsSession: TokenSnapshot? = null
+            private set
+
+        override suspend fun getNotifications(expectedSession: TokenSnapshot?): List<NotificationDto> {
+            lastNotificationsSession = expectedSession
+            return notifications
         }
 
         override suspend fun getUsuarios(
@@ -315,6 +399,17 @@ class RemoteRepositoryTest {
                 prioridadBase = 2,
                 esEmergenciaCritica = false,
                 canalOficialContacto = null
+            )
+        }
+
+        private fun sampleNotificationDto(): NotificationDto {
+            return NotificationDto(
+                id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                usuarioId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                incidenteId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                mensaje = "Su incidente cambió de estado",
+                leido = false,
+                fecha = "2026-09-24T01:00:00.000Z"
             )
         }
 

@@ -4,6 +4,7 @@ import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.domain.model.Evidence
@@ -14,7 +15,7 @@ interface IncidentRepository {
 
     suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident
 
-    suspend fun getIncidents(): List<Incident>
+    suspend fun getIncidents(filters: IncidentFilters = IncidentFilters()): List<Incident>
 
     suspend fun getCurrentUserIncidents(): List<Incident>
 

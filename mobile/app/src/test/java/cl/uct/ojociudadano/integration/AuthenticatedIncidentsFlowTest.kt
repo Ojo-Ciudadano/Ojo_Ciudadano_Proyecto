@@ -1,6 +1,7 @@
 package cl.uct.ojociudadano.integration
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.mapper.toRequestDto
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.RetrofitClient
@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.*
@@ -139,13 +141,13 @@ class AuthenticatedIncidentsFlowTest {
         val api = api()
         manager.establish(userB)
 
-        assertSessionFailure { api.getIncidents(userA.userId, oldToken) }
+        assertSessionFailure { api.getIncidents(usuarioReportaId = userA.userId, expectedSession = oldToken) }
         assertSessionFailure { api.createIncident(input.toRequestDto(userA.userId), oldToken) }
         // Even a new login returning the same JWT must reject queued old work.
         manager.establish(userA)
         assertSessionFailure { api.getIncidentById("incident-id", oldToken) }
         manager.logout()
-        assertSessionFailure { api.getIncidents(userA.userId, oldToken) }
+        assertSessionFailure { api.getIncidents(usuarioReportaId = userA.userId, expectedSession = oldToken) }
 
         assertEquals(0, server.requestCount)
     }
@@ -194,7 +196,7 @@ class AuthenticatedIncidentsFlowTest {
         manager.establish(userA)
         server.enqueue(MockResponse().setBody("[]"))
 
-        assertTrue(repository().getIncidents().isEmpty())
+        assertTrue(repository().getIncidents(IncidentFilters()).isEmpty())
 
         val request = takeRequest()
         assertEquals("/api/v1/incidentes", request.path)
@@ -207,7 +209,7 @@ class AuthenticatedIncidentsFlowTest {
         manager.establish(admin)
         server.enqueue(MockResponse().setBody("[${incidentJson(userB)}]"))
 
-        val incident = repository().getIncidents().single()
+        val incident = repository().getIncidents(IncidentFilters()).single()
 
         assertEquals("d0000000-0000-4000-8000-000000000004", incident.id)
         assertEquals(userB.userId, incident.reporterUserId)
@@ -263,7 +265,7 @@ class AuthenticatedIncidentsFlowTest {
         for (code in listOf(403, 503)) {
             server.enqueue(MockResponse().setResponseCode(code))
 
-            val failure = runCatching { repository().getIncidents() }.exceptionOrNull()
+            val failure = runCatching { repository().getIncidents(IncidentFilters()) }.exceptionOrNull()
 
             assertTrue(failure is ApiException.Http)
             assertEquals(code, (failure as ApiException.Http).statusCode)
@@ -395,6 +397,56 @@ class AuthenticatedIncidentsFlowTest {
         assertTrue(pending.await() is SessionRequiredException)
     }
 
+    @Test fun `logout while PATCH is pending discards its successful response`() = runTest {
+        val admin = userA.copy(roles = listOf("ADMIN"))
+        manager.establish(admin)
+        val release = CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                check(release.await(5, TimeUnit.SECONDS))
+                return MockResponse().setBody(incidentJson(admin).replace("Nuevo", "En revisión"))
+            }
+        }
+        val pending = async(Dispatchers.IO) {
+            runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
+        }
+        try {
+            assertEquals("PATCH", takeRequest().method)
+            manager.logout()
+        } finally {
+            release.countDown()
+        }
+        assertTrue(pending.await() is SessionRequiredException)
+        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertSessionFailure { repository().updateStatus("incident-id", "En revisión", "Valid") }
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `status PATCH is never replayed after retryable HTTP responses or a lost response`() = runTest {
+        manager.establish(userA.copy(roles = listOf("ADMIN")))
+        for (response in listOf(
+            MockResponse().setResponseCode(408),
+            MockResponse().setResponseCode(503).setHeader("Retry-After", "0"),
+            MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST),
+            MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+        )) {
+            server.enqueue(response)
+            // A replay would consume this response and incorrectly report success.
+            server.enqueue(MockResponse().setBody(incidentJson(userA)))
+            val before = server.requestCount
+            val failure = runCatching {
+                repository().updateStatus("incident-id", "En revisión", "Valid")
+            }.exceptionOrNull()
+            assertNotNull(failure)
+            assertEquals("PATCH", takeRequest().method)
+            assertNull(server.takeRequest(200, TimeUnit.MILLISECONDS))
+            assertEquals(before + 1, server.requestCount)
+            // Consume the sentinel with a read so each case starts with an empty queue.
+            repository().getIncidentById("incident-id")
+            assertEquals("GET", takeRequest().method)
+        }
+    }
+
     @Test fun `malformed status response becomes controlled error and preserves session`() = runTest {
         manager.establish(userA.copy(roles = listOf("ADMIN")))
         server.enqueue(MockResponse().setBody("["))
@@ -429,7 +481,7 @@ class AuthenticatedIncidentsFlowTest {
     private suspend fun assertAllOperationsBlocked(repository: RemoteIncidentRepository) {
         assertSessionFailure { repository.getCurrentUserIncidents() }
         assertSessionFailure { repository.createIncident(input) }
-        assertSessionFailure { repository.getIncidents() }
+        assertSessionFailure { repository.getIncidents(IncidentFilters()) }
         assertSessionFailure { repository.getIncidentById("incident-id") }
     }
 

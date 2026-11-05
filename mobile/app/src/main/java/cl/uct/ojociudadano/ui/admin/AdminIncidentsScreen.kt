@@ -13,6 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,10 +41,32 @@ import cl.uct.ojociudadano.ui.reports.incidentDate
 fun AdminIncidentsScreen(onBack: () -> Unit, onIncidentSelected: (String) -> Unit) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: AdminIncidentsViewModel = viewModel(factory = remember(application) {
-        AdminIncidentsViewModelFactory(application.container.incidentRepository)
+        AdminIncidentsViewModelFactory(
+            incidentRepository = application.container.incidentRepository,
+            categoryRepository = application.container.categoryRepository
+        )
     })
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, model) {
+        val observer = LifecycleEventObserver { _, event ->
+            // Returning from detail refreshes server state while preserving active filters.
+            if (event == Lifecycle.Event.ON_RESUME) model.loadIncidents()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val state by model.state.collectAsState()
-    AdminIncidentsContent(state, onBack, model::loadIncidents, onIncidentSelected = onIncidentSelected)
+    AdminIncidentsContent(
+        state = state,
+        onBack = onBack,
+        onRetry = model::loadIncidents,
+        onIncidentSelected = onIncidentSelected,
+        onEstadoSelected = model::selectEstado,
+        onComunaSelected = model::selectComuna,
+        onCategoriaSelected = model::selectCategoria,
+        onClearFilters = model::clearFilters,
+        onRetryCategories = model::loadCategories
+    )
 }
 
 @Composable
@@ -49,7 +75,12 @@ fun AdminIncidentsContent(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    onIncidentSelected: ((String) -> Unit)? = null
+    onIncidentSelected: ((String) -> Unit)? = null,
+    onEstadoSelected: (String?) -> Unit = {},
+    onComunaSelected: (String?) -> Unit = {},
+    onCategoriaSelected: (String?) -> Unit = {},
+    onClearFilters: () -> Unit = {},
+    onRetryCategories: () -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Incidentes", subtitle = "Administrador", onBack = onBack)
@@ -73,6 +104,16 @@ fun AdminIncidentsContent(
                     )
                 }
             }
+            item {
+                AdminIncidentFilterBar(
+                    state = state,
+                    onEstadoSelected = onEstadoSelected,
+                    onComunaSelected = onComunaSelected,
+                    onCategoriaSelected = onCategoriaSelected,
+                    onClearFilters = onClearFilters,
+                    onRetryCategories = onRetryCategories
+                )
+            }
             if (state.status == IncidentsUiState.Success) {
                 items(state.incidents, key = { it.id }) { incident ->
                     AdminIncidentCard(incident, onIncidentSelected)
@@ -82,7 +123,11 @@ fun AdminIncidentsContent(
                     IncidentLoadState(
                         state.status,
                         onRetry,
-                        emptyMessage = "Aún no hay incidentes para mostrar."
+                        emptyMessage = if (state.filters.isEmpty) {
+                            "Aún no hay incidentes para mostrar."
+                        } else {
+                            "No hay incidentes que coincidan con los filtros seleccionados."
+                        }
                     )
                 }
             }

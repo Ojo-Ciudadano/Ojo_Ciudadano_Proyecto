@@ -27,9 +27,12 @@ export function Navbar() {
 
   return (
     <aside className="web-sidebar">
-      <div className="ws-brand">
-        <img src="/logo-3.jpeg" alt="Ojo Ciudadano" className="sidebar-logo" />
-        <span className="ws-brand-text">Ojo Ciudadano</span>
+      <div className="ws-brand ws-brand-ciudadano">
+        <img
+          src="/img/03.png"
+          alt="Ojo Ciudadano"
+          className="sidebar-logo"
+        />
       </div>
 
       <nav className="ws-nav">

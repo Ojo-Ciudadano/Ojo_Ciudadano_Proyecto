@@ -421,3 +421,159 @@
     flex-direction: column;
   }
 }
+
+/* Historial del incidente (#149) */
+
+.detalle-historial {
+  margin-top: 20px;
+}
+
+.historial-vacio {
+  margin: 0;
+  color: #60646c;
+  line-height: 1.6;
+}
+
+.historial-mensaje {
+  padding: 20px;
+  border: 1px solid #e3e5e8;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #60646c;
+  line-height: 1.6;
+}
+
+.historial-mensaje p {
+  margin: 0;
+}
+
+.historial-error {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.historial-error button {
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 16px;
+  border: 1px solid #0b1f4d;
+  border-radius: 8px;
+  background: #0b1f4d;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.historial-error button:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+}
+
+.historial-error button:focus-visible {
+  outline: 3px solid #f97316;
+  outline-offset: 3px;
+}
+
+.historial-cronologia {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+}
+
+.historial-cronologia::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 7px;
+  width: 2px;
+  background: #cbd2dc;
+}
+
+.historial-entrada {
+  position: relative;
+}
+
+.historial-marcador {
+  position: absolute;
+  top: 16px;
+  left: -24px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1d4ed8;
+  box-shadow: 0 0 0 2px #1d4ed8;
+}
+
+.historial-entrada-asignacion .historial-marcador {
+  background: #f97316;
+  box-shadow: 0 0 0 2px #f97316;
+}
+
+.historial-contenido {
+  padding: 16px 18px;
+  border: 1px solid #e3e5e8;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.historial-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.historial-etiqueta-tipo {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.historial-etiqueta-estado {
+  background: rgba(29, 78, 216, 0.1);
+  color: #1d4ed8;
+}
+
+.historial-etiqueta-asignacion {
+  background: rgba(249, 115, 22, 0.14);
+  color: #c2410c;
+}
+
+.historial-fecha {
+  color: #60646c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.historial-datos {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.historial-observacion-bloque {
+  grid-column: 1 / -1;
+}
+
+.historial-sin-observacion {
+  color: #60646c;
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .historial-datos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

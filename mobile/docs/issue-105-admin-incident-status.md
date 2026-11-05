@@ -147,3 +147,103 @@ comprobar ausencia de accesos administrativos. Rotación y restauración de proc
 recargan desde backend; la edición del diálogo no se persiste tras muerte del proceso.
 
 Rama destino del PR: integration. Directiva: Closes #105. Sin merge ni cierre manual.
+
+## Actualización del PR #242 con integration (2026-11-05)
+
+Esta sección registra la validación actual; los resultados anteriores corresponden
+al desarrollo original. Árbol inicialmente limpio en `9d9f3df`, rama
+`feature/105-admin-incident-status`, conservando `77d9d60` y `9d9f3df`.
+Se ejecutó `git fetch origin` y merge convencional de `origin/integration`
+(`89d891f`), sin rebase, reset ni force push.
+
+### Compatibilidad y conflictos
+
+- Conflictos resueltos manualmente en `IncidentRepository.kt` y
+  `RemoteIncidentRepository.kt`: se conserva `updateStatus` junto a
+  `getIncidents(filters: IncidentFilters = IncidentFilters())`, el envío de
+  estado/categoría/comuna y el filtro ciudadano por reportante.
+- #103/#104/#116/#117/#162 ya estaban en la base original. #163, integrado por
+  `c2099b7`, incorpora la firma filtrada y adapta consumidores/dobles.
+  Se mantienen historial, asignación, prioridad, candidatos, evidencias y creación.
+- El merge automático duplicó cuatro métodos administrativos en el doble de
+  `AdminIncidentDetailViewModelTest`; la primera compilación detectó el problema.
+  Se deja una sola implementación por método, sin eliminar casos ni aserciones.
+- También se incorporan los cambios de GPS (#82), notificaciones de datos (#115)
+  y mapa (#107), sin modificaciones propias a esas funcionalidades.
+- `SessionManager`, `TokenSnapshot`, `BearerTokenInterceptor`, navegación protegida,
+  DTOs y mappers administrativos mantienen sus contratos. El PATCH conserva JWT,
+  UUID del incidente y únicamente `estado`/`observacion` en el body. Se verificó
+  nuevamente el controlador, DTO, servicio y matriz versionados del backend.
+
+### Correcciones de estabilización
+
+| Archivo relativo a mobile/ | Ajuste |
+| --- | --- |
+| `app/src/main/java/cl/uct/ojociudadano/data/repository/IncidentRepository.kt` | Combina cambio de estado con consulta filtrada. |
+| `app/src/main/java/cl/uct/ojociudadano/data/repository/RemoteIncidentRepository.kt` | Conserva PATCH administrativo y consultas filtradas autenticadas. |
+| `app/src/main/java/cl/uct/ojociudadano/data/remote/StatusPatchInterceptor.kt` | Marca exclusivamente el body del PATCH de estado como `isOneShot`; impide reenviarlo tras fallos de transporte o respuestas que OkHttp puede reintentar. |
+| `app/src/main/java/cl/uct/ojociudadano/data/remote/RetrofitClient.kt` | Registra el interceptor manteniendo sesión, TLS y el resto del cliente existente. |
+| `app/src/main/java/cl/uct/ojociudadano/ui/admin/AdminIncidentsScreen.kt` | Recarga al recibir ON_RESUME, incluido el regreso del detalle, conservando filtros en el ViewModel. |
+| `app/src/test/java/cl/uct/ojociudadano/integration/AuthenticatedIncidentsFlowTest.kt` | Regresiones de 408, 503 con Retry-After: 0, desconexión, timeout real y logout con PATCH pendiente. Comprueban un único PATCH y descarte de respuesta obsoleta. |
+| `app/src/test/java/cl/uct/ojociudadano/ui/admin/AdminIncidentsViewModelTest.kt` | Recarga tras mutación conserva los tres filtros y acepta que el servidor excluya el incidente que cambió de estado. |
+| `app/src/test/java/cl/uct/ojociudadano/ui/admin/AdminIncidentDetailViewModelTest.kt` | Elimina únicamente declaraciones duplicadas por el merge. |
+| `docs/issue-105-admin-incident-status.md` | Evidencia, compatibilidad y límites de esta integración. |
+
+Se revisó el código fuente de OkHttp 4.12.0 disponible en el caché local:
+`RetryAndFollowUpInterceptor` puede repetir una escritura ante 408/503 y ciertos
+fallos de transporte si el body permite repetición. Las regresiones usan el
+cliente de producción y MockWebServer, con una respuesta de éxito centinela que
+un segundo PATCH consumiría indebidamente. Un timeout de lectura real tampoco
+produce un segundo PATCH. Las consultas GET conservan su comportamiento habitual.
+
+### Validación de la integración
+
+Comandos ejecutados desde mobile/:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin :app:lintDebug --console=plain
+./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.admin.AdminIncidentDetailScreenTest,cl.uct.ojociudadano.ui.admin.AdminIncidentsScreenTest,cl.uct.ojociudadano.ui.startup.RoleNavigationTest,cl.uct.ojociudadano.ui.reports.IncidentBrowsingTest --console=plain
+git diff --check
+git diff --cached --check
+```
+
+- BUILD SUCCESSFUL: pruebas unitarias, APK debug, compilación androidTest y lint.
+- 371 casos unitarios: 368 aprobados, 3 omitidos, 0 fallos y 0 errores.
+- Incluye todas las pruebas de cambio de estado, detalle/listado administrativo,
+  repositorios, mappers y filtros. Las pruebas existentes siguen compilando.
+- 24/24 instrumentadas aprobadas en Motorola AVD Android 17, sin omisiones.
+- Lint: 0 errores y 35 advertencias. Las ubicaciones corresponden a archivos/líneas
+  sin cambios propios de esta integración (incluidas dependencias y filtros
+  recibidos de integration); no se ejecutó un baseline separado de lint de esa
+  rama para comparar numéricamente advertencias.
+- Sin marcadores de conflicto, declaraciones administrativas duplicadas ni
+  diferencias propias en backend, web, infraestructura o CI/CD respecto de
+  origin/integration. Esos cambios aparecen en el merge únicamente por provenir
+  de la rama destino.
+- Fallo inicial de infraestructura: el sandbox no permite escribir el lock del
+  caché Gradle ni abrir ADB. Se repitieron las verificaciones con los permisos
+  correspondientes. El fallo posterior de compilación por métodos duplicados
+  era una incompatibilidad del merge y quedó corregido.
+
+Cobertura: matriz completa y estados terminales/desconocidos; observación vacía
+y espacios; confirmaciones simultáneas; carga y errores seguros; 200/401/403/409/
+503; timeout sin replay; logout y cambio de usuario durante PATCH; PATCH confirmado
+con GET fallido y reintento exclusivamente GET; recarga con filtros activos.
+La restricción visual ADMIN se comprueba con navegación protegida instrumentada;
+el repositorio también rechaza localmente roles no autorizados. El backend
+conserva la responsabilidad de autorización efectiva.
+
+Logs de esta actualización: `/tmp/pr242-validation.log` (iteración),
+`/tmp/pr242-validation-final.log` (resultado final) y
+`/tmp/pr242-instrumented.log`. Reportes locales en `app/build/test-results/`,
+`app/build/reports/androidTests/connected/debug/` y
+`app/build/reports/lint-results-debug.html`.
+
+### Pendientes
+
+Las tres pruebas omitidas requieren habilitar explícitamente integración remota
+(categorías, consulta de incidentes y creación real). No se ejecutaron mutaciones
+contra backend remoto. Sigue pendiente E2E del despliegue real con un ADMIN y un
+incidente autorizado, incluyendo la verificación del historial persistido.
+La evidencia local no certifica disponibilidad ni autorización del despliegue.
+No se fusiona el PR hacia integration ni se cierra manualmente #105.

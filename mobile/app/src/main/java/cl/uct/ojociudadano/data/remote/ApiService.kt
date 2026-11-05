@@ -6,6 +6,7 @@ import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.remote.dto.NotificationDto
 import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
@@ -51,6 +52,9 @@ interface ApiService {
     @GET("api/v1/incidentes")
     suspend fun getIncidents(
         @Query("usuarioReportaId") usuarioReportaId: String? = null,
+        @Query("estadoId") estadoId: String? = null,
+        @Query("categoriaId") categoriaId: String? = null,
+        @Query("comuna") comuna: String? = null,
         @Tag expectedSession: TokenSnapshot? = null
     ): List<IncidentDto>
 
@@ -95,6 +99,11 @@ interface ApiService {
         @Path("id") id: String,
         @Tag expectedSession: TokenSnapshot? = null
     ): ResponseBody
+
+    @GET("api/v1/notificaciones")
+    suspend fun getNotifications(
+        @Tag expectedSession: TokenSnapshot? = null
+    ): List<NotificationDto>
 
     @GET("api/v1/usuarios")
     suspend fun getUsuarios(
