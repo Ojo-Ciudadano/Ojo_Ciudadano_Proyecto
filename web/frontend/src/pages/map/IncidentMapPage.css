@@ -21,6 +21,79 @@
   line-height: 1.6;
 }
 
+/* Controles de filtrado (#143) */
+
+.mapa-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+}
+
+.mapa-filtro {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mapa-filtro label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0b1f4d;
+}
+
+.mapa-filtro select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbd2dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #121212;
+  font: inherit;
+  font-size: 14px;
+}
+
+.mapa-restablecer {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #0b1f4d;
+  border-radius: 8px;
+  background: #0b1f4d;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.mapa-restablecer:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.mapa-restablecer:disabled {
+  background: #eef0f3;
+  border-color: #d8dde5;
+  color: #727985;
+  cursor: not-allowed;
+}
+
+.mapa-filtro select:focus-visible,
+.mapa-restablecer:focus-visible {
+  outline: 3px solid #f97316;
+  outline-offset: 3px;
+}
+
 .mapa-tarjeta {
   position: relative;
   width: 100%;
@@ -164,6 +237,14 @@
 }
 
 @media (max-width: 640px) {
+  .mapa-filtro {
+    flex-basis: 100%;
+  }
+
+  .mapa-restablecer {
+    width: 100%;
+  }
+
   .mapa-tarjeta {
     height: clamp(360px, 58vh, 520px);
     padding: 6px;

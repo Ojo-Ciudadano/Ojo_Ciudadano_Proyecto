@@ -1,4 +1,3 @@
-
 import type { RoleName } from '../types'
 
 export interface NavigationRule {
@@ -12,6 +11,15 @@ export const ROLES: Record<RoleName, RoleName> = {
   ADMIN: 'ADMIN',
   CIUDADANO: 'CIUDADANO',
 }
+
+/**
+ * Roles autorizados para consultar la vista de detalle `/incidentes/:id` (#133, #142).
+ * Las acciones administrativas dentro de la vista permanecen restringidas a ADMIN.
+ */
+export const INCIDENT_DETAIL_ALLOWED_ROLES: readonly RoleName[] = [
+  ROLES.CIUDADANO,
+  ROLES.ADMIN,
+] as const
 
 export function getInitialRouteForRoles(
   roles?: string[] | null,
@@ -36,7 +44,10 @@ export function hasKnownRole(roles?: string[] | null): boolean {
     return false
   }
 
-  return roles.includes(ROLES.ADMIN) || roles.includes(ROLES.CIUDADANO)
+  return (
+    roles.includes(ROLES.ADMIN) ||
+    roles.includes(ROLES.CIUDADANO)
+  )
 }
 
 export function isRoleAuthorized(
@@ -54,7 +65,8 @@ export function isRoleAuthorized(
  * Reglas centralizadas de rutas y menú Web.
  *
  * Issue #130: Protección y navegación según roles.
- * Issue #147: Incorporar listado de usuarios para ADMIN.
+ * Issue #145: Notificaciones para Ciudadano y Administrador.
+ * Issue #147: Listado de usuarios para Administrador.
  */
 export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
@@ -90,6 +102,12 @@ export const NAVIGATION_RULES: readonly NavigationRule[] = [
   {
     path: '/mapa',
     label: 'Mapa de incidentes',
+    allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
+    section: 'main',
+  },
+  {
+    path: '/notificaciones',
+    label: 'Notificaciones',
     allowedRoles: [ROLES.CIUDADANO, ROLES.ADMIN],
     section: 'main',
   },

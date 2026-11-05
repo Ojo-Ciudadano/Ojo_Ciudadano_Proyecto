@@ -1,11 +1,13 @@
 import { apiClient } from './api'
 import type {
   FiltrosIncidentes,
+  FiltrosMapaIncidentes,
   Incidente,
 } from '../types/incidente'
 import type {
   AsignacionActiva,
   IncidenteDetalle,
+  RegistroHistorialIncidente,
 } from '../types/incidenteDetalle'
 import type { EstadoIncidente } from '../config/transicionesIncidente'
 
@@ -24,18 +26,37 @@ export function normalizarIncidentes(payload: unknown): Incidente[] | null {
   return payload as Incidente[]
 }
 
+/**
+ * Limpia y normaliza los filtros aplicables al mapa web (#143).
+ */
+export function normalizarFiltrosMapa(
+  filtros?: Partial<FiltrosMapaIncidentes> | null,
+): FiltrosMapaIncidentes {
+  const estadoId =
+    typeof filtros?.estadoId === 'string' ? filtros.estadoId.trim() : ''
+  const categoriaId =
+    typeof filtros?.categoriaId === 'string' ? filtros.categoriaId.trim() : ''
+
+  return {
+    estadoId,
+    categoriaId,
+  }
+}
+
 export async function obtenerIncidentes(
   signal?: AbortSignal,
   filtros: Partial<FiltrosIncidentes> = {},
 ): Promise<Incidente[]> {
   const params: Record<string, string> = {}
 
-  if (filtros.estadoId) {
-    params.estadoId = filtros.estadoId
+  const estadoId = filtros.estadoId?.trim()
+  if (estadoId) {
+    params.estadoId = estadoId
   }
 
-  if (filtros.categoriaId) {
-    params.categoriaId = filtros.categoriaId
+  const categoriaId = filtros.categoriaId?.trim()
+  if (categoriaId) {
+    params.categoriaId = categoriaId
   }
 
   const comuna = filtros.comuna?.trim()
@@ -69,8 +90,14 @@ export async function obtenerIncidentes(
  */
 export function obtenerIncidentesParaMapa(
   signal?: AbortSignal,
+  filtros: Partial<FiltrosMapaIncidentes> = {},
 ): Promise<Incidente[]> {
-  return obtenerIncidentes(signal)
+  const { estadoId, categoriaId } = normalizarFiltrosMapa(filtros)
+
+  return obtenerIncidentes(signal, {
+    estadoId,
+    categoriaId,
+  })
 }
 
 export async function obtenerIncidenteDetalle(
@@ -221,4 +248,98 @@ export async function cambiarPrioridadIncidente(
   }
 
   return incidente
+}
+
+export function normalizarHistorialIncidente(
+  payload: unknown,
+  incidenteId?: string,
+): RegistroHistorialIncidente[] | null {
+  if (!Array.isArray(payload)) {
+    return null
+  }
+
+  for (const item of payload) {
+    if (!item || typeof item !== 'object') {
+      return null
+    }
+
+    const registro = item as Partial<RegistroHistorialIncidente>
+
+    if (
+      typeof registro.id !== 'string' ||
+      !registro.id.trim() ||
+      typeof registro.incidenteId !== 'string' ||
+      !registro.incidenteId.trim() ||
+      (incidenteId && registro.incidenteId !== incidenteId)
+    ) {
+      return null
+    }
+
+    const camposTextoOpcionales = [
+      registro.usuarioId,
+      registro.observacion,
+      registro.fecha,
+      registro.tipo,
+      registro.tipoEvento,
+    ]
+
+    if (
+      camposTextoOpcionales.some(
+        (valor) =>
+          valor !== undefined &&
+          valor !== null &&
+          typeof valor !== 'string',
+      )
+    ) {
+      return null
+    }
+
+    if (registro.estado !== undefined && registro.estado !== null) {
+      if (typeof registro.estado !== 'object') {
+        return null
+      }
+
+      const camposEstado = [
+        registro.estado.id,
+        registro.estado.nombre,
+        registro.estado.orden,
+      ]
+
+      if (
+        camposEstado.slice(0, 2).some(
+          (valor) =>
+            valor !== undefined &&
+            valor !== null &&
+            typeof valor !== 'string',
+        ) ||
+        (camposEstado[2] !== undefined &&
+          camposEstado[2] !== null &&
+          typeof camposEstado[2] !== 'number')
+      ) {
+        return null
+      }
+    }
+  }
+
+  return payload as RegistroHistorialIncidente[]
+}
+
+export async function obtenerHistorialIncidente(
+  id: string,
+  signal?: AbortSignal,
+): Promise<RegistroHistorialIncidente[]> {
+  const response = await apiClient.get<unknown>(
+    `/incidentes/${encodeURIComponent(id)}/historial`,
+    { signal },
+  )
+
+  const historial = normalizarHistorialIncidente(response.data, id)
+
+  if (!historial) {
+    throw new Error(
+      'El servidor devolvió un historial de incidente inválido.',
+    )
+  }
+
+  return historial
 }
