@@ -19,8 +19,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import cl.uct.ojociudadano.data.model.IncidentStatus
@@ -253,6 +255,114 @@ class AdminIncidentDetailScreenTest {
         assertEquals(1, reloads)
     }
 
+    @Test fun assignmentSectionShowsConfirmedResponsibleOrAnAbsentAssignment() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident)
+        )
+        var opens = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    state = state.value,
+                    onBack = {},
+                    onRetry = {},
+                    assignmentActions = AdminIncidentAssignmentActions(onOpen = { opens++ })
+                )
+            }
+        }
+        compose.onNodeWithText("Responsable").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Sin responsable asignado.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("admin_assignment_open").performScrollTo().performClick()
+        assertEquals(1, opens)
+
+        compose.runOnIdle {
+            state.value = AdminIncidentDetailState(
+                assignedIncident.id,
+                IncidentsUiState.Success,
+                assignedIncident,
+                candidates = AssignmentCandidates.Ready(listOf(admin), 1)
+            )
+        }
+        compose.onNodeWithText("Admin Uno").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Reasignar responsable").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Sin responsable asignado.").assertDoesNotExist()
+    }
+
+    @Test fun assignmentPickerOnlyEnablesConfirmAfterSelectingAnAdministrator() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                assignedIncident.id,
+                IncidentsUiState.Success,
+                assignedIncident,
+                pickerVisible = true,
+                candidates = AssignmentCandidates.Ready(listOf(admin, otherAdmin), 2)
+            )
+        )
+        var confirms = 0
+        var cancels = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    state = state.value,
+                    onBack = {},
+                    onRetry = {},
+                    assignmentActions = AdminIncidentAssignmentActions(
+                        onConfirm = { confirms++ },
+                        onDismiss = { cancels++ }
+                    )
+                )
+            }
+        }
+        compose.onNodeWithText("Reasignar responsable").assertIsDisplayed()
+        compose.onNodeWithText("Admin Uno").assertIsDisplayed()
+        compose.onNodeWithText("admin1@uct.cl").assertIsDisplayed()
+        compose.onNodeWithText("Admin Dos").assertIsDisplayed()
+        compose.onNodeWithTag("admin_assignment_confirm").assertIsNotEnabled()
+
+        compose.runOnIdle {
+            state.value = state.value.copy(selectedCandidateId = admin.id)
+        }
+        compose.onNodeWithTag("admin_assignment_confirm").assertIsEnabled().performClick()
+        assertEquals(1, confirms)
+
+        compose.onNodeWithTag("admin_assignment_cancel").performClick()
+        assertEquals(1, cancels)
+    }
+
+    @Test fun failedAndEmptyCandidateCatalogsStayControlledInsideThePicker() {
+        val state = mutableStateOf(
+            AdminIncidentDetailState(
+                incident.id,
+                IncidentsUiState.Success,
+                incident,
+                pickerVisible = true,
+                candidates = AssignmentCandidates.Failed("No se pudo consultar a los administradores.", true)
+            )
+        )
+        var retries = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentDetailContent(
+                    state = state.value,
+                    onBack = {},
+                    onRetry = {},
+                    assignmentActions = AdminIncidentAssignmentActions(onRetryCandidates = { retries++ })
+                )
+            }
+        }
+        compose.onNodeWithText("No se pudo consultar a los administradores.").assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").performClick()
+        assertEquals(1, retries)
+
+        compose.runOnIdle {
+            state.value = state.value.copy(candidates = AssignmentCandidates.Ready(emptyList(), 0))
+        }
+        compose.onNodeWithText("No hay administradores disponibles.").assertIsDisplayed()
+        compose.onNodeWithTag("admin_assignment_confirm").assertIsNotEnabled()
+        compose.onNodeWithText(admin.id).assertDoesNotExist()
+        compose.onNodeWithText(incident.title).assertIsDisplayed()
+    }
+
     @Test fun prioritySectionShowsCurrentLevelOrExplicitAbsence() {
         val state = mutableStateOf(
             AdminIncidentDetailState(incident.id, IncidentsUiState.Success, incident.copy(priorityLevel = 3))
@@ -284,7 +394,7 @@ class AdminIncidentDetailScreenTest {
             onConfirm = { confirmed++ }
         )
         compose.setContent {
-            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}, actions) }
+            OjoCiudadanoTheme { AdminIncidentDetailContent(state.value, {}, {}, priorityActions = actions) }
         }
         compose.onNodeWithText("Modificar prioridad").assertIsDisplayed()
         for (level in 1..5) compose.onNodeWithTag("admin_priority_option_$level").assertExists()
@@ -346,6 +456,31 @@ class AdminIncidentDetailScreenTest {
         IncidentStatus("status", "En revisión", 2),
         IncidentLocation("location", -38.7, -72.5, "Plaza", "Temuco", "Araucanía", "Centro"),
         "another-citizen", null, "2026-11-02T12:00:00Z", "2026-11-03T13:00:00Z"
+    )
+
+    private val admin = CandidateUser(
+        "c0000000-0000-4000-8000-000000000001",
+        "Admin Uno",
+        "admin1@uct.cl",
+        listOf("ADMIN")
+    )
+
+    private val otherAdmin = CandidateUser(
+        "c0000000-0000-4000-8000-000000000002",
+        "Admin Dos",
+        "admin2@uct.cl",
+        listOf("ADMIN")
+    )
+
+    private val assignedIncident = incident.copy(
+        activeAssignment = IncidentAssignment(
+            "a0000000-0000-4000-8000-000000000001",
+            incident.id,
+            admin.id,
+            "a0000000-0000-4000-8000-0000000000aa",
+            "2026-11-03T10:00:00Z",
+            true
+        )
     )
 
     private fun history(id: String, date: String, observation: String?) = IncidentStateHistory(

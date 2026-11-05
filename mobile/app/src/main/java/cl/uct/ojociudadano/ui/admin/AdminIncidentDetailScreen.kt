@@ -57,8 +57,18 @@ fun AdminIncidentDetailScreen(id: String?, onBack: () -> Unit) {
             onConfirm = model::confirmPriority
         )
     }
+    val assignmentActions = remember(model) {
+        AdminIncidentAssignmentActions(
+            onOpen = model::openAssignmentPicker,
+            onDismiss = model::dismissAssignmentPicker,
+            onSelect = model::selectCandidate,
+            onConfirm = model::confirmAssignment,
+            onRetryCandidates = model::retryCandidates
+        )
+    }
     AdminIncidentDetailContent(state, onBack, model::retry,
         priorityActions = priorityActions,
+        assignmentActions = assignmentActions,
         onRetryHistory = model::retryHistory,
         onSelectStatus = model::selectStatus, onObservationChanged = model::editObservation,
         onConfirmChange = model::confirmChange, onCancelChange = model::cancelChange,
@@ -72,6 +82,7 @@ fun AdminIncidentDetailContent(
     onRetry: () -> Unit,
     priorityActions: AdminIncidentPriorityActions = AdminIncidentPriorityActions(),
     modifier: Modifier = Modifier,
+    assignmentActions: AdminIncidentAssignmentActions = AdminIncidentAssignmentActions(),
     onRetryHistory: () -> Unit = {},
     onSelectStatus: ((String) -> Unit)? = null,
     onObservationChanged: (String) -> Unit = {},
@@ -149,6 +160,11 @@ fun AdminIncidentDetailContent(
                         }
                     }
                     AdminIncidentInformation(it)
+                    AdminIncidentAssignmentSection(
+                        assignment = it.activeAssignment,
+                        state = state,
+                        actions = assignmentActions
+                    )
                     AdminIncidentPrioritySection(state, priorityActions)
                     AdminIncidentHistorySection(
                         status = state.historyStatus,
