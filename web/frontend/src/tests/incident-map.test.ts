@@ -45,7 +45,7 @@ import { interpretarErrorDetalleIncidente } from '../hooks/useIncidenteDetalle'
 import {
   puedeGestionarIncidente,
   resolverEnlaceRetornoDetalle,
-} from '../pages/incidentes/IncidenteDetallePage'
+} from '../pages/incidentes/detalleIncidenteAcceso'
 import { apiClient } from '../services/api'
 import {
   INCIDENT_DETAIL_ALLOWED_ROLES,

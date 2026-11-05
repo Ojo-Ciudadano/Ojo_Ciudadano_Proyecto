@@ -18,7 +18,6 @@ import {
   getInitialRouteForRoles,
 } from './config/navigation'
 import { NuevoIncidentePage } from './pages/reportes/NuevoIncidentePage'
-import './pages/incidentes/IncidenteDetallePage.css'
 
 /**
  * Destino inicial según el rol:
