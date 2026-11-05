@@ -12,6 +12,7 @@ object RoleAccessPolicy {
         AppRoutes.ADMIN to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ADMIN_INCIDENTS to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ADMIN_INCIDENT_DETAIL to setOf(InitialDestination.ADMINISTRATOR),
+        AppRoutes.ADMIN_COMING_SOON to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ROLE_UNAVAILABLE to setOf(InitialDestination.UNAVAILABLE),
         AppRoutes.HOME to setOf(InitialDestination.CITIZEN),
         AppRoutes.REPORTS to setOf(InitialDestination.CITIZEN),
@@ -25,6 +26,7 @@ object RoleAccessPolicy {
     /** Accept registered patterns and concrete incident routes; unclassified routes are denied. */
     fun allows(state: SessionState, route: String?): Boolean {
         val destination = when {
+            route in AdminFutureSection.entries.map { it.route } -> AppRoutes.ADMIN_COMING_SOON
             route == AppRoutes.ADMIN_INCIDENT_DETAIL -> route
             route != null && adminIncidentRoute.matches(route) -> AppRoutes.ADMIN_INCIDENT_DETAIL
             route == AppRoutes.INCIDENT_DETAIL -> route

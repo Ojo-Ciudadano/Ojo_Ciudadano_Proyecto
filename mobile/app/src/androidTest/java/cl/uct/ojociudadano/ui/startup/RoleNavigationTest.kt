@@ -8,6 +8,12 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.graphics.asAndroidBitmap
+import android.graphics.Bitmap
+import java.io.File
 import androidx.compose.ui.test.performTextInput
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
@@ -20,6 +26,7 @@ import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.navigation.AppNavigation
 import cl.uct.ojociudadano.navigation.navigateIfAllowed
 import cl.uct.ojociudadano.navigation.AppRoutes
+import cl.uct.ojociudadano.navigation.AdminFutureSection
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import cl.uct.ojociudadano.ui.login.LoginTestTags
 import java.util.Base64
@@ -214,7 +221,8 @@ class RoleNavigationTest {
                 AppNavigation(manager, controller, startDestination = AppRoutes.HOME)
             }
         }
-        for (route in listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS, "admin/incidents/test-id")) {
+        for (route in listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS, "admin/incidents/test-id") +
+            AdminFutureSection.entries.map { it.route }) {
             compose.runOnIdle {
                 assertFalse(controller.navigateIfAllowed(manager, route))
                 controller.navigate(route)
@@ -277,6 +285,44 @@ class RoleNavigationTest {
         compose.runOnIdle {
             assertEquals(AppRoutes.LOGIN, controller.currentDestination?.route)
             assertNull(controller.previousBackStackEntry)
+        }
+    }
+
+    @Test fun administradorAbreCadaSeccionFuturaYRegresaSinDuplicarElPanel() {
+        val manager = DefaultSessionManager(Storage(session("ADMIN")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme { AppNavigation(manager, controller, startDestination = AppRoutes.ADMIN) }
+        }
+        val dashboard = compose.runOnIdle { requireNotNull(controller.currentBackStackEntry).id }
+        saveScreenshot("admin-dashboard.png")
+        for (section in AdminFutureSection.entries) {
+            for (systemBack in listOf(false, true)) {
+                compose.onNodeWithText(section.title).performScrollTo().performClick()
+                compose.onNodeWithText("Próximamente").assertIsDisplayed()
+                compose.onNodeWithText(section.description).assertIsDisplayed()
+                compose.runOnIdle {
+                    assertEquals(AppRoutes.ADMIN_COMING_SOON, controller.currentDestination?.route)
+                    assertEquals(section.id, controller.currentBackStackEntry?.arguments?.getString("section"))
+                }
+                if (section == AdminFutureSection.USERS) saveScreenshot("admin-coming-soon.png")
+                if (systemBack) compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+                else compose.onNodeWithText("Volver al panel").performClick()
+                compose.onNodeWithText("Gestión de incidentes").performScrollTo().assertIsDisplayed()
+                compose.runOnIdle {
+                    assertEquals(dashboard, controller.currentBackStackEntry?.id)
+                    assertNull(controller.previousBackStackEntry)
+                }
+            }
+        }
+    }
+
+    private fun saveScreenshot(name: String) {
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        File(compose.activity.getExternalFilesDir(null), name).outputStream().use {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
     }
 

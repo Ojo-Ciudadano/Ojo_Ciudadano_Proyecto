@@ -21,9 +21,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.ui.components.CitizenHeader
+import cl.uct.ojociudadano.navigation.AdminFutureSection
 
 @Composable
 fun AdminHomeScreen(
@@ -31,7 +33,8 @@ fun AdminHomeScreen(
     email: String,
     onIncidentManagementClick: () -> Unit,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onFutureSectionClick: (AdminFutureSection) -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Ojo Ciudadano", subtitle = "Administrador") {
@@ -64,12 +67,28 @@ fun AdminHomeScreen(
                 description = "Consulta el listado de incidentes, su ubicación y estado actual.",
                 onClick = onIncidentManagementClick
             )
+            Text("En futuras versiones", style = MaterialTheme.typography.titleMedium)
+            AdminFutureSection.entries.forEach { section ->
+                AdminNavigationCard(
+                    title = section.title,
+                    description = section.description,
+                    onClick = { onFutureSectionClick(section) },
+                    icon = section.icon,
+                    comingSoon = true
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun AdminNavigationCard(title: String, description: String, onClick: () -> Unit) {
+private fun AdminNavigationCard(
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    icon: ImageVector = Icons.AutoMirrored.Filled.Assignment,
+    comingSoon: Boolean = false
+) {
     OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(20.dp),
@@ -77,7 +96,7 @@ private fun AdminNavigationCard(title: String, description: String, onClick: () 
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.Assignment,
+                icon,
                 contentDescription = null,
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.secondary
@@ -85,6 +104,8 @@ private fun AdminNavigationCard(title: String, description: String, onClick: () 
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodyMedium)
+                if (comingSoon) Text("Próximamente", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
             }
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
         }

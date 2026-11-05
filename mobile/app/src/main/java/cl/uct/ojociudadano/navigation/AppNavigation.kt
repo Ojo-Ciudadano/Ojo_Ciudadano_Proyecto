@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
 import cl.uct.ojociudadano.ui.admin.AdminHomeScreen
+import cl.uct.ojociudadano.ui.admin.AdminComingSoonScreen
 import cl.uct.ojociudadano.ui.admin.AdminIncidentsScreen
 import cl.uct.ojociudadano.ui.admin.AdminIncidentDetailScreen
 import cl.uct.ojociudadano.ui.home.HomeScreen
@@ -45,6 +46,7 @@ object AppRoutes {
     const val ADMIN = "admin"
     const val ADMIN_INCIDENTS = "admin/incidents"
     const val ADMIN_INCIDENT_DETAIL = "admin/incidents/{id}"
+    const val ADMIN_COMING_SOON = "admin/coming-soon/{section}"
     const val ROLE_UNAVAILABLE = "role_unavailable"
     const val HOME = "home"
     const val REPORTS = "reports"
@@ -149,7 +151,18 @@ fun AppNavigation(
                     name = session?.name.orEmpty(),
                     email = session?.email.orEmpty(),
                     onIncidentManagementClick = { navigate(AppRoutes.ADMIN_INCIDENTS) },
-                    onLogout = onLogout
+                    onLogout = onLogout,
+                    onFutureSectionClick = { navigate(it.route) }
+                )
+            }
+            protectedComposable(sessionManager, navController, AppRoutes.ADMIN_COMING_SOON) { entry ->
+                AdminComingSoonScreen(
+                    section = AdminFutureSection.fromId(entry.arguments?.getString("section")),
+                    onBack = {
+                        if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN) &&
+                            !navController.popBackStack(AppRoutes.ADMIN, inclusive = false)
+                        ) navigate(AppRoutes.ADMIN)
+                    }
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN_INCIDENTS) {
