@@ -19,3 +19,17 @@ export interface UsuariosListadoResponse {
   data: UsuarioListado[]
   meta: UsuariosPaginationMeta
 }
+
+// Issue #148: roles permitidos por el backend
+export type RolUsuario = 'ADMIN' | 'CIUDADANO'
+
+// Datos enviados al endpoint PATCH
+export interface ActualizarRolUsuarioRequest {
+  rol: RolUsuario
+}
+
+// Respuesta del backend después del cambio
+export interface ActualizarRolUsuarioResponse {
+  id: string
+  roles: RolUsuario[]
+}
