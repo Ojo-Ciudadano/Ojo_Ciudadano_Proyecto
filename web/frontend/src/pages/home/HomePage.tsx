@@ -1,228 +1,339 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { IncidentMap } from '../../components/map/IncidentMap'
+import { mapearIncidentesAMarcadores } from '../../components/map/incidentMarkers'
+import { useInicioCiudadano } from '../../hooks/useInicioCiudadano'
 import './HomePage.css'
 
-interface Incidente {
-  id: string
-  categoria: string
-  comuna: string
-  tiempo: string
-  reportadoPor: string
-  estado: string
-  descripcion: string
-  mediaType: 'foto' | 'video'
-  mediaCount?: string
-  comentarios: { nombre: string; texto: string }[]
+function texto(valor?: string | null): string {
+  return valor?.trim() || 'Sin información'
 }
 
-const incidentes: Incidente[] = [
-  {
-    id: 'INC-4021',
-    categoria: 'Incendio forestal',
-    comuna: 'Carahue',
-    tiempo: 'hace 6 min',
-    reportadoPor: 'Camila Paine',
-    estado: 'NUEVO',
-    descripcion: 'Columna de humo activa junto al cruce principal, aprox. 2 km del acceso a Carahue.',
-    mediaType: 'foto',
-    mediaCount: '1/2',
-    comentarios: [
-      { nombre: 'Matias Ordenes', texto: 'Brigada forestal en camino, ETA 15 min.' }
-    ]
-  },
-  {
-    id: 'INC-4018',
-    categoria: 'Corte de servicio',
-    comuna: 'Loncoche',
-    tiempo: 'hace 40 min',
-    reportadoPor: 'Bastian Huenul',
-    estado: 'EN REVISION',
-    descripcion: 'Corte de suministro electrico afecta a varias viviendas del sector rural.',
-    mediaType: 'video',
-    mediaCount: '0:18',
-    comentarios: []
-  },
-  {
-    id: 'INC-4015',
-    categoria: 'Arbol caido',
-    comuna: 'Padre Las Casas',
-    tiempo: 'hace 2 h',
-    reportadoPor: 'Elena Millao',
-    estado: 'EN ATENCION',
-    descripcion: 'Arbol de gran tamano bloquea completamente la via de acceso al sector.',
-    mediaType: 'foto',
-    mediaCount: undefined,
-    comentarios: []
+function fecha(valor?: string | null): string {
+  if (!valor) return 'Sin información'
+
+  const interpretada = new Date(valor)
+
+  if (Number.isNaN(interpretada.getTime())) {
+    return 'Sin información'
   }
-]
 
-const estadoClase: Record<string, string> = {
-  'NUEVO': 'pill-nuevo',
-  'EN REVISION': 'pill-revision',
-  'EN ATENCION': 'pill-atencion',
-  'RESUELTO': 'pill-resuelto',
-  'CERRADO': 'pill-cerrado'
-}
-
-const mediaGradient: Record<string, string> = {
-  'INC-4021': 'linear-gradient(135deg,#fdba74,#f97316 55%,#7c2d12)',
-  'INC-4018': 'linear-gradient(135deg,#93c5fd,#3b82f6 55%,#1e3a8a)',
-  'INC-4015': 'linear-gradient(135deg,#86efac,#16a34a 55%,#14532d)'
+  return new Intl.DateTimeFormat('es-CL', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(interpretada)
 }
 
 export function HomePage() {
-  const [filtroActivo, setFiltroActivo] = useState('Todos')
-  const [comentarios, setComentarios] = useState<Record<string, string>>({})
+  const {
+    sesionDisponible,
+    vista,
+    estadoId,
+    busqueda,
+    estados,
+    incidentesFiltrados,
+    incidentesPagina,
+    cargando,
+    error,
+    cambiarVista,
+    cambiarEstado,
+    cambiarBusqueda,
+    restablecerEstado,
+    reintentar,
+    paginaActual,
+    totalPaginas,
+    totalResultados,
+    desde,
+    hasta,
+    puedeRetroceder,
+    puedeAvanzar,
+    paginaAnterior,
+    paginaSiguiente,
+  } = useInicioCiudadano()
 
-  const handleComentario = (id: string) => {
-    const texto = comentarios[id]
-    if (!texto?.trim()) return
-    alert(`Comentario agregado en ${id}: ${texto}`)
-    setComentarios(prev => ({ ...prev, [id]: '' }))
-  }
+  const marcadores = useMemo(
+    () => mapearIncidentesAMarcadores(incidentesFiltrados),
+    [incidentesFiltrados],
+  )
+
+  const totalSinCoordenadas = Math.max(
+    0,
+    totalResultados - marcadores.length,
+  )
 
   return (
-    <div className="home-page">
-      <div className="wm-head">
+    <section
+      className="inicio-ciudadano"
+      aria-labelledby="inicio-ciudadano-titulo"
+    >
+      <header className="inicio-ciudadano-encabezado">
         <div>
-          <h2>Inicio</h2>
-          <p></p>
+          <h1 id="inicio-ciudadano-titulo">Inicio</h1>
+          <p>
+            Consulta los incidentes disponibles y tus propios reportes.
+          </p>
         </div>
-        <button className="btn btn-primary btn-small">+ Nuevo reporte</button>
-      </div>
 
-      <div className="filters-row">
-        <input type="text" placeholder="Buscar por categoria o comuna..." />
-        <select>
-          <option>Todos los estados</option>
-          <option>Nuevo</option>
-          <option>En revision</option>
-          <option>Asignado</option>
-          <option>En atencion</option>
-          <option>Resuelto</option>
-          <option>Cerrado</option>
-        </select>
-      </div>
-
-      <div className="chip-row">
-        {['Todos', 'Mis reportes', 'Nuevo', 'En atencion', 'Resuelto'].map(chip => (
-          <div
-            key={chip}
-            className={`chip ${filtroActivo === chip ? 'on' : ''}`}
-            onClick={() => setFiltroActivo(chip)}
+        {sesionDisponible && (
+          <Link
+            className="inicio-ciudadano-nuevo"
+            to="/reportes/nuevo"
           >
-            {chip}
+            + Nuevo reporte
+          </Link>
+        )}
+      </header>
+
+      {sesionDisponible && (
+        <div className="inicio-ciudadano-filtros">
+          <div
+            className="inicio-ciudadano-vistas"
+            role="group"
+            aria-label="Reportes que deseas consultar"
+          >
+            <button
+              type="button"
+              aria-pressed={vista === 'todos'}
+              onClick={() => cambiarVista('todos')}
+            >
+              Todos
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={vista === 'mis-reportes'}
+              onClick={() => cambiarVista('mis-reportes')}
+            >
+              Mis reportes
+            </button>
           </div>
-        ))}
-      </div>
 
-      <div className="home-grid">
-        <div className="home-list">
-          {incidentes.map(inc => (
-            <div key={inc.id} className="rep-card">
-              <div className="rep-top">
-                <div>
-                  <div className="rep-cat">{inc.categoria}</div>
-                  <div className="rep-meta">{inc.comuna} - {inc.tiempo} - reportado por {inc.reportadoPor}</div>
-                </div>
-                <div className={`pill ${estadoClase[inc.estado] || ''}`}>{inc.estado}</div>
+          <div className="inicio-ciudadano-buscador">
+            <label htmlFor="inicio-ciudadano-busqueda">
+              Categoría o comuna
+            </label>
+
+            <input
+              id="inicio-ciudadano-busqueda"
+              type="search"
+              placeholder="Ej.: incendio, Lautaro…"
+              value={busqueda}
+              onChange={(event) =>
+                cambiarBusqueda(event.target.value)
+              }
+            />
+          </div>
+
+          <div className="inicio-ciudadano-filtro-estado">
+            <label htmlFor="inicio-ciudadano-estado">
+              Estado
+            </label>
+
+            <select
+              id="inicio-ciudadano-estado"
+              value={estadoId}
+              onChange={(event) => cambiarEstado(event.target.value)}
+            >
+              <option value="">Todos los estados</option>
+
+              {estadoId &&
+                !estados.some((estado) => estado.id === estadoId) && (
+                  <option value={estadoId}>
+                    Estado seleccionado
+                  </option>
+                )}
+
+              {estados.map((estado) => (
+                <option key={estado.id} value={estado.id}>
+                  {estado.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            className="inicio-ciudadano-restablecer"
+            onClick={restablecerEstado}
+            disabled={!estadoId}
+          >
+            Restablecer estado
+          </button>
+        </div>
+      )}
+
+      <div className="inicio-ciudadano-distribucion">
+        <div className="inicio-ciudadano-resultados">
+          <div aria-busy={cargando}>
+            {cargando ? (
+              <div className="inicio-ciudadano-mensaje" role="status">
+                Cargando incidentes…
               </div>
+            ) : !sesionDisponible ? (
+              <div className="inicio-ciudadano-mensaje" role="status">
+                Inicia sesión como Ciudadano para consultar los reportes.
+              </div>
+            ) : error ? (
+              <div
+                className="inicio-ciudadano-mensaje inicio-ciudadano-error"
+                role="alert"
+              >
+                <p>{error.mensaje}</p>
 
-              <div className="rep-desc">{inc.descripcion}</div>
-
-              <div className="rep-media" style={{ background: mediaGradient[inc.id] }}>
-                {inc.mediaType === 'foto' ? (
-                  <>
-                    <span className="media-badge">Foto</span>
-                    {inc.mediaCount && <span className="media-count">{inc.mediaCount}</span>}
-                  </>
-                ) : (
-                  <>
-                    <div className="media-play">
-                      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                    </div>
-                    <span className="media-badge">{inc.mediaCount}</span>
-                  </>
+                {error.permiteReintentar && (
+                  <button type="button" onClick={reintentar}>
+                    Reintentar
+                  </button>
                 )}
               </div>
-
-              <div className="pipeline">
-                <div className="seg on red"></div>
-                <div className={`seg ${inc.estado !== 'NUEVO' ? 'on orange' : ''}`}></div>
-                <div className={`seg ${inc.estado === 'EN ATENCION' ? 'on blue' : ''}`}></div>
-                <div className="seg"></div>
-                <div className="seg"></div>
-                <div className="seg"></div>
-                <div className="seg"></div>
+            ) : totalResultados === 0 ? (
+              <div className="inicio-ciudadano-mensaje" role="status">
+                {estadoId || busqueda.trim()
+                  ? 'No se encontraron reportes con los filtros seleccionados.'
+                  : vista === 'mis-reportes'
+                    ? 'Todavía no tienes reportes registrados.'
+                    : 'No hay incidentes disponibles.'}
               </div>
+            ) : (
+              <ul className="inicio-ciudadano-lista">
+                {incidentesPagina.map((incidente) => (
+                  <li
+                    key={incidente.id}
+                    className="inicio-ciudadano-tarjeta"
+                    data-incidente-id={incidente.id}
+                    data-estado={incidente.estado?.nombre ?? ''}
+                  >
+                    <article
+                      aria-labelledby={`incidente-titulo-${incidente.id}`}
+                    >
+                      <div className="inicio-ciudadano-tarjeta-encabezado">
+                        <h2 id={`incidente-titulo-${incidente.id}`}>
+                          {texto(incidente.titulo)}
+                        </h2>
 
-              {inc.comentarios.length > 0 && (
-                <div className="feed-comments">
-                  {inc.comentarios.map((c, i) => (
-                    <div key={i} className="comment-item">
-                      <strong>{c.nombre}</strong>
-                      <span>{c.texto}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <span className="inicio-ciudadano-estado">
+                          {texto(incidente.estado?.nombre)}
+                        </span>
+                      </div>
 
-              <div className="feed-comment-box">
-                <input
-                  type="text"
-                  placeholder="Escribe un comentario..."
-                  value={comentarios[inc.id] || ''}
-                  onChange={(e) => setComentarios(prev => ({ ...prev, [inc.id]: e.target.value }))}
-                />
-                <button className="btn btn-secondary btn-small" onClick={() => handleComentario(inc.id)}>
-                  Comentar
+                      <p className="inicio-ciudadano-folio">
+                        Folio: {incidente.id}
+                      </p>
+
+                      <dl className="inicio-ciudadano-datos">
+                        <div>
+                          <dt>Categoría</dt>
+                          <dd>{texto(incidente.categoria?.nombre)}</dd>
+                        </div>
+
+                        <div>
+                          <dt>Comuna</dt>
+                          <dd>{texto(incidente.ubicacion?.comuna)}</dd>
+                        </div>
+
+                        <div>
+                          <dt>Fecha de creación</dt>
+                          <dd>{fecha(incidente.fechaCreacion)}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {sesionDisponible && (
+            <nav
+              className="inicio-ciudadano-paginacion"
+              aria-label="Paginación de reportes"
+            >
+              <p role="status">
+                {cargando
+                  ? 'Consultando resultados…'
+                  : error
+                    ? 'Resultados no disponibles.'
+                    : totalResultados === 0
+                      ? '0 resultados'
+                      : `Mostrando ${desde}–${hasta} de ${totalResultados} reportes`}
+              </p>
+
+              <div className="inicio-ciudadano-paginacion-controles">
+                <button
+                  type="button"
+                  onClick={paginaAnterior}
+                  disabled={!puedeRetroceder}
+                >
+                  Anterior
+                </button>
+
+                <span>
+                  {cargando || error || totalPaginas === 0
+                    ? 'Página —'
+                    : `Página ${paginaActual} de ${totalPaginas}`}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={paginaSiguiente}
+                  disabled={!puedeAvanzar}
+                >
+                  Siguiente
                 </button>
               </div>
-            </div>
-          ))}
+            </nav>
+          )}
         </div>
 
-        <div className="panel">
-          <h4>MAPA TERRITORIAL</h4>
-          <div className="home-map">
-            <div className="pin red" style={{ top: '30%', left: '40%' }}>
-              <div className="drop"></div>
-            </div>
-            <div className="pin blue" style={{ top: '25%', left: '70%' }}>
-              <div className="drop"></div>
-            </div>
-            <div className="pin red" style={{ top: '55%', left: '30%' }}>
-              <div className="drop"></div>
-            </div>
-            <div className="pin blue" style={{ top: '60%', left: '60%' }}>
-              <div className="drop"></div>
-            </div>
-          </div>
+        {sesionDisponible && (
+          <aside
+            className="inicio-ciudadano-panel-mapa"
+            aria-labelledby="inicio-ciudadano-mapa-titulo"
+          >
+            <h2 id="inicio-ciudadano-mapa-titulo">
+              Mapa territorial
+            </h2>
 
-          <div className="inc-list">
-            <div className="inc-row">
-              <div className="dot" style={{ background: 'var(--red)' }}></div>
-              <div className="txt">
-                <strong>Incendio forestal</strong>
-                <span>Carahue - INC-4021</span>
-              </div>
-            </div>
-            <div className="inc-row">
-              <div className="dot" style={{ background: 'var(--orange)' }}></div>
-              <div className="txt">
-                <strong>Corte de servicio</strong>
-                <span>Loncoche - INC-4018</span>
-              </div>
-            </div>
-            <div className="inc-row">
-              <div className="dot" style={{ background: 'var(--blue)' }}></div>
-              <div className="txt">
-                <strong>Arbol caido</strong>
-                <span>Padre Las Casas - INC-4015</span>
-              </div>
-            </div>
-          </div>
-        </div>
+            <p className="inicio-ciudadano-mapa-descripcion">
+              Ubicación de los reportes que coinciden con tu selección.
+            </p>
+
+            {cargando ? (
+              <p role="status">Actualizando el mapa…</p>
+            ) : error ? (
+              <p>
+                El mapa estará disponible cuando se puedan consultar
+                los reportes.
+              </p>
+            ) : (
+              <>
+                <IncidentMap
+                  markers={marcadores}
+                  className="inicio-ciudadano-mapa"
+                />
+
+                <p className="inicio-ciudadano-mapa-resumen" role="status">
+                  {marcadores.length === 0
+                    ? 'No hay reportes con coordenadas válidas para mostrar.'
+                    : `${marcadores.length} reporte(s) con ubicación.`}
+                </p>
+
+                {totalSinCoordenadas > 0 && (
+                  <p className="inicio-ciudadano-mapa-nota">
+                    {totalSinCoordenadas} reporte(s) sin coordenadas
+                    válidas permanecen disponibles en el listado.
+                  </p>
+                )}
+
+                <p className="inicio-ciudadano-mapa-nota">
+                  El mapa incluye todas las coincidencias,
+                  no solo la página visible.
+                </p>
+              </>
+            )}
+          </aside>
+        )}
       </div>
-    </div>
+    </section>
   )
 }

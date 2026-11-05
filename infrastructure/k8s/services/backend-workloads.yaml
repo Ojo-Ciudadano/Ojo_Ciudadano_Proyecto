@@ -78,6 +78,25 @@ spec:
       labels:
         app: incidentes
     spec:
+      initContainers:
+        - name: prisma-migrate
+          image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/migrate-prisma:d2d3a0a1a06c1f116305d7eca822e2099aa7e860
+          command: ["npx", "prisma", "migrate", "deploy"]
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: postgres-incidentes
+            - name: DATABASE_URL_INCIDENTES
+              value: "postgresql://incidentes_user:$(DB_PASSWORD)@postgres-incidentes-svc:5432/incidentes?schema=public"
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
       containers:
         - name: incidentes
           image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/incidentes:latest

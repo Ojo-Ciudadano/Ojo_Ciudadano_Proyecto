@@ -1,15 +1,24 @@
 package cl.uct.ojociudadano.data.repository
 
+import cl.uct.ojociudadano.data.mapper.toCandidatePage
 import cl.uct.ojociudadano.data.mapper.toDomain
 import cl.uct.ojociudadano.data.mapper.toRequestDto
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.ApiService
+import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
 import cl.uct.ojociudadano.data.remote.error.executeApiCall
 import cl.uct.ojociudadano.data.session.SessionIdentity
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionRequiredException
+import cl.uct.ojociudadano.data.session.UserRole
 import cl.uct.ojociudadano.data.session.requireIdentity
 import cl.uct.ojociudadano.domain.model.Evidence
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -23,9 +32,14 @@ class RemoteIncidentRepository(
     private val sessionManager: SessionManager
 ) : IncidentRepository {
 
-    override suspend fun getIncidents(): List<Incident> {
+    override suspend fun getIncidents(filters: IncidentFilters): List<Incident> {
         val response = withCurrentIdentity { identity ->
-            apiService.getIncidents(expectedSession = identity.token)
+            apiService.getIncidents(
+                estadoId = filters.estadoId,
+                categoriaId = filters.categoriaId,
+                comuna = filters.comuna,
+                expectedSession = identity.token
+            )
         }
         return response.map { it.toDomain() }
     }
@@ -33,7 +47,10 @@ class RemoteIncidentRepository(
     override suspend fun getCurrentUserIncidents(): List<Incident> {
         return withCurrentIdentity { identity ->
             // Defense in depth: never trust a server that accidentally ignores the query filter.
-            apiService.getIncidents(identity.userId, identity.token)
+            apiService.getIncidents(
+                usuarioReportaId = identity.userId,
+                expectedSession = identity.token
+            )
                 .map { it.toDomain() }
                 .filter { it.reporterUserId == identity.userId }
         }
@@ -105,5 +122,43 @@ class RemoteIncidentRepository(
         return withCurrentIdentity { identity ->
             apiService.downloadEvidenceFile(id, identity.token)
         }
+    }
+
+    override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> {
+        val response = withCurrentIdentity { identity ->
+            apiService.getIncidentHistory(incidentId, identity.token)
+        }
+        return response.map { it.toDomain() }
+    }
+
+    override suspend fun assignResponsible(
+        incidentId: String,
+        assignedUserId: String
+    ): IncidentAssignment {
+        val request = AssignResponsibleRequestDto(usuarioAsignadoId = assignedUserId)
+        val response = withCurrentIdentity { identity ->
+            apiService.assignResponsible(incidentId, request, identity.token)
+        }
+        return response.toDomain()
+    }
+
+    override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
+        val request = UpdatePriorityRequestDto(nivelPrioridad = priorityLevel)
+        val response = withCurrentIdentity { identity ->
+            apiService.updatePriority(incidentId, request, identity.token)
+        }
+        return response.toDomain()
+    }
+
+    override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {
+        val response = withCurrentIdentity { identity ->
+            apiService.getUsuarios(
+                page = page,
+                limit = limit,
+                rol = UserRole.ADMIN.backendValue,
+                expectedSession = identity.token
+            )
+        }
+        return response.toCandidatePage()
     }
 }

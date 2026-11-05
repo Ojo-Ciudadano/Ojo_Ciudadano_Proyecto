@@ -1,3 +1,4 @@
+
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 import type { ApiError, User } from '../types'
 
@@ -5,6 +6,7 @@ const API_URL = import.meta.env?.VITE_API_URL || 'http://localhost:3000'
 
 export const DEFAULT_SESSION_EXPIRED_MESSAGE =
   'Tu sesión ha expirado o ya no es válida. Por favor, inicia sesión nuevamente.'
+
 export const DEFAULT_PERMISSION_DENIED_MESSAGE =
   'No tienes permisos suficientes para realizar esta operación.'
 
@@ -33,19 +35,49 @@ interface TaggedRequestConfig extends InternalAxiosRequestConfig {
 const sessionInvalidatedListeners = new Set<SessionInvalidatedListener>()
 const permissionDeniedListeners = new Set<PermissionDeniedListener>()
 
+// Issue #144: observadores de cambios de sesión
+const sessionChangeListeners = new Set<() => void>()
+
 let currentSessionEpoch = 0
 let lastInvalidatedToken: string | null = null
 let lastInvalidatedEpoch: number | null = null
 
-export function onSessionInvalidated(listener: SessionInvalidatedListener): () => void {
+// Issue #144: identificador de la sesión actual
+export function getSessionEpoch(): number {
+  return currentSessionEpoch
+}
+
+// Issue #144: suscripción a cambios de sesión
+export function subscribeSessionChanges(
+  listener: () => void,
+): () => void {
+  sessionChangeListeners.add(listener)
+
+  return () => {
+    sessionChangeListeners.delete(listener)
+  }
+}
+
+// Issue #144: avisar a los hooks cuando cambia la sesión
+function notifySessionChange(): void {
+  sessionChangeListeners.forEach((listener) => listener())
+}
+
+export function onSessionInvalidated(
+  listener: SessionInvalidatedListener,
+): () => void {
   sessionInvalidatedListeners.add(listener)
+
   return () => {
     sessionInvalidatedListeners.delete(listener)
   }
 }
 
-export function onPermissionDenied(listener: PermissionDeniedListener): () => void {
+export function onPermissionDenied(
+  listener: PermissionDeniedListener,
+): () => void {
   permissionDeniedListeners.add(listener)
+
   return () => {
     permissionDeniedListeners.delete(listener)
   }
@@ -55,24 +87,35 @@ export function startNewSession(token: string, user?: User): void {
   currentSessionEpoch += 1
   lastInvalidatedToken = null
   lastInvalidatedEpoch = null
+
   localStorage.setItem('access_token', token)
+
   if (user !== undefined) {
     localStorage.setItem('user', JSON.stringify(user))
   }
+
+  // Issue #144: notificar nueva sesión
+  notifySessionChange()
 }
 
 export function clearSessionStorage(): void {
   currentSessionEpoch += 1
+
   localStorage.removeItem('access_token')
   localStorage.removeItem('user')
+
+  // Issue #144: notificar cierre o invalidación
+  notifySessionChange()
 }
 
 export function resetApiAuthStateForTests(): void {
   currentSessionEpoch = 0
   lastInvalidatedToken = null
   lastInvalidatedEpoch = null
+
   sessionInvalidatedListeners.clear()
   permissionDeniedListeners.clear()
+  sessionChangeListeners.clear()
 }
 
 function isLoginEndpoint(url?: string): boolean {
@@ -82,35 +125,60 @@ function isLoginEndpoint(url?: string): boolean {
 
 function extractBearerToken(authHeader?: unknown): string | null {
   if (typeof authHeader !== 'string') return null
+
   const match = authHeader.match(/^Bearer\s+(.+)$/i)
+
   return match ? match[1].trim() : null
 }
 
-function normalizeMessage(rawMessage: unknown, fallback: string): string {
+function normalizeMessage(
+  rawMessage: unknown,
+  fallback: string,
+): string {
   if (Array.isArray(rawMessage)) {
     const joined = rawMessage.filter(Boolean).join(', ').trim()
     return joined || fallback
   }
-  if (typeof rawMessage === 'string' && rawMessage.trim().length > 0) {
+
+  if (
+    typeof rawMessage === 'string' &&
+    rawMessage.trim().length > 0
+  ) {
     return rawMessage.trim()
   }
+
   return fallback
 }
 
 function resolvePermissionDeniedMessage(rawMessage: unknown): string {
-  const genericMessages = new Set(['forbidden', 'forbidden resource', 'error 403'])
+  const genericMessages = new Set([
+    'forbidden',
+    'forbidden resource',
+    'error 403',
+  ])
+
   if (typeof rawMessage === 'string') {
     const trimmed = rawMessage.trim()
-    if (trimmed && !genericMessages.has(trimmed.toLowerCase())) {
+
+    if (
+      trimmed &&
+      !genericMessages.has(trimmed.toLowerCase())
+    ) {
       return trimmed
     }
   }
+
   if (Array.isArray(rawMessage) && rawMessage.length > 0) {
     const joined = rawMessage.filter(Boolean).join(', ').trim()
-    if (joined && !genericMessages.has(joined.toLowerCase())) {
+
+    if (
+      joined &&
+      !genericMessages.has(joined.toLowerCase())
+    ) {
       return joined
     }
   }
+
   return DEFAULT_PERMISSION_DENIED_MESSAGE
 }
 
@@ -121,46 +189,67 @@ export const apiClient = axios.create({
   },
 })
 
-apiClient.interceptors.request.use((config: TaggedRequestConfig) => {
-  const loginRequest = isLoginEndpoint(config.url)
-  config._isAuthLoginRequest = loginRequest
+apiClient.interceptors.request.use(
+  (config: TaggedRequestConfig) => {
+    const loginRequest = isLoginEndpoint(config.url)
+    config._isAuthLoginRequest = loginRequest
 
-  const explicitToken = extractBearerToken(config.headers?.Authorization)
-  const storedToken = localStorage.getItem('access_token')
-  const tokenToUse = explicitToken ?? (!loginRequest ? storedToken : null)
+    const explicitToken = extractBearerToken(
+      config.headers?.Authorization,
+    )
 
-  if (tokenToUse && !explicitToken) {
-    config.headers.Authorization = `Bearer ${tokenToUse}`
-  }
+    const storedToken = localStorage.getItem('access_token')
 
-  config._requestToken = tokenToUse ?? null
-  if (config._sessionEpoch === undefined) {
-    config._sessionEpoch = currentSessionEpoch
-  }
+    const tokenToUse =
+      explicitToken ?? (!loginRequest ? storedToken : null)
 
-  return config
-})
+    if (tokenToUse && !explicitToken) {
+      config.headers.Authorization = `Bearer ${tokenToUse}`
+    }
+
+    config._requestToken = tokenToUse ?? null
+
+    if (config._sessionEpoch === undefined) {
+      config._sessionEpoch = currentSessionEpoch
+    }
+
+    return config
+  },
+)
 
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const config = (error.config ?? {}) as TaggedRequestConfig
     const responseData = error.response?.data
+
     const statusCode: number =
-      error.response?.status ?? responseData?.statusCode ?? 500
-    const path: string = responseData?.path ?? config.url ?? ''
+      error.response?.status ??
+      responseData?.statusCode ??
+      500
+
+    const path: string =
+      responseData?.path ?? config.url ?? ''
 
     if (statusCode === 401) {
-      const isLogin = config._isAuthLoginRequest || isLoginEndpoint(config.url)
+      const isLogin =
+        config._isAuthLoginRequest ||
+        isLoginEndpoint(config.url)
 
       if (isLogin) {
         const loginError: ApiError = {
           statusCode: 401,
-          timestamp: responseData?.timestamp ?? new Date().toISOString(),
+          timestamp:
+            responseData?.timestamp ??
+            new Date().toISOString(),
           path,
-          error: responseData?.error ?? 'Unauthorized',
-          message: responseData?.message ?? 'Credenciales inválidas',
+          error:
+            responseData?.error ?? 'Unauthorized',
+          message:
+            responseData?.message ??
+            'Credenciales inválidas',
         }
+
         return Promise.reject(loginError)
       }
 
@@ -173,17 +262,25 @@ apiClient.interceptors.response.use(
           requestToken !== undefined &&
           lastInvalidatedToken === requestToken &&
           lastInvalidatedEpoch === requestEpoch) ||
-        (requestEpoch !== undefined && lastInvalidatedEpoch === requestEpoch)
+        (requestEpoch !== undefined &&
+          lastInvalidatedEpoch === requestEpoch)
 
       const belongsToCurrentSession =
         Boolean(requestToken) &&
         Boolean(activeToken) &&
         requestToken === activeToken &&
-        (requestEpoch === undefined || requestEpoch === currentSessionEpoch)
+        (requestEpoch === undefined ||
+          requestEpoch === currentSessionEpoch)
 
-      if (!alreadyInvalidated && belongsToCurrentSession && requestToken) {
+      if (
+        !alreadyInvalidated &&
+        belongsToCurrentSession &&
+        requestToken
+      ) {
         lastInvalidatedToken = requestToken
-        lastInvalidatedEpoch = requestEpoch ?? currentSessionEpoch
+        lastInvalidatedEpoch =
+          requestEpoch ?? currentSessionEpoch
+
         clearSessionStorage()
 
         const event: SessionInvalidatedEvent = {
@@ -191,31 +288,43 @@ apiClient.interceptors.response.use(
           message: DEFAULT_SESSION_EXPIRED_MESSAGE,
           path,
         }
-        sessionInvalidatedListeners.forEach((listener) => listener(event))
+
+        sessionInvalidatedListeners.forEach(
+          (listener) => listener(event),
+        )
       }
 
       const unauthorizedError: ApiError = {
         statusCode: 401,
-        timestamp: responseData?.timestamp ?? new Date().toISOString(),
+        timestamp:
+          responseData?.timestamp ??
+          new Date().toISOString(),
         path,
-        error: responseData?.error ?? 'Unauthorized',
+        error:
+          responseData?.error ?? 'Unauthorized',
         message: normalizeMessage(
           responseData?.message,
           DEFAULT_SESSION_EXPIRED_MESSAGE,
         ),
       }
+
       return Promise.reject(unauthorizedError)
     }
 
     if (statusCode === 403) {
-      const permissionMessage = resolvePermissionDeniedMessage(
-        responseData?.message,
-      )
+      const permissionMessage =
+        resolvePermissionDeniedMessage(
+          responseData?.message,
+        )
+
       const forbiddenError: ApiError = {
         statusCode: 403,
-        timestamp: responseData?.timestamp ?? new Date().toISOString(),
+        timestamp:
+          responseData?.timestamp ??
+          new Date().toISOString(),
         path,
-        error: responseData?.error ?? 'Forbidden',
+        error:
+          responseData?.error ?? 'Forbidden',
         message: permissionMessage,
       }
 
@@ -225,7 +334,10 @@ apiClient.interceptors.response.use(
         path,
         error: forbiddenError,
       }
-      permissionDeniedListeners.forEach((listener) => listener(event))
+
+      permissionDeniedListeners.forEach(
+        (listener) => listener(event),
+      )
 
       return Promise.reject(forbiddenError)
     }
@@ -237,6 +349,7 @@ apiClient.interceptors.response.use(
       error: 'Internal Server Error',
       message: 'Ocurrió un error inesperado',
     }
+
     return Promise.reject(apiError)
   },
 )

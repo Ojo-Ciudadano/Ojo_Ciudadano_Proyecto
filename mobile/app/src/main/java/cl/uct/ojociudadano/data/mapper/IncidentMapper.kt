@@ -28,6 +28,9 @@ fun IncidentDto.toDomain(): Incident {
         reporterUserId = usuarioReportaId,
         priorityLevel = nivelPrioridad,
         createdAt = fechaCreacion,
-        updatedAt = fechaActualizacion
+        updatedAt = fechaActualizacion,
+        history = historial?.map { it.toDomain() } ?: emptyList(),
+        activeAssignment = asignacionActiva?.toDomain(),
+        evidences = evidencias.orEmpty().map { it.toDomain() }
     )
 }

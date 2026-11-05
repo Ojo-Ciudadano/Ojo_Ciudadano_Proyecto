@@ -61,7 +61,7 @@ fun AdminHomeScreen(
             Text("Funciones administrativas", style = MaterialTheme.typography.titleMedium)
             AdminNavigationCard(
                 title = "Gestión de incidentes",
-                description = "Acceso al módulo de gestión de incidentes. Funcionalidad pendiente.",
+                description = "Consulta el listado de incidentes, su ubicación y estado actual.",
                 onClick = onIncidentManagementClick
             )
         }

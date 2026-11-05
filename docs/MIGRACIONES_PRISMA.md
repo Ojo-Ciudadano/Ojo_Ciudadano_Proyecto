@@ -155,3 +155,159 @@ npx prisma migrate diff --from-config-datasource --to-schema ./prisma/schema.pri
 # Regeneración del cliente Prisma
 npx prisma generate
 ```
+
+---
+
+## 5. Seed de ciudadanos demo (Issue #151)
+
+El seed de Auth/Usuarios vive en `web/backend/apps/auth-usuarios/prisma/seed.ts` y está registrado en `prisma.config.ts`. Además del administrador y de los roles `ADMIN`/`CIUDADANO`, crea un conjunto acotado de ciudadanos ficticios con **UUID fijos y reproducibles**.
+
+### 5.1 Comando de ejecución local
+
+```bash
+cd web/backend/apps/auth-usuarios
+npx prisma db seed
+```
+
+El comando carga `web/backend/.env` (vía `prisma.config.ts`) y requiere `DATABASE_URL_AUTH`.
+
+### 5.2 Usuarios demo
+
+| Nombre | Correo | UUID fijo |
+| :--- | :--- | :--- |
+| Ciudadano Demo Uno | `ciudadano.demo1@ojociudadano.cl` | `a1b2c3d4-0001-4000-8000-000000000001` |
+| Ciudadana Demo Dos | `ciudadano.demo2@ojociudadano.cl` | `a1b2c3d4-0002-4000-8000-000000000002` |
+| Ciudadano Demo Tres | `ciudadano.demo3@ojociudadano.cl` | `a1b2c3d4-0003-4000-8000-000000000003` |
+
+Todos reciben el rol `CIUDADANO` mediante `UsuarioRol`. Los hashes se generan con `bcryptjs` y salt `10`, el mismo algoritmo usado por `auth.service.ts`.
+
+### 5.3 Contraseña de los usuarios demo
+
+La contraseña compartida se lee de la variable `DEMO_CITIZEN_PASSWORD` (definida en `web/backend/.env`):
+
+```bash
+# web/backend/.env
+DEMO_CITIZEN_PASSWORD=<contraseña-demo>
+```
+
+Si la variable no está definida o está vacía, el seed usa el fallback exclusivo de desarrollo local `CiudadanoDemo123!` y emite una advertencia. En entornos compartidos o remotos se debe definir un valor propio; no se versionan credenciales reales.
+
+### 5.4 Idempotencia
+
+El seed se puede ejecutar cualquier cantidad de veces:
+
+* Crea o actualiza los ciudadanos demo por su UUID fijo.
+* Reutiliza el hash existente cuando la contraseña configurada ya es válida, evitando escrituras innecesarias.
+* Asegura la relación `UsuarioRol` con `upsert`.
+* Si un correo demo ya existe asociado a **otro** UUID, no lo modifica: lo informa por consola y continúa. Así nunca sobrescribe usuarios ajenos al conjunto demo.
+
+Una segunda ejecución debe reportar `sin-cambios` para los tres ciudadanos y no debe aumentar el número de filas.
+
+### 5.5 Poblar la base remota en UCT
+
+El Service `postgres-auth-svc` es `ClusterIP`; para alcanzarlo desde fuera del clúster se abre un túnel:
+
+```bash
+# Terminal 1: mantener el túnel abierto
+kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez
+```
+
+```bash
+# Terminal 2: ejecutar el seed contra la base remota
+PG_PASS=$(kubectl -n student-daalvarez get secret backend-secrets -o jsonpath="{.data.postgres-auth}" | base64 -d)
+
+cd web/backend/apps/auth-usuarios
+DATABASE_URL_AUTH="postgresql://auth_user:${PG_PASS}@localhost:5432/auth_usuarios?schema=public" \
+DEMO_CITIZEN_PASSWORD="<contraseña-demo>" \
+npx prisma db seed
+```
+
+> Si el puerto `5432` local ya está ocupado por otra instancia de PostgreSQL, se puede mapear otro puerto (por ejemplo `55432:5432`) y ajustar la URL a `localhost:55432`. Las migraciones pendientes se aplican antes del seed con `npx prisma migrate deploy` usando la misma `DATABASE_URL_AUTH`.
+
+---
+
+## 6. Seed de incidentes demo (Issue #152)
+
+El seed de Incidentes vive en `web/backend/apps/incidentes/prisma/seed.ts` y está registrado en `web/backend/apps/incidentes/prisma.config.ts` (`seed: "npx tsx prisma/seed.ts"`). Crea un conjunto acotado de incidentes georreferenciados en La Araucanía usando los ciudadanos demo de la Issue #151.
+
+> **Importante (entorno remoto/UCE/UCT):** La ejecución del seed contra el entorno remoto de producción/Kubernetes (UCT) **DEBE realizarse desde la máquina local** abriendo túneles mediante `kubectl port-forward` (`postgres-incidentes-svc` y `postgres-auth-svc`), debido a la **ausencia intencional de herramientas de desarrollo** (`prisma`, `node`, `ts-node`) dentro del contenedor de producción. **No** se ejecuta desde dentro del contenedor de la aplicación.
+
+### 6.1 Requisitos previos
+
+1. La base de Incidentes debe tener las migraciones aplicadas.
+2. Los **catálogos son SOLO LECTURA**: deben existir previamente los **5 estados canónicos** (`Nuevo`, `En revisión`, `En atención`, `Resuelto`, `Cerrado`) y las **8 categorías requeridas** con su `prioridadBase` válido (1-5). Si faltan, el seed **abortará inmediatamente con código de salida 1** y **sin escribir ni alterar ningún registro** en la base de incidentes.
+3. La base de Auth/Usuarios debe tener el seed de #151 ejecutado: los incidentes demo referencian los UUID fijos de `ciudadano.demo1`, `ciudadano.demo2` y `ciudadano.demo3`.
+4. `web/backend/.env` debe definir `DATABASE_URL_INCIDENTES` y `DATABASE_URL_AUTH`. El seed valida los ciudadanos en Auth/Usuarios antes de cualquier escritura en Incidentes; si no existen o no tienen el rol `CIUDADANO`, aborta con un mensaje claro y no modifica la base de Incidentes.
+
+### 6.2 Comando de ejecución local
+
+```bash
+cd web/backend/apps/incidentes
+npx prisma db seed
+```
+
+Salida esperada en la primera ejecución (catálogos ya existentes):
+
+```text
+Seed de incidentes demo (#152) completado
+  Estados vigentes (solo lectura): 5
+  Categorías vigentes (solo lectura): 8
+  Ubicaciones: creados=10, actualizados=0, sin cambios=0
+  Incidentes:  creados=10, actualizados=0, sin cambios=0
+  Ciudadanos demo validados en auth-usuarios: 3
+```
+
+En una segunda ejecución los contadores deben quedar en `sin cambios` para ubicaciones e incidentes, sin aumentar el número de filas. Los catálogos **no se crean ni modifican**.
+
+### 6.3 Incidentes demo
+
+| Comuna | Sector | Categoría | Estado | Prioridad |
+| :--- | :--- | :--- | :--- | :---: |
+| Temuco | Centro | Alumbrado público | En revisión | 2 |
+| Temuco | Pedro de Valdivia | Baches y vialidad | En atención | 2 |
+| Padre Las Casas | Centro | Aseo y basura | Nuevo | 1 |
+| Temuco | Santa Rosa | Agua y alcantarillado | En atención | 3 |
+| Padre Las Casas | San Antonio | Áreas verdes y arbolado | Resuelto | 1 |
+| Temuco | Amanecer | Seguridad ciudadana | Cerrado | 4 |
+| Villarrica | Centro | Accidente de tránsito | En revisión | 5 |
+| Angol | El Vergel | Incendio | Resuelto | 5 |
+| Nueva Imperial | Centro | Aseo y basura | Nuevo | 1 |
+| Temuco | Labranza | Alumbrado público | Cerrado | 2 |
+
+La prioridad inicial se deriva siempre de `categoria.prioridadBase`, igual que en `IncidentesService.create`, y debe estar entre 1 y 5.
+
+### 6.4 Idempotencia y validaciones
+
+* **Catálogos SOLO LECTURA:** No se crean ni modifican estados ni categorías. Se consultan previamente en la base de datos; deben existir los 5 estados canónicos (`Nuevo`, `En revisión`, `En atención`, `Resuelto`, `Cerrado`) y las 8 categorías requeridas con `prioridadBase` válido (1-5). Si falta alguno, el seed **aborta inmediatamente con exit code 1** sin escribir ni alterar ningún registro.
+* Las 10 ubicaciones y los 10 incidentes usan UUID fijos (`d1520000-...` y `e1520000-...`). Antes de escribir se comparan campo a campo; solo se crea lo ausente y solo se actualiza lo que difiere (garantizando 0 escrituras/duplicados en ejecuciones sucesivas).
+* Las definiciones locales se validan antes de conectar: UUID, estados/categorías requeridos, **coordenadas geográficamente reales y coherentes dentro de La Araucanía** (comunas válidas: Temuco, Padre Las Casas, Villarrica, Angol, Nueva Imperial), referencias a ubicaciones/ciudadanos demo.
+* **Prioridad derivada:** `nivelPrioridad` se calcula leyendo directamente el `prioridadBase` de la categoría vigente existente en la BD (igual que `IncidentesService.create`).
+* Los ciudadanos demo se validan en la base de Auth/Usuarios (existencia y rol `CIUDADANO`) antes de cualquier escritura en Incidentes.
+* Toda la escritura de ubicaciones e incidentes ocurre en una sola transacción: si una validación o escritura falla, no queda un seed parcial.
+
+### 6.5 Poblar la base remota en UCT
+
+> **Obligatorio:** La ejecución del seed contra el entorno remoto de producción/Kubernetes (UCT) **DEBE realizarse desde la máquina local**, abriendo túneles mediante `kubectl port-forward` (`postgres-incidentes-svc` y `postgres-auth-svc`), debido a la **ausencia intencional de herramientas de desarrollo** (`prisma`, `node`, `ts-node`) dentro del contenedor de producción.
+
+El seed necesita alcanzar **dos** Services `ClusterIP`: `postgres-incidentes-svc` (escritura) y `postgres-auth-svc` (validación de ciudadanos). Mantén dos túneles abiertos:
+
+```bash
+# Terminal 1: base de Incidentes
+kubectl -n student-daalvarez port-forward svc/postgres-incidentes-svc 5433:5432
+
+# Terminal 2: base de Auth/Usuarios
+kubectl -n student-daalvarez port-forward svc/postgres-auth-svc 5432:5432
+```
+
+```bash
+# Terminal 3: ejecutar el seed contra las bases remotas
+PG_PASS_INC=$(kubectl -n student-daalvarez get secret backend-secrets -o jsonpath="{.data.postgres-incidentes}" | base64 -d)
+PG_PASS_AUTH=$(kubectl -n student-daalvarez get secret backend-secrets -o jsonpath="{.data.postgres-auth}" | base64 -d)
+
+cd web/backend/apps/incidentes
+DATABASE_URL_INCIDENTES="postgresql://incidentes_user:${PG_PASS_INC}@localhost:5433/incidentes" \
+DATABASE_URL_AUTH="postgresql://auth_user:${PG_PASS_AUTH}@localhost:5432/auth_usuarios" \
+npx prisma db seed
+```
+
+> Si el puerto local `5432` o `5433` ya está ocupado, mapea otros puertos (por ejemplo `55432:5432` y `55433:5432`) y ajusta las URLs. Las migraciones pendientes se aplican antes del seed con `npx prisma migrate deploy` usando la misma `DATABASE_URL_INCIDENTES`. El seed de Auth/Usuarios (#151) debe haberse ejecutado previamente contra `postgres-auth-svc`.

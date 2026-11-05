@@ -28,7 +28,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
 import cl.uct.ojociudadano.ui.admin.AdminHomeScreen
-import cl.uct.ojociudadano.ui.admin.AdminIncidentsPendingScreen
+import cl.uct.ojociudadano.ui.admin.AdminIncidentsScreen
+import cl.uct.ojociudadano.ui.admin.AdminIncidentDetailScreen
 import cl.uct.ojociudadano.ui.home.HomeScreen
 import cl.uct.ojociudadano.ui.login.LoginCredentials
 import cl.uct.ojociudadano.ui.login.LoginScreen
@@ -43,6 +44,7 @@ import cl.uct.ojociudadano.ui.reports.ReportsScreen
 object AppRoutes {
     const val ADMIN = "admin"
     const val ADMIN_INCIDENTS = "admin/incidents"
+    const val ADMIN_INCIDENT_DETAIL = "admin/incidents/{id}"
     const val ROLE_UNAVAILABLE = "role_unavailable"
     const val HOME = "home"
     const val REPORTS = "reports"
@@ -151,13 +153,27 @@ fun AppNavigation(
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN_INCIDENTS) {
-                AdminIncidentsPendingScreen(onBack = {
+                AdminIncidentsScreen(onIncidentSelected = {
+                    navigate("admin/incidents/${Uri.encode(it)}")
+                }, onBack = {
                     if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN) &&
                         !navController.popBackStack(AppRoutes.ADMIN, inclusive = false)
                     ) {
                         navigate(AppRoutes.ADMIN)
                     }
                 })
+            }
+            protectedComposable(sessionManager, navController, AppRoutes.ADMIN_INCIDENT_DETAIL) { entry ->
+                AdminIncidentDetailScreen(
+                    id = entry.arguments?.getString("id"),
+                    onBack = {
+                        if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN_INCIDENTS) &&
+                            !navController.popBackStack(AppRoutes.ADMIN_INCIDENTS, inclusive = false)
+                        ) {
+                            navigate(AppRoutes.ADMIN_INCIDENTS)
+                        }
+                    }
+                )
             }
             protectedComposable(sessionManager, navController, AppRoutes.ROLE_UNAVAILABLE) {
                 SessionDestinationScreen(

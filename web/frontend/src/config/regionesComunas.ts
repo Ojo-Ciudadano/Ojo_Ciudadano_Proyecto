@@ -1,0 +1,44 @@
+interface RegionComunas {
+  nombre: string
+  comunas: string[]
+}
+
+export const REGIONES_COMUNAS: RegionComunas[] = [
+  {
+    nombre: 'La Araucanía',
+    comunas: [
+      'Angol',
+      'Carahue',
+      'Cholchol',
+      'Collipulli',
+      'Cunco',
+      'Curacautín',
+      'Curarrehue',
+      'Ercilla',
+      'Freire',
+      'Galvarino',
+      'Gorbea',
+      'Lautaro',
+      'Loncoche',
+      'Lonquimay',
+      'Los Sauces',
+      'Lumaco',
+      'Melipeuco',
+      'Nueva Imperial',
+      'Padre Las Casas',
+      'Perquenco',
+      'Pitrufquén',
+      'Pucón',
+      'Purén',
+      'Renaico',
+      'Saavedra',
+      'Temuco',
+      'Teodoro Schmidt',
+      'Toltén',
+      'Traiguén',
+      'Victoria',
+      'Vilcún',
+      'Villarrica',
+    ],
+  },
+]
