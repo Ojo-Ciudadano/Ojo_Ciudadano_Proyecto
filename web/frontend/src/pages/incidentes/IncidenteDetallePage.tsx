@@ -5,6 +5,7 @@ import type { IncidenteDetalle } from '../../types/incidenteDetalle'
 import { AsignacionIncidente } from './AsignacionIncidente'
 import { CambioPrioridadIncidente } from './CambioPrioridadIncidente'
 import { CambioEstadoIncidente } from './CambioEstadoIncidente'
+import { HistorialIncidente } from './HistorialIncidente'
 import {
   puedeGestionarIncidente,
   resolverEnlaceRetornoDetalle,
@@ -185,7 +186,12 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
         </section>
       </div>
 
-      {/* Evidencias e historial se integrarán en sus respectivas issues. */}
+      <HistorialIncidente
+        key={`historial-${incidente.id}`}
+        incidenteId={incidente.id}
+        historialIncluido={incidente.historial}
+        versionHistorial={incidente.historialVersion}
+      />
     </div>
   )
 }
