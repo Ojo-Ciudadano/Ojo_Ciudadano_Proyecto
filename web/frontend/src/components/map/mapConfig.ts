@@ -51,6 +51,9 @@ export interface IncidentMapMarker {
   titulo: string
   descripcion?: string | null
   prioridad?: number | null
+  categoria?: string | null
+  estado?: string | null
+  fechaCreacion?: string | null
 }
 
 /** Verifica que las coordenadas sean números finitos dentro del rango válido. */

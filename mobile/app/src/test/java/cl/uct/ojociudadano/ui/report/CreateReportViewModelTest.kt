@@ -8,10 +8,14 @@ import cl.uct.ojociudadano.data.media.TEMP_EVIDENCE_MAX_AGE_MILLIS
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
+import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.data.model.IncidentAssignment
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.IncidentLocation
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.model.IncidentStatus
+import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
@@ -20,6 +24,7 @@ import cl.uct.ojociudadano.data.session.SessionRequiredException
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
+import cl.uct.ojociudadano.data.model.IncidentStateHistory
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.CompletableDeferred
@@ -1867,7 +1872,7 @@ private class FakeIncidentRepository(
     val createInputs = mutableListOf<CreateIncidentInput>()
     val uploadAttempts = mutableListOf<UploadedEvidence>()
 
-    override suspend fun getIncidents(): List<Incident> = emptyList()
+    override suspend fun getIncidents(filters: IncidentFilters): List<Incident> = emptyList()
 
     override suspend fun getCurrentUserIncidents(): List<Incident> = emptyList()
 
@@ -1907,6 +1912,24 @@ private class FakeIncidentRepository(
 
     override suspend fun downloadEvidenceFile(id: String): ResponseBody {
         throw NotImplementedError("No implementado para esta prueba")
+    }
+    override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> {
+        throw NotImplementedError()
+    }
+
+    override suspend fun assignResponsible(
+        incidentId: String,
+        assignedUserId: String
+    ): IncidentAssignment {
+        throw NotImplementedError()
+    }
+
+    override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
+        throw NotImplementedError()
+    }
+
+    override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {
+        throw NotImplementedError()
     }
 }
 

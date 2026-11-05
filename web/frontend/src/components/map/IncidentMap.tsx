@@ -14,6 +14,15 @@ import {
   normalizarMarcadores,
   type IncidentMapMarker,
 } from './mapConfig'
+import {
+  crearContenidoPopup,
+  crearContenidoTooltip,
+  resolverIncidenteNavegacion,
+} from './incidentPopup'
+import {
+  debeCerrarPopupMapa,
+  sincronizarIncidenteSeleccionado,
+} from './incidentMarkers'
 import './IncidentMap.css'
 
 const EMPTY_MARKERS: readonly IncidentMapMarker[] = []
@@ -25,19 +34,46 @@ interface IncidentCircleMarker extends L.CircleMarker {
 
 interface IncidentMapProps {
   /**
-   * Capa de marcadores. La pantalla puede pasar datos en el futuro sin
-   * reconstruir el mapa: el efecto solo sincroniza el `LayerGroup`.
+   * Capa de marcadores. La pantalla puede pasar datos sin reconstruir el mapa:
+   * el efecto solo sincroniza el `LayerGroup`.
    */
   markers?: readonly IncidentMapMarker[]
+  /**
+   * Acción invocada cuando el usuario solicita abrir el detalle del incidente
+   * desde el popup del marcador seleccionado (#142).
+   */
+  onOpenIncidentDetail?: (incidentId: string) => void
+  /** Identificador opcional del incidente cuyo popup se encuentra activo. */
+  selectedMarkerId?: string | null
+  /** Notifica cuando se abre o cierra el popup de un marcador. */
+  onSelectMarker?: (markerId: string | null) => void
   className?: string
 }
 
-export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapProps) {
+export function IncidentMap({
+  markers = EMPTY_MARKERS,
+  onOpenIncidentDetail,
+  selectedMarkerId,
+  onSelectMarker,
+  className,
+}: IncidentMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersLayerRef = useRef<L.LayerGroup | null>(null)
+  const openPopupIncidentIdRef = useRef<string | null>(null)
+  const isSyncingLayersRef = useRef(false)
+  const onSelectMarkerRef = useRef(onSelectMarker)
+  const onOpenDetailRef = useRef(onOpenIncidentDetail)
   const [tileError, setTileError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
+
+  useEffect(() => {
+    onSelectMarkerRef.current = onSelectMarker
+  }, [onSelectMarker])
+
+  useEffect(() => {
+    onOpenDetailRef.current = onOpenIncidentDetail
+  }, [onOpenIncidentDetail])
 
   const handleRetry = useCallback(() => {
     setTileError(false)
@@ -133,19 +169,54 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
       map.remove()
       markersLayerRef.current = null
       mapRef.current = null
+      openPopupIncidentIdRef.current = null
     }
   }, [retryKey])
 
   // Sincroniza los marcadores sin recrear el mapa ni el contenedor.
   useEffect(() => {
     const layer = markersLayerRef.current
+    const map = mapRef.current
     if (!layer) {
       return
     }
 
+    const marcadoresNormalizados = normalizarMarcadores(markers)
+    const idPopupAbiertoEnMapa = openPopupIncidentIdRef.current
+    const idPopupActivo =
+      selectedMarkerId !== undefined
+        ? selectedMarkerId
+        : idPopupAbiertoEnMapa
+
+    const idPopupVigente = sincronizarIncidenteSeleccionado(
+      idPopupActivo,
+      marcadoresNormalizados,
+    )
+
+    const cerrarPopupActual =
+      debeCerrarPopupMapa(
+        idPopupAbiertoEnMapa ?? idPopupActivo,
+        marcadoresNormalizados,
+      ) ||
+      (idPopupAbiertoEnMapa !== null && idPopupVigente === null)
+
+    isSyncingLayersRef.current = true
+
+    if (cerrarPopupActual) {
+      map?.closePopup()
+      openPopupIncidentIdRef.current = null
+      if (selectedMarkerId !== null) {
+        onSelectMarkerRef.current?.(null)
+      }
+    } else {
+      openPopupIncidentIdRef.current = idPopupVigente
+    }
+
     layer.clearLayers()
 
-    for (const marcador of normalizarMarcadores(markers)) {
+    let marcadorConPopupAbierto: IncidentCircleMarker | null = null
+
+    for (const marcador of marcadoresNormalizados) {
       const circle: IncidentCircleMarker = L.circleMarker(
         [marcador.latitud, marcador.longitud],
         {
@@ -159,26 +230,54 @@ export function IncidentMap({ markers = EMPTY_MARKERS, className }: IncidentMapP
 
       // La identidad queda disponible en la capa para futuras interacciones.
       circle.incidentId = marcador.id
-      circle.bindTooltip(marcador.titulo, { direction: 'top', offset: [0, -8] })
+      circle.bindTooltip(crearContenidoTooltip(marcador, document), {
+        direction: 'top',
+        offset: [0, -8],
+      })
 
-      // Se construye el popup con nodos de texto para evitar inyección de HTML.
-      const popup = document.createElement('div')
-      popup.className = 'incident-map__popup'
+      // El popup usa `textContent` en todos sus campos (sin `innerHTML`).
+      circle.bindPopup(
+        crearContenidoPopup(marcador, document, {
+          onVerDetalle: (incidenteSolicitadoId) => {
+            const idDestino = resolverIncidenteNavegacion(
+              { incidenteSeleccionadoId: openPopupIncidentIdRef.current },
+              incidenteSolicitadoId,
+            )
+            if (idDestino) {
+              onOpenDetailRef.current?.(idDestino)
+            }
+          },
+        }),
+      )
 
-      const titulo = document.createElement('strong')
-      titulo.textContent = marcador.titulo
-      popup.appendChild(titulo)
+      circle.on('popupopen', () => {
+        openPopupIncidentIdRef.current = marcador.id
+        onSelectMarkerRef.current?.(marcador.id)
+      })
 
-      if (marcador.descripcion) {
-        const descripcion = document.createElement('p')
-        descripcion.textContent = marcador.descripcion
-        popup.appendChild(descripcion)
-      }
+      circle.on('popupclose', () => {
+        if (isSyncingLayersRef.current) {
+          return
+        }
+        if (openPopupIncidentIdRef.current === marcador.id) {
+          openPopupIncidentIdRef.current = null
+          onSelectMarkerRef.current?.(null)
+        }
+      })
 
-      circle.bindPopup(popup)
       circle.addTo(layer)
+
+      if (idPopupVigente && marcador.id === idPopupVigente) {
+        marcadorConPopupAbierto = circle
+      }
     }
-  }, [markers, retryKey])
+
+    if (marcadorConPopupAbierto) {
+      marcadorConPopupAbierto.openPopup()
+    }
+
+    isSyncingLayersRef.current = false
+  }, [markers, selectedMarkerId, retryKey])
 
   const rootClassName = ['incident-map', className].filter(Boolean).join(' ')
 

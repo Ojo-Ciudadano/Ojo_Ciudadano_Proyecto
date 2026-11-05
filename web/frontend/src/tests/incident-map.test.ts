@@ -16,16 +16,56 @@ import {
   type IncidentMapMarker,
 } from '../components/map/mapConfig'
 import {
+  FILTROS_MAPA_INICIALES,
+  actualizarColeccionCatalogoMapa,
+  crearCoordinadorConsultasMapa,
+  debeCerrarPopupMapa,
   interpretarErrorMapa,
   mapearIncidenteAMarcador,
   mapearIncidentesAMarcadores,
+  obtenerOpcionesFiltroMapa,
+  restablecerFiltrosMapa,
+  sincronizarIncidenteSeleccionado,
+  tieneFiltrosMapaActivos,
 } from '../components/map/incidentMarkers'
 import {
+  ESTADO_SELECCION_INICIAL,
+  ORIGEN_NAVEGACION_MAPA,
+  TEXTO_ACCION_DETALLE,
+  TEXTO_CATEGORIA_DESCONOCIDA,
+  TEXTO_ESTADO_DESCONOCIDO,
+  TEXTO_FECHA_DESCONOCIDA,
+  construirResumenIncidente,
+  construirRutaDetalleIncidente,
+  crearContenidoPopup,
+  crearContenidoTooltip,
+  formatearFechaCreacion,
+  reducirSeleccionPopup,
+  resolverIncidenteNavegacion,
+  type DocumentoPopup,
+} from '../components/map/incidentPopup'
+import {
+  crearControladorIncidentesMapa,
+} from '../hooks/useIncidentesMapa'
+import {
+  normalizarFiltrosMapa,
   normalizarIncidentes,
+  obtenerIncidenteDetalle,
   obtenerIncidentesParaMapa,
 } from '../services/incidentes.service'
+import { interpretarErrorDetalleIncidente } from '../hooks/useIncidenteDetalle'
+import {
+  puedeGestionarIncidente,
+  resolverEnlaceRetornoDetalle,
+} from '../pages/incidentes/detalleIncidenteAcceso'
 import { apiClient } from '../services/api'
-import { NAVIGATION_RULES, ROLES, getVisibleNavigation } from '../config/navigation'
+import {
+  INCIDENT_DETAIL_ALLOWED_ROLES,
+  NAVIGATION_RULES,
+  ROLES,
+  getVisibleNavigation,
+  isRoleAuthorized,
+} from '../config/navigation'
 import type { Incidente } from '../types/incidente'
 
 const almacenamiento = new Map<string, string>()
@@ -54,14 +94,53 @@ if (typeof globalThis.localStorage === 'undefined') {
   })
 }
 
+const ESTADO_NUEVO_ID = 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14'
+const ESTADO_ATENCION_ID = 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15'
+const CATEGORIA_INCENDIO_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+const CATEGORIA_ALUMBRADO_ID = 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16'
+
 const incidenteBase: Incidente = {
   id: 'INC-1',
   titulo: 'Incendio forestal',
   descripcion: 'Humo visible en el cerro',
+  fechaCreacion: '2026-11-03T15:12:00.000Z',
   nivelPrioridad: 1,
+  estadoId: ESTADO_NUEVO_ID,
+  categoriaId: CATEGORIA_INCENDIO_ID,
+  estado: {
+    id: ESTADO_NUEVO_ID,
+    nombre: 'Nuevo',
+  },
+  categoria: {
+    id: CATEGORIA_INCENDIO_ID,
+    nombre: 'Incendio forestal',
+  },
   ubicacion: {
     latitud: -38.7359,
     longitud: -72.5904,
+    comuna: 'Temuco',
+    region: 'La Araucanía',
+  },
+}
+
+const incidenteSecundario: Incidente = {
+  id: 'INC-2',
+  titulo: 'Luminaria apagada en Av. Alemania',
+  descripcion: 'Poste sin suministro eléctrico',
+  nivelPrioridad: 3,
+  estadoId: ESTADO_ATENCION_ID,
+  categoriaId: CATEGORIA_ALUMBRADO_ID,
+  estado: {
+    id: ESTADO_ATENCION_ID,
+    nombre: 'En atención',
+  },
+  categoria: {
+    id: CATEGORIA_ALUMBRADO_ID,
+    nombre: 'Alumbrado público',
+  },
+  ubicacion: {
+    latitud: -38.74,
+    longitud: -72.6,
     comuna: 'Temuco',
     region: 'La Araucanía',
   },
@@ -72,7 +151,65 @@ const marcadorBase: IncidentMapMarker = {
   latitud: -38.7359,
   longitud: -72.5904,
   titulo: 'Incendio forestal',
+  descripcion: 'Humo visible en el cerro',
+  categoria: 'Incendios',
+  estado: 'Reportado',
+  fechaCreacion: '2026-11-03T15:12:00.000Z',
   prioridad: 1,
+}
+
+interface ElementoFalso {
+  tagName: string
+  className: string
+  textContent: string
+  atributos: Record<string, string>
+  hijos: ElementoFalso[]
+  listeners: Record<string, Array<() => void>>
+  appendChild(hijo: ElementoFalso): void
+  setAttribute(nombre: string, valor: string): void
+  addEventListener(evento: string, handler: () => void): void
+  click(): void
+}
+
+function crearElementoFalso(tagName: string): ElementoFalso {
+  const elemento: ElementoFalso = {
+    tagName,
+    className: '',
+    textContent: '',
+    atributos: {},
+    hijos: [],
+    listeners: {},
+    appendChild(hijo: ElementoFalso) {
+      elemento.hijos.push(hijo)
+    },
+    setAttribute(nombre: string, valor: string) {
+      elemento.atributos[nombre] = valor
+    },
+    addEventListener(evento: string, handler: () => void) {
+      if (!elemento.listeners[evento]) {
+        elemento.listeners[evento] = []
+      }
+      elemento.listeners[evento].push(handler)
+    },
+    click() {
+      for (const handler of elemento.listeners.click ?? []) {
+        handler()
+      }
+    },
+  }
+  return elemento
+}
+
+function crearDocumentoFalso(): DocumentoPopup {
+  return {
+    createElement(tagName: string): HTMLElement {
+      return crearElementoFalso(tagName) as unknown as HTMLElement
+    },
+  }
+}
+
+function comoElementoFalso(elemento: HTMLElement): ElementoFalso {
+  return elemento as unknown as ElementoFalso
 }
 
 describe('Configuración del mapa de incidentes (#139)', () => {
@@ -181,6 +318,9 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
     assert.equal(marcador.longitud, -72.5904)
     assert.equal(marcador.titulo, 'Incendio forestal')
     assert.equal(marcador.descripcion, 'Humo visible en el cerro')
+    assert.equal(marcador.categoria, 'Incendio forestal')
+    assert.equal(marcador.estado, 'Nuevo')
+    assert.equal(marcador.fechaCreacion, '2026-11-03T15:12:00.000Z')
     assert.equal(marcador.prioridad, 1)
   })
 
@@ -260,6 +400,261 @@ describe('Mapeo de incidentes a marcadores (#140)', () => {
     const red = interpretarErrorMapa(new Error('network error'))
     assert.equal(red.permiteReintentar, true)
     assert.match(red.mensaje, /Inténtalo nuevamente/i)
+  })
+})
+
+describe('Popup resumen del marcador (#141)', () => {
+  it('resume título, categoría, estado y fecha de creación', () => {
+    const resumen = construirResumenIncidente(marcadorBase)
+    assert.equal(resumen.incidentId, 'INC-1')
+    assert.equal(resumen.titulo, 'Incendio forestal')
+    assert.equal(resumen.categoria, 'Incendios')
+    assert.equal(resumen.estado, 'Reportado')
+    assert.notEqual(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+    assert.match(resumen.fechaCreacion, /2026/)
+  })
+
+  it('conserva los campos de resumen en el recorrido incidente -> mapear -> normalizar -> resumen', () => {
+    const mapeado = mapearIncidenteAMarcador(incidenteBase)
+    assert.ok(mapeado)
+    const [normalizado] = normalizarMarcadores([mapeado])
+    assert.ok(normalizado)
+    const resumen = construirResumenIncidente(normalizado)
+
+    assert.equal(resumen.incidentId, 'INC-1')
+    assert.equal(resumen.titulo, 'Incendio forestal')
+    assert.equal(resumen.categoria, 'Incendio forestal')
+    assert.equal(resumen.estado, 'Nuevo')
+    assert.notEqual(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+  })
+
+  it('usa respaldos legibles cuando faltan datos o la fecha es inválida', () => {
+    const resumen = construirResumenIncidente({
+      ...marcadorBase,
+      titulo: '   ',
+      categoria: null,
+      estado: '',
+      fechaCreacion: 'no-es-fecha',
+    })
+    assert.equal(resumen.titulo, 'Incidente INC-1')
+    assert.equal(resumen.categoria, TEXTO_CATEGORIA_DESCONOCIDA)
+    assert.equal(resumen.estado, TEXTO_ESTADO_DESCONOCIDO)
+    assert.equal(resumen.fechaCreacion, TEXTO_FECHA_DESCONOCIDA)
+    assert.equal(formatearFechaCreacion(null), TEXTO_FECHA_DESCONOCIDA)
+    assert.equal(formatearFechaCreacion(undefined), TEXTO_FECHA_DESCONOCIDA)
+  })
+
+  it('construye el popup con nodos de texto, conserva el id y expone el botón Ver detalle', () => {
+    const documento = crearDocumentoFalso()
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorBase, documento),
+    )
+    assert.equal(contenido.className, 'incident-map__popup')
+    assert.equal(contenido.atributos['data-incident-id'], 'INC-1')
+    const [titulo, datos, boton] = contenido.hijos
+    assert.equal(titulo.tagName, 'strong')
+    assert.equal(titulo.textContent, 'Incendio forestal')
+    assert.equal(datos.tagName, 'dl')
+    assert.deepEqual(
+      datos.hijos.map((hijo) => `${hijo.tagName}:${hijo.textContent}`),
+      [
+        'dt:Categoría',
+        'dd:Incendios',
+        'dt:Estado',
+        'dd:Reportado',
+        'dt:Fecha de creación',
+        `dd:${construirResumenIncidente(marcadorBase).fechaCreacion}`,
+      ],
+    )
+    assert.equal(boton.tagName, 'button')
+    assert.equal(boton.textContent, TEXTO_ACCION_DETALLE)
+    assert.equal(boton.atributos['data-incident-id'], 'INC-1')
+  })
+
+  it('trata un título con HTML como texto literal en popup y tooltip, sin interpretarlo', () => {
+    const documento = crearDocumentoFalso()
+    const marcadorXss = {
+      ...marcadorBase,
+      titulo: '<img src=x onerror=alert(1)>',
+    }
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorXss, documento),
+    )
+    const tooltip = comoElementoFalso(
+      crearContenidoTooltip(marcadorXss, documento),
+    )
+    assert.equal(
+      contenido.hijos[0].textContent,
+      '<img src=x onerror=alert(1)>',
+    )
+    assert.equal(tooltip.textContent, '<img src=x onerror=alert(1)>')
+  })
+
+  it('reemplaza la selección al cambiar de marcador y solo limpia al cerrar el seleccionado', () => {
+    let estado = reducirSeleccionPopup(ESTADO_SELECCION_INICIAL, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-1',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-1')
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-2',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-2')
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-1',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, 'INC-2')
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-2',
+    })
+    assert.equal(estado.incidenteSeleccionadoId, null)
+    estado = reducirSeleccionPopup(
+      { incidenteSeleccionadoId: 'INC-3' },
+      { tipo: 'limpiar' },
+    )
+    assert.equal(estado.incidenteSeleccionadoId, null)
+  })
+})
+
+describe('Navegación desde un marcador al detalle del incidente Web (#142)', () => {
+  it('invoca la acción de detalle con el identificador real del marcador seleccionado', () => {
+    const documento = crearDocumentoFalso()
+    const abiertos: string[] = []
+
+    const contenido = comoElementoFalso(
+      crearContenidoPopup(marcadorBase, documento, {
+        onVerDetalle: (id) => abiertos.push(id),
+      }),
+    )
+
+    const boton = contenido.hijos.find((hijo) => hijo.tagName === 'button')
+    assert.ok(boton)
+    boton.click()
+
+    assert.deepEqual(abiertos, ['INC-1'])
+    assert.equal(construirRutaDetalleIncidente(abiertos[0]), '/incidentes/INC-1')
+  })
+
+  it('evita abrir un incidente anterior cuando el usuario selecciona varios marcadores antes de navegar', () => {
+    let estado = reducirSeleccionPopup(ESTADO_SELECCION_INICIAL, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-1',
+    })
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'seleccionar',
+      incidenteId: 'INC-2',
+    })
+    // Aunque llegue un cierre tardío de INC-1 o un clic residual de INC-1, el destino activo es INC-2
+    estado = reducirSeleccionPopup(estado, {
+      tipo: 'cerrar',
+      incidenteId: 'INC-1',
+    })
+
+    const idResuelto = resolverIncidenteNavegacion(estado, 'INC-1')
+    assert.equal(idResuelto, 'INC-2')
+    assert.equal(construirRutaDetalleIncidente(idResuelto), '/incidentes/INC-2')
+  })
+
+  it('rechaza identificadores vacíos o inválidos al construir la ruta del detalle', () => {
+    assert.equal(construirRutaDetalleIncidente(''), null)
+    assert.equal(construirRutaDetalleIncidente('   '), null)
+    assert.equal(construirRutaDetalleIncidente(null), null)
+    assert.equal(construirRutaDetalleIncidente(undefined), null)
+    assert.equal(
+      construirRutaDetalleIncidente('INC/42'),
+      '/incidentes/INC%2F42',
+    )
+  })
+
+  it('autoriza el acceso a la ruta del detalle para CIUDADANO y ADMIN pero restringe las acciones administrativas a ADMIN', () => {
+    assert.equal(
+      isRoleAuthorized([ROLES.CIUDADANO], INCIDENT_DETAIL_ALLOWED_ROLES),
+      true,
+    )
+    assert.equal(
+      isRoleAuthorized([ROLES.ADMIN], INCIDENT_DETAIL_ALLOWED_ROLES),
+      true,
+    )
+    assert.equal(isRoleAuthorized([], INCIDENT_DETAIL_ALLOWED_ROLES), false)
+
+    assert.equal(puedeGestionarIncidente([ROLES.CIUDADANO]), false)
+    assert.equal(puedeGestionarIncidente([ROLES.ADMIN]), true)
+    assert.equal(puedeGestionarIncidente(null), false)
+  })
+
+  it('ofrece retorno al mapa cuando el detalle se abre desde el mapa y conserva el retorno por rol en otros orígenes', () => {
+    const desdeMapaCiudadano = resolverEnlaceRetornoDetalle(
+      { origen: ORIGEN_NAVEGACION_MAPA },
+      [ROLES.CIUDADANO],
+    )
+    assert.deepEqual(desdeMapaCiudadano, {
+      destino: '/mapa',
+      etiqueta: '← Volver al mapa',
+    })
+
+    const desdeMapaAdmin = resolverEnlaceRetornoDetalle(
+      { origen: ORIGEN_NAVEGACION_MAPA },
+      [ROLES.ADMIN],
+    )
+    assert.deepEqual(desdeMapaAdmin, {
+      destino: '/mapa',
+      etiqueta: '← Volver al mapa',
+    })
+
+    const desdeTablaAdmin = resolverEnlaceRetornoDetalle(null, [ROLES.ADMIN])
+    assert.deepEqual(desdeTablaAdmin, {
+      destino: '/incidentes',
+      etiqueta: '← Volver a la tabla de incidentes',
+    })
+  })
+
+  it('representa de forma controlada acceso denegado (403), inexistente (404) e identificador inválido (400)', () => {
+    const denegado = interpretarErrorDetalleIncidente({ statusCode: 403 })
+    assert.equal(denegado.noEncontrado, false)
+    assert.equal(denegado.error?.accesoDenegado, true)
+    assert.equal(denegado.error?.permiteReintentar, false)
+    assert.match(denegado.error?.mensaje ?? '', /permisos/i)
+
+    const noEncontrado = interpretarErrorDetalleIncidente({ statusCode: 404 })
+    assert.equal(noEncontrado.noEncontrado, true)
+    assert.equal(noEncontrado.error, null)
+
+    const idInvalido = interpretarErrorDetalleIncidente({ statusCode: 400 })
+    assert.equal(idInvalido.noEncontrado, false)
+    assert.equal(idInvalido.error?.permiteReintentar, false)
+    assert.match(idInvalido.error?.mensaje ?? '', /identificador/i)
+  })
+
+  it('reutiliza obtenerIncidenteDetalle (#133) consultando el incidente elegido por su id real', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    let urlConsultada = ''
+
+    apiClient.defaults.adapter = async (config) => {
+      urlConsultada = config.url ?? ''
+      return {
+        data: {
+          ...incidenteBase,
+          id: 'INC-1',
+          estadoId: 'EST-1',
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      const detalle = await obtenerIncidenteDetalle('INC-1')
+      assert.equal(urlConsultada, '/incidentes/INC-1')
+      assert.equal(detalle.id, 'INC-1')
+      assert.equal(detalle.titulo, 'Incendio forestal')
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
   })
 })
 
@@ -363,6 +758,346 @@ describe('Consulta de incidentes para el mapa (#140)', () => {
           return true
         },
       )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+})
+
+describe('Filtros por estado y categoría en el mapa Web (#143)', () => {
+  it('extrae valores e identificadores válidos de los catálogos existentes sin duplicados', () => {
+    const listado: Incidente[] = [
+      incidenteBase,
+      incidenteSecundario,
+      { ...incidenteBase, id: 'INC-DUPLICADO' },
+      {
+        ...incidenteBase,
+        id: 'INC-SIN-CATALOGO',
+        estadoId: '',
+        categoriaId: '',
+        estado: { id: '   ', nombre: '   ' },
+        categoria: null,
+      },
+    ]
+
+    const estados = obtenerOpcionesFiltroMapa(listado, 'estado')
+    const categorias = obtenerOpcionesFiltroMapa(listado, 'categoria')
+
+    assert.deepEqual(estados, [
+      { id: ESTADO_ATENCION_ID, nombre: 'En atención' },
+      { id: ESTADO_NUEVO_ID, nombre: 'Nuevo' },
+    ])
+
+    assert.deepEqual(categorias, [
+      { id: CATEGORIA_ALUMBRADO_ID, nombre: 'Alumbrado público' },
+      { id: CATEGORIA_INCENDIO_ID, nombre: 'Incendio forestal' },
+    ])
+  })
+
+  it('conserva las opciones del catálogo inicial cuando una consulta filtrada retorna menos o ningún resultado', () => {
+    const catalogoInicial = actualizarColeccionCatalogoMapa(
+      [],
+      [incidenteBase, incidenteSecundario],
+      true,
+    )
+    const trasFiltroVacio = actualizarColeccionCatalogoMapa(
+      catalogoInicial,
+      [],
+      false,
+    )
+
+    assert.equal(
+      obtenerOpcionesFiltroMapa(trasFiltroVacio, 'estado').length,
+      2,
+    )
+    assert.equal(
+      obtenerOpcionesFiltroMapa(trasFiltroVacio, 'categoria').length,
+      2,
+    )
+  })
+
+  it('normaliza, detecta y restablece los filtros de estado y categoría', () => {
+    assert.equal(tieneFiltrosMapaActivos(FILTROS_MAPA_INICIALES), false)
+    assert.equal(
+      tieneFiltrosMapaActivos({ estadoId: '  ', categoriaId: '' }),
+      false,
+    )
+
+    const normalizados = normalizarFiltrosMapa({
+      estadoId: `  ${ESTADO_NUEVO_ID}  `,
+      categoriaId: ` ${CATEGORIA_INCENDIO_ID} `,
+    })
+
+    assert.deepEqual(normalizados, {
+      estadoId: ESTADO_NUEVO_ID,
+      categoriaId: CATEGORIA_INCENDIO_ID,
+    })
+    assert.equal(tieneFiltrosMapaActivos(normalizados), true)
+    assert.deepEqual(restablecerFiltrosMapa(), FILTROS_MAPA_INICIALES)
+  })
+
+  it('consulta GET /incidentes con filtro individual por estado, por categoría, combinados y al restablecer', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const parametrosRecibidos: Record<string, string>[] = []
+
+    const catalogoCompleto: Incidente[] = [
+      incidenteBase,
+      incidenteSecundario,
+      {
+        ...incidenteBase,
+        id: 'INC-COORD-INVALIDA',
+        ubicacion: { latitud: 150, longitud: -72.59 },
+      },
+    ]
+
+    apiClient.defaults.adapter = async (config) => {
+      const params = (config.params ?? {}) as Record<string, string>
+      parametrosRecibidos.push({ ...params })
+
+      const filtrados = catalogoCompleto.filter((inc) => {
+        const cumpleEstado = !params.estadoId || inc.estadoId === params.estadoId
+        const cumpleCategoria =
+          !params.categoriaId || inc.categoriaId === params.categoriaId
+        return cumpleEstado && cumpleCategoria
+      })
+
+      return {
+        data: filtrados,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      // 1. Filtro individual por estado (excluye coordenadas inválidas)
+      const porEstado = await obtenerIncidentesParaMapa(undefined, {
+        estadoId: ESTADO_NUEVO_ID,
+      })
+      assert.deepEqual(parametrosRecibidos[0], { estadoId: ESTADO_NUEVO_ID })
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(porEstado).map((m) => m.id),
+        ['INC-1'],
+      )
+
+      // 2. Filtro individual por categoría
+      const porCategoria = await obtenerIncidentesParaMapa(undefined, {
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(parametrosRecibidos[1], {
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(porCategoria).map((m) => m.id),
+        ['INC-2'],
+      )
+
+      // 3. Filtros combinados simultáneos (estado + categoría)
+      const combinados = await obtenerIncidentesParaMapa(undefined, {
+        estadoId: ESTADO_ATENCION_ID,
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(parametrosRecibidos[2], {
+        estadoId: ESTADO_ATENCION_ID,
+        categoriaId: CATEGORIA_ALUMBRADO_ID,
+      })
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(combinados).map((m) => m.id),
+        ['INC-2'],
+      )
+
+      // 4. Restablecer filtros recupera todos los incidentes georreferenciados válidos
+      const restablecidos = await obtenerIncidentesParaMapa(
+        undefined,
+        restablecerFiltrosMapa(),
+      )
+      assert.deepEqual(parametrosRecibidos[3], {})
+      assert.deepEqual(
+        mapearIncidentesAMarcadores(restablecidos).map((m) => m.id),
+        ['INC-1', 'INC-2'],
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('evita que una respuesta desactualizada sobrescriba los resultados de una selección más reciente', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const coordinador = crearCoordinadorConsultasMapa()
+
+    let resolverPrimeraConsulta!: (datos: Incidente[]) => void
+    let notificarPrimeraEnVuelo!: () => void
+
+    const primeraSolicitudEnVuelo = new Promise<void>((resolve) => {
+      notificarPrimeraEnVuelo = resolve
+    })
+
+    apiClient.defaults.adapter = (config) => {
+      const params = (config.params ?? {}) as Record<string, string>
+
+      if (params.estadoId === ESTADO_NUEVO_ID) {
+        notificarPrimeraEnVuelo()
+        return new Promise((resolve) => {
+          resolverPrimeraConsulta = (datos) => {
+            resolve({
+              data: datos,
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              config,
+            })
+          }
+        })
+      }
+
+      return Promise.resolve({
+        data: [incidenteSecundario],
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      })
+    }
+
+    try {
+      let marcadoresEnPantalla: IncidentMapMarker[] = []
+
+      // 1. Inicia una primera consulta lenta (Estado = Nuevo) y espera a que esté en vuelo
+      const consultaAnterior = coordinador.iniciarConsulta()
+      const promesaAnterior = obtenerIncidentesParaMapa(consultaAnterior.signal, {
+        estadoId: ESTADO_NUEVO_ID,
+      })
+        .then((datos) => {
+          if (consultaAnterior.esVigente()) {
+            marcadoresEnPantalla = mapearIncidentesAMarcadores(datos)
+          }
+        })
+        .catch(() => {
+          // Si el adaptador rechaza por aborto, se ignora sin tocar el estado
+        })
+
+      await primeraSolicitudEnVuelo
+
+      // 2. El usuario cambia el filtro antes de que responda la primera solicitud
+      const consultaReciente = coordinador.iniciarConsulta()
+      assert.equal(consultaAnterior.signal.aborted, true)
+      assert.equal(consultaAnterior.esVigente(), false)
+      assert.equal(consultaReciente.esVigente(), true)
+
+      const datosRecientes = await obtenerIncidentesParaMapa(
+        consultaReciente.signal,
+        { estadoId: ESTADO_ATENCION_ID },
+      )
+      if (consultaReciente.esVigente()) {
+        marcadoresEnPantalla = mapearIncidentesAMarcadores(datosRecientes)
+      }
+
+      // 3. La primera consulta responde tardíamente, pero no reemplaza la selección reciente
+      resolverPrimeraConsulta([incidenteBase])
+      await promesaAnterior
+
+      assert.deepEqual(
+        marcadoresEnPantalla.map((m) => m.id),
+        ['INC-2'],
+      )
+    } finally {
+      apiClient.defaults.adapter = adapterOriginal
+    }
+  })
+
+  it('cierra el popup seleccionado si su marcador desaparece por los filtros y lo conserva si permanece visible', () => {
+    const marcadoresIniciales = mapearIncidentesAMarcadores([
+      incidenteBase,
+      incidenteSecundario,
+    ])
+    const marcadoresFiltrados = mapearIncidentesAMarcadores([
+      incidenteSecundario,
+    ])
+
+    // Inicialmente INC-1 tiene el popup abierto y está presente
+    assert.equal(debeCerrarPopupMapa('INC-1', marcadoresIniciales), false)
+    assert.equal(
+      sincronizarIncidenteSeleccionado('INC-1', marcadoresIniciales),
+      'INC-1',
+    )
+
+    // Al filtrar, INC-1 desaparece: debe cerrarse el popup
+    assert.equal(debeCerrarPopupMapa('INC-1', marcadoresFiltrados), true)
+    assert.equal(
+      sincronizarIncidenteSeleccionado('INC-1', marcadoresFiltrados),
+      null,
+    )
+
+    // Si el popup abierto era INC-2 y sigue en los resultados filtrados, se conserva
+    assert.equal(debeCerrarPopupMapa('INC-2', marcadoresFiltrados), false)
+    assert.equal(
+      sincronizarIncidenteSeleccionado('INC-2', marcadoresFiltrados),
+      'INC-2',
+    )
+  })
+
+  it('limpia incidenteSeleccionadoId en el estado del hook al excluir el incidente y no reabre el popup al restablecer los filtros', async () => {
+    const adapterOriginal = apiClient.defaults.adapter
+    const catalogoCompleto: Incidente[] = [incidenteBase, incidenteSecundario]
+
+    apiClient.defaults.adapter = async (config) => {
+      const params = (config.params ?? {}) as Record<string, string>
+      const filtrados = catalogoCompleto.filter((inc) => {
+        const cumpleEstado = !params.estadoId || inc.estadoId === params.estadoId
+        const cumpleCategoria =
+          !params.categoriaId || inc.categoriaId === params.categoriaId
+        return cumpleEstado && cumpleCategoria
+      })
+
+      return {
+        data: filtrados,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      }
+    }
+
+    try {
+      const controlador = crearControladorIncidentesMapa()
+
+      // 1. Carga inicial con INC-1 e INC-2 disponibles y se abre el popup de INC-1
+      await controlador.cargarInicial()
+      controlador.seleccionarIncidente('INC-1')
+      assert.equal(controlador.obtenerEstado().incidenteSeleccionadoId, 'INC-1')
+
+      // 2. Se aplica un filtro que excluye a INC-1 (solo queda INC-2):
+      // el popup se cierra y la selección almacenada queda en null
+      await controlador.cambiarFiltro('estadoId', ESTADO_ATENCION_ID)
+      let estado = controlador.obtenerEstado()
+      assert.deepEqual(
+        estado.marcadores.map((m) => m.id),
+        ['INC-2'],
+      )
+      assert.equal(estado.incidenteSeleccionadoId, null)
+
+      // 3. Se restablecen los filtros: INC-1 vuelve al mapa pero su popup permanece cerrado (null)
+      await controlador.restablecerFiltros()
+      estado = controlador.obtenerEstado()
+      assert.deepEqual(
+        estado.marcadores.map((m) => m.id),
+        ['INC-1', 'INC-2'],
+      )
+      assert.equal(estado.incidenteSeleccionadoId, null)
+
+      // 4. Si se abre nuevamente el popup de INC-1 y se aplica un filtro que lo mantiene visible,
+      // su selección y popup permanecen abiertos
+      controlador.seleccionarIncidente('INC-1')
+      assert.equal(controlador.obtenerEstado().incidenteSeleccionadoId, 'INC-1')
+
+      await controlador.cambiarFiltro('estadoId', ESTADO_NUEVO_ID)
+      estado = controlador.obtenerEstado()
+      assert.deepEqual(
+        estado.marcadores.map((m) => m.id),
+        ['INC-1'],
+      )
+      assert.equal(estado.incidenteSeleccionadoId, 'INC-1')
     } finally {
       apiClient.defaults.adapter = adapterOriginal
     }
