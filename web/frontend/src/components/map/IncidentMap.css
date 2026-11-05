@@ -70,21 +70,62 @@
 .incident-map__popup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   max-width: 240px;
   color: #121212;
   font-size: 13px;
   line-height: 1.5;
 }
 
-.incident-map__popup strong {
+.incident-map__popup-titulo {
   color: #0b1f4d;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
-.incident-map__popup p {
+.incident-map__popup-datos {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
   margin: 0;
   color: #4b5563;
+}
+
+.incident-map__popup-datos dt {
+  margin: 0;
+  color: #60646c;
+  font-weight: 600;
+}
+
+.incident-map__popup-datos dd {
+  margin: 0;
+  color: #121212;
+  overflow-wrap: anywhere;
+}
+
+.incident-map__popup-accion {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 6px 12px;
+  border: 1px solid #0b1f4d;
+  border-radius: 6px;
+  background: #0b1f4d;
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.incident-map__popup-accion:hover {
+  border-color: var(--blue, #1d4ed8);
+  background: var(--blue, #1d4ed8);
+}
+
+.incident-map__popup-accion:focus-visible {
+  outline: 3px solid #f97316;
+  outline-offset: 2px;
 }
 
 /* Ajustes visuales de los controles de Leaflet al tema del proyecto. */
