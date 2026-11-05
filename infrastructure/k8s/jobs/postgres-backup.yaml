@@ -1,0 +1,220 @@
+# Respaldo periódico de las 3 bases PostgreSQL (Auth/Usuarios, Incidentes, Notificaciones)
+# Namespace UCT del proyecto: student-daalvarez. Ajustar metadata.namespace si aplica.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backups-pvc
+  namespace: student-daalvarez
+  labels:
+    app: postgres-backup
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: cinder-ceph
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-backup-script
+  namespace: student-daalvarez
+  labels:
+    app: postgres-backup
+    component: backup
+data:
+  backup-db.sh: |
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+
+    BACKUP_DIR="${BACKUP_DIR:-/backups}"
+    TIMESTAMP="$(date -u +%Y%m%d_%H%M%S)"
+
+    log()  { printf '[postgres-backup] %s\n' "$*"; }
+    fail() { printf '[postgres-backup][ERROR] %s\n' "$*" >&2; exit 1; }
+
+    require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "Comando requerido no encontrado: $1"; }
+    require_var() { local n="$1"; [[ -n "${!n:-}" ]] || fail "Variable requerida no definida: $n"; }
+
+    backup_one() {
+      local service="$1" host_var="$2" port_var="$3" db_var="$4" user_var="$5" pass_var="$6"
+      require_var "$host_var"; require_var "$port_var"; require_var "$db_var"; require_var "$user_var"; require_var "$pass_var"
+      local host="${!host_var}" port="${!port_var}" db="${!db_var}" user="${!user_var}" pass="${!pass_var}"
+      local file="${BACKUP_DIR}/backup_${service}_${TIMESTAMP}.sql.gz"
+      local tmp="${file}.part"
+      local logf="${tmp}.log"
+
+      log "Inicio: service=${service} db=${db} host=${host}:${port} file=${file}"
+      rm -f "$tmp" "$logf"
+
+      if ! PGPASSWORD="$pass" pg_dump \
+          --host="$host" --port="$port" --username="$user" --dbname="$db" \
+          --format=plain --no-owner --no-acl --clean --if-exists \
+          2>"$logf" | gzip -c > "$tmp"; then
+        rm -f "$tmp"
+        [[ -s "$logf" ]] && cat "$logf" >&2 || true
+        rm -f "$logf"
+        fail "Respaldo FALLÓ para ${service} (${db}); no se generó archivo final."
+      fi
+
+      if [[ ! -s "$tmp" ]] || ! gzip -t "$tmp" >/dev/null 2>&1; then
+        rm -f "$tmp" "$logf"
+        fail "Respaldo de ${service} (${db}) inválido o vacío. Abortando."
+      fi
+
+      mv "$tmp" "$file"
+      rm -f "$logf"
+      log "OK: ${file} ($(wc -c < "$file" | tr -d ' ') bytes)"
+    }
+
+    require_cmd pg_dump; require_cmd gzip; require_cmd date
+    mkdir -p "$BACKUP_DIR"
+    log "Directorio: ${BACKUP_DIR} | Timestamp UTC: ${TIMESTAMP}"
+
+    backup_one "auth-usuarios"    AUTH_DB_HOST AUTH_DB_PORT AUTH_DB_NAME AUTH_DB_USER AUTH_DB_PASSWORD
+    backup_one "incidentes"        INCIDENTES_DB_HOST INCIDENTES_DB_PORT INCIDENTES_DB_NAME INCIDENTES_DB_USER INCIDENTES_DB_PASSWORD
+    backup_one "notificaciones"    NOTIFICACIONES_DB_HOST NOTIFICACIONES_DB_PORT NOTIFICACIONES_DB_NAME NOTIFICACIONES_DB_USER NOTIFICACIONES_DB_PASSWORD
+
+    log "Respaldos completados. Archivos:"
+    ls -lh "${BACKUP_DIR}/backup_auth-usuarios_${TIMESTAMP}.sql.gz" \
+           "${BACKUP_DIR}/backup_incidentes_${TIMESTAMP}.sql.gz" \
+           "${BACKUP_DIR}/backup_notificaciones_${TIMESTAMP}.sql.gz"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: student-daalvarez
+  labels:
+    app: postgres-backup
+    component: backup
+spec:
+  # Diario 03:00 UTC. Ajustar según ventana de mantenimiento / retención documentada.
+  schedule: "0 3 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+            component: backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            fsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  cp /opt/backup-script/backup-db.sh /tmp/backup-db.sh
+                  chmod +x /tmp/backup-db.sh
+                  exec /tmp/backup-db.sh
+              env:
+                - name: BACKUP_DIR
+                  value: /backups
+                # Hosts/puertos/nombres de BD desde ConfigMap (no sensible)
+                - name: AUTH_DB_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_HOST_AUTH
+                - name: AUTH_DB_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_PORT_AUTH
+                - name: AUTH_DB_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_NAME_AUTH
+                - name: INCIDENTES_DB_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_HOST_INCIDENTES
+                - name: INCIDENTES_DB_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_PORT_INCIDENTES
+                - name: INCIDENTES_DB_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_NAME_INCIDENTES
+                - name: NOTIFICACIONES_DB_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_HOST_NOTIFICACIONES
+                - name: NOTIFICACIONES_DB_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_PORT_NOTIFICACIONES
+                - name: NOTIFICACIONES_DB_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backend-config
+                      key: DB_NAME_NOTIFICACIONES
+                # Usuarios (no sensibles en este despliegue; coherentes con postgres-all.yaml)
+                - name: AUTH_DB_USER
+                  value: auth_user
+                - name: INCIDENTES_DB_USER
+                  value: incidentes_user
+                - name: NOTIFICACIONES_DB_USER
+                  value: notificaciones_user
+                # Credenciales sensibles desde Secret
+                - name: AUTH_DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: backend-secrets
+                      key: postgres-auth
+                - name: INCIDENTES_DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: backend-secrets
+                      key: postgres-incidentes
+                - name: NOTIFICACIONES_DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: backend-secrets
+                      key: postgres-notificaciones
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                - name: backup-script
+                  mountPath: /opt/backup-script
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 150m
+                  memory: 256Mi
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: postgres-backups-pvc
+            - name: backup-script
+              configMap:
+                name: postgres-backup-script
+                defaultMode: 0555
