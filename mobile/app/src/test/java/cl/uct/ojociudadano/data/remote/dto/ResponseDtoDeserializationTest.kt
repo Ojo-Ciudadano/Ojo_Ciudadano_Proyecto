@@ -75,7 +75,17 @@ class ResponseDtoDeserializationTest {
                 "comuna": "Temuco",
                 "region": "La Araucanía",
                 "sector": "Centro"
-              }
+              },
+              "evidencias": [
+                {
+                  "id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                  "incidenteId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                  "tipoMime": "image/jpeg",
+                  "tamanoArchivo": 2048,
+                  "fechaCreacion": "2026-09-23T20:03:00.000Z",
+                  "url": "/evidencias/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee/archivo"
+                }
+              ]
             }
         """.trimIndent()
 
@@ -101,6 +111,31 @@ class ResponseDtoDeserializationTest {
         assertEquals(-72.5904, incident.ubicacion.longitud, 0.0)
         assertEquals("Temuco", incident.ubicacion.comuna)
         assertEquals("La Araucanía", incident.ubicacion.region)
+
+        val evidence = requireNotNull(incident.evidencias).single()
+        assertEquals("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", evidence.id)
+        assertEquals(incident.id, evidence.incidenteId)
+        assertEquals("image/jpeg", evidence.tipoMime)
+        assertEquals(2048L, evidence.tamanoArchivo)
+        assertEquals("2026-09-23T20:03:00.000Z", evidence.fechaCreacion)
+        assertEquals(
+            "/evidencias/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee/archivo",
+            evidence.url
+        )
+    }
+
+    @Test
+    fun `incident response without evidencias exposes null for mapper fallback`() {
+        val json = """
+            {
+              "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+              "titulo": "Poste caído"
+            }
+        """.trimIndent()
+
+        val incident = gson.fromJson(json, IncidentDto::class.java)
+
+        assertNull(incident.evidencias)
     }
 
     @Test

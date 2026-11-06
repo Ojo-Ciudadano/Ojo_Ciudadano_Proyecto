@@ -1,0 +1,19 @@
+node_modules
+dist
+dist-ssr
+coverage
+
+# Archivos de entorno locales: la configuracion publica se inyecta en tiempo de
+# compilacion mediante --build-arg VITE_API_URL, nunca desde un .env versionado.
+.env
+.env.*
+!.env.example
+
+# Metadatos y artefactos de desarrollo
+.git
+.gitignore
+*.log
+*.local
+*.tsbuildinfo
+.vscode
+.idea

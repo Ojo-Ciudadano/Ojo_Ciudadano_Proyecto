@@ -1,6 +1,6 @@
 package cl.uct.ojociudadano.ui.theme
 
-import android.app.Activity
+import androidx.compose.ui.unit.dp
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -12,32 +12,41 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = androidx.compose.ui.graphics.Color(0xFFFFB3B8),
+    secondary = androidx.compose.ui.graphics.Color(0xFFB5CBE3),
+    background = androidx.compose.ui.graphics.Color(0xFF101820),
+    surface = androidx.compose.ui.graphics.Color(0xFF18232E)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = CitizenRed,
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFE4E6),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF68131D),
+    secondary = CitizenBlue,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFE0EAF4),
+    onSecondaryContainer = CitizenBlue,
+    background = CitizenBackground,
+    onBackground = CitizenBlue,
+    surface = androidx.compose.ui.graphics.Color.White,
+    surfaceContainerLowest = androidx.compose.ui.graphics.Color.White,
+    surfaceContainerLow = androidx.compose.ui.graphics.Color.White,
+    surfaceContainer = androidx.compose.ui.graphics.Color(0xFFF0F3F8),
+    surfaceContainerHigh = androidx.compose.ui.graphics.Color(0xFFEAF0F6),
+    surfaceContainerHighest = androidx.compose.ui.graphics.Color(0xFFE2E9F1),
+    surfaceTint = CitizenBlue,
+    outline = androidx.compose.ui.graphics.Color(0xFF718096),
+    outlineVariant = androidx.compose.ui.graphics.Color(0xFFD7E0EA),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFE8EDF3),
+    onSurface = CitizenBlue,
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF45566A)
 )
 
 @Composable
 fun OjoCiudadanoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -53,6 +62,13 @@ fun OjoCiudadanoTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = androidx.compose.material3.Shapes(
+            extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            large = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+        ),
         content = content
     )
 }

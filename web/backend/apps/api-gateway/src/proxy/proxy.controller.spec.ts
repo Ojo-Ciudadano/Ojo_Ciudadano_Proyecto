@@ -21,7 +21,9 @@ describe('ProxyController', () => {
         {
           provide: JwtService,
           useValue: {
-            verifyAsync: jest.fn().mockResolvedValue({ sub: '123' }),
+            verifyAsync: jest.fn().mockResolvedValue({
+              sub: '123',
+            }),
           },
         },
       ],
@@ -38,21 +40,63 @@ describe('ProxyController', () => {
   it('handleAuthProxy debe delegar en proxyService.forward', async () => {
     const req = {} as Request;
     const res = {} as Response;
+
     await controller.handleAuthProxy(req, res);
+
     expect(service.forward).toHaveBeenCalledWith(req, res);
   });
 
   it('handleIncidentesProxy debe delegar en proxyService.forward', async () => {
     const req = {} as Request;
     const res = {} as Response;
+
     await controller.handleIncidentesProxy(req, res);
+
     expect(service.forward).toHaveBeenCalledWith(req, res);
+  });
+
+  it('handleIncidentesEstadoProxy debe delegar en proxyService.forward', async () => {
+    const req = {} as Request;
+    const res = {} as Response;
+
+    await controller.handleIncidentesEstadoProxy(req, res);
+
+    expect(service.forward).toHaveBeenCalledWith(req, res);
+  });
+
+  it('handleIncidentesPrioridadProxy debe delegar en proxyService.forward', async () => {
+    const req = {} as Request;
+    const res = {} as Response;
+
+    await controller.handleIncidentesPrioridadProxy(req, res);
+
+    expect(service.forward).toHaveBeenCalledWith(req, res);
+  });
+
+  // Issue #114: consultar notificaciones del usuario autenticado
+  it('handleMisNotificacionesProxy debe delegar en proxyService.forward', async () => {
+    const req = {
+      method: 'GET',
+      path: '/api/v1/notificaciones',
+      headers: {
+        authorization: 'Bearer token-de-prueba',
+      },
+    } as Request;
+
+    const res = {} as Response;
+
+    await controller.handleMisNotificacionesProxy(req, res);
+
+    expect(service.forward).toHaveBeenCalledWith(req, res);
+    expect(service.forward).toHaveBeenCalledTimes(1);
   });
 
   it('handleNotificacionesProxy debe delegar en proxyService.forward', async () => {
     const req = {} as Request;
     const res = {} as Response;
+
     await controller.handleNotificacionesProxy(req, res);
+
     expect(service.forward).toHaveBeenCalledWith(req, res);
   });
 });

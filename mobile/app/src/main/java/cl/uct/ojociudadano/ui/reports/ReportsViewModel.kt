@@ -18,10 +18,24 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
+enum class IncidentScope { ALL, MINE }
+
 class ReportsViewModel(
     private val incidentRepository: IncidentRepository,
     private val categoryRepository: CategoryRepository
 ) : ViewModel() {
+
+    private val _scope = MutableStateFlow(IncidentScope.MINE)
+    val scope = _scope.asStateFlow()
+    private var loadJob: kotlinx.coroutines.Job? = null
+    private var selectedCategory: Category? = null
+    private var selectedDate = DateFilter.RECENT
+
+    fun selectScope(scope: IncidentScope) {
+        if (_scope.value == scope) return
+        _scope.value = scope
+        loadIncidents()
+    }
 
     // TODOS LOS INCIDENTES
     private val _allIncidents = MutableStateFlow<List<Incident>>(emptyList())
@@ -47,16 +61,22 @@ class ReportsViewModel(
     }
 
     fun loadIncidents() {
-        viewModelScope.launch {
-
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _allIncidents.value = emptyList()
+            _incidents.value = emptyList()
             // Estado de carga
             _uiState.value = IncidentsUiState.Loading
 
             try {
-                val resultI = incidentRepository.getIncidents()
+                val resultI = when (_scope.value) {
+                    IncidentScope.ALL -> incidentRepository.getIncidents()
+                    IncidentScope.MINE -> incidentRepository.getCurrentUserIncidents()
+                }
 
                 _allIncidents.value = resultI
                 _incidents.value = resultI
+                filterIncidents(selectedCategory, selectedDate)
 
                 // Estado vacío o exitoso
                 _uiState.value = if (resultI.isEmpty()) {
@@ -70,19 +90,23 @@ class ReportsViewModel(
 
             } catch (exception: Exception) {
 
-                Log.e(
-                    "ReportsViewModel",
-                    "Error al cargar incidentes: " +
+                runCatching {
+                    Log.e(
+                        "ReportsViewModel",
+                        "Error al cargar incidentes: " +
                             "type=${exception::class.java.name}, " +
                             "message=${exception.message}, " +
                             "cause=${exception.cause}",
-                    exception
-                )
+                        exception
+                    )
+                }
+
+                _allIncidents.value = emptyList()
+                _incidents.value = emptyList()
 
                 // Estado de error
                 _uiState.value = IncidentsUiState.Error(
-                    message = exception.message
-                        ?: "Ocurrió un error al cargar los incidentes."
+                    message = exception.incidentMessage()
                 )
             }
         }
@@ -98,11 +122,9 @@ class ReportsViewModel(
                 throw exception
 
             } catch (exception: Exception) {
-                Log.e(
-                    "ReportsViewModel",
-                    "Error al cargar categorías",
-                    exception
-                )
+                runCatching {
+                    Log.e("ReportsViewModel", "Error al cargar categorías", exception)
+                }
             }
         }
     }
@@ -128,7 +150,7 @@ class ReportsViewModel(
 
             DateFilter.RECENT -> {
                 _allIncidents.value.sortedByDescending { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                 }
             }
 
@@ -138,7 +160,7 @@ class ReportsViewModel(
                     .toLocalDate()
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .atZone(ZoneId.systemDefault())
                         .toLocalDate() == today
                 }
@@ -148,7 +170,7 @@ class ReportsViewModel(
                 val limit = now.minus(7, ChronoUnit.DAYS)
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .isAfter(limit)
                 }
             }
@@ -157,7 +179,7 @@ class ReportsViewModel(
                 val limit = now.minus(30, ChronoUnit.DAYS)
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .isAfter(limit)
                 }
             }
@@ -166,7 +188,7 @@ class ReportsViewModel(
                 val limit = now.minus(365, ChronoUnit.DAYS)
 
                 _allIncidents.value.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .isAfter(limit)
                 }
             }
@@ -177,6 +199,8 @@ class ReportsViewModel(
         category: Category?,
         dateFilter: DateFilter
     ) {
+        selectedCategory = category
+        selectedDate = dateFilter
         var filtered = _allIncidents.value
 
         // Filtrar por categoría
@@ -193,7 +217,7 @@ class ReportsViewModel(
 
             DateFilter.RECENT -> {
                 filtered.sortedByDescending { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                 }
             }
 
@@ -203,7 +227,7 @@ class ReportsViewModel(
                     .toLocalDate()
 
                 filtered.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .atZone(ZoneId.systemDefault())
                         .toLocalDate() == today
                 }
@@ -213,7 +237,7 @@ class ReportsViewModel(
                 val limit = now.minus(7, ChronoUnit.DAYS)
 
                 filtered.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .isAfter(limit)
                 }
             }
@@ -222,7 +246,7 @@ class ReportsViewModel(
                 val limit = now.minus(30, ChronoUnit.DAYS)
 
                 filtered.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .isAfter(limit)
                 }
             }
@@ -231,7 +255,7 @@ class ReportsViewModel(
                 val limit = now.minus(365, ChronoUnit.DAYS)
 
                 filtered.filter { incident ->
-                    Instant.parse(incident.createdAt)
+                    (runCatching { Instant.parse(incident.createdAt) }.getOrNull() ?: Instant.EPOCH)
                         .isAfter(limit)
                 }
             }

@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/notificaciones"
+method: GET
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 401 Unauthorized', function () {
+          pm.response.to.have.status(401);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Respuesta contiene ErrorResponseFormat para 401', function () {
+          pm.expect(jsonData).to.have.property('statusCode', 401);
+          pm.expect(jsonData).to.have.property('error', 'Unauthorized');
+          pm.expect(jsonData).to.have.property('message');
+      });
+    language: text/javascript
+order: 1000

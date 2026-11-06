@@ -68,6 +68,7 @@ export class AuthService {
 
     return {
       access_token: await this.jwtService.signAsync(payload),
+      token_type: 'Bearer',
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,

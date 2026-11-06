@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.OjoCiudadano" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.OjoCiudadano.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.OjoCiudadano</item>
+    </style>
 </resources>

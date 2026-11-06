@@ -3,7 +3,7 @@
 **Responsable:** Martín Maier  
 **Tarea:** MM-02 — Definir la estructura modular y las convenciones de carpetas  
 **Proyecto:** Ojo Ciudadano  
-**Versión:** 1.3.0 — Sprint 1  
+**Versión:** 1.4.0 — Sprint 2  
 
 ---
 
@@ -228,6 +228,12 @@ export default defineConfig({
 ### 6.3 Almacenamiento de Evidencias (Supabase Storage)
 * Las imágenes y evidencias de incidentes se almacenan en un bucket dedicado en **Supabase Storage**.
 * La base de datos de `incidentes` almacena únicamente las URLs o identificadores del archivo generado por Supabase Storage, sin guardar binarios directamente en PostgreSQL.
+* El modelo `Evidencia` persiste la metadata de cada evidencia (`clave_archivo`, `tipo_mime`, `tamano_archivo`, `fecha_creacion`) y la relaciona con su incidente mediante clave foránea. El detalle de los campos se documenta en [MIGRACIONES_PRISMA.md](MIGRACIONES_PRISMA.md).
+
+### 6.4 Aplicación de Migraciones
+* El pipeline CI/CD **no** aplica migraciones automáticamente: cada migración se ejecuta de forma manual con `npx prisma migrate deploy`.
+* En el clúster UCT, PostgreSQL es un `ClusterIP`; el procedimiento completo (contexto de Kubernetes, `kubectl port-forward` hacia `postgres-incidentes-svc` y ejecución de la migración) está en [MIGRACIONES_PRISMA.md](MIGRACIONES_PRISMA.md).
+* En desarrollo local se aplican las migraciones sobre los contenedores de `docker-compose.yml` (`postgres-incidentes` en el puerto `5433`).
 
 ---
 
@@ -243,3 +249,10 @@ export default defineConfig({
   * `DATABASE_URL_AUTH="postgresql://auth_user:auth_password@localhost:5432/auth_usuarios"`
   * `DATABASE_URL_INCIDENTES="postgresql://incidentes_user:incidentes_password@localhost:5433/incidentes"`
   * `DATABASE_URL_NOTIFICACIONES="postgresql://notificaciones_user:notificaciones_password@localhost:5434/notificaciones"`
+
+---
+
+## 8. Flujo Git y Revisión Cruzada de Pull Requests
+
+* Toda funcionalidad, corrección o tarea documental del Sprint 2 se desarrolla en una rama `feature/<numero-issue>-<slug>` creada desde `integration` y se integra mediante Pull Request hacia `integration` vinculado con `Closes #<numero>`.
+* Antes de aprobar y fusionar cualquier entrega, el revisor debe aplicar el [Checklist de Revisión Cruzada de Pull Requests (CHECKLIST_REVISION_CRUZADA_PR.md)](CHECKLIST_REVISION_CRUZADA_PR.md).

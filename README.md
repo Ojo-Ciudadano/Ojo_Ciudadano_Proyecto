@@ -8,8 +8,15 @@ Sistema colaborativo para el reporte, seguimiento y gestión de incidentes urban
 
 ```text
 Ojo_Ciudadano_Proyecto/
-├── docs/                      # Documentación transversal de arquitectura y contratos
-│   └── CONVENCIONES_ARQUITECTURA.md
+├── docs/                      # Documentación transversal de arquitectura, gestión y contratos
+│   ├── ACTA_CIERRE_SPRINT_2.md
+│   ├── ADR_VERSIONADO_API_V1.md
+│   ├── CHECKLIST_REVISION_CRUZADA_PR.md
+│   ├── CONVENCIONES_ARQUITECTURA.md
+│   ├── CONFIGURACION_ENTORNOS_CORS.md
+│   ├── ESTRATEGIA_DESPLIEGUE_WEB_K8S.md
+│   ├── INFORME_FINAL_SPRINT_2.md
+│   └── MIGRACIONES_PRISMA.md
 ├── mobile/                    # Aplicación Móvil Android (4° Año) - Kotlin nativo, GPS, Cámara
 ├── web/                       # Plataforma Web y Backend de Microservicios (2° Año)
 │   ├── frontend/              # Plataforma Web de Gestión (React + TypeScript + Vite + Leaflet)
@@ -82,7 +89,34 @@ npx prisma generate --schema=apps/incidentes/prisma/schema.prisma
 npx prisma generate --schema=apps/notificaciones/prisma/schema.prisma
 ```
 
-### 6. Ejecución en Modo Desarrollo
+### 6. Aplicar Migraciones Prisma
+```bash
+# Microservicio de Incidentes (base de datos locales)
+cd web/backend/apps/incidentes
+npx prisma migrate deploy
+npx prisma migrate status
+```
+> El pipeline CI/CD **no** aplica migraciones automáticamente. Para la base de datos remota del clúster UCT se debe usar `kubectl port-forward` contra `postgres-incidentes-svc`. El procedimiento completo está en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md).
+
+### 7. Cargar Seed de Ciudadanos Demo (#151)
+```bash
+cd web/backend/apps/auth-usuarios
+
+# Crea/actualiza el admin, los roles y los ciudadanos demo de forma idempotente
+npx prisma db seed
+```
+> Los usuarios demo, sus UUIDs fijos y la variable `DEMO_CITIZEN_PASSWORD` se detallan en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#5-seed-de-ciudadanos-demo-issue-151). **Para ejecutar el seed contra el entorno remoto de producción/Kubernetes (UCT), DEBE realizarse desde la máquina local** abriendo un túnel con `kubectl port-forward svc/postgres-auth-svc 5432:5432 -n student-daalvarez` (debido a la ausencia intencional de herramientas de desarrollo como `prisma`, `node` o `ts-node` dentro del contenedor de producción).
+
+### 8. Cargar Seed de Incidentes Demo (#152)
+```bash
+cd web/backend/apps/incidentes
+
+# Requiere que el seed de ciudadanos demo (#151) ya se haya ejecutado
+npx prisma db seed
+```
+> Crea 10 incidentes georreferenciados en Temuco, Padre Las Casas, Villarrica, Angol y Nueva Imperial, asociados a los ciudadanos demo de #151. Es idempotente, trata los catálogos como solo lectura (valida que existan los 5 estados y las 8 categorías, abortando sin escribir si faltan) y valida los usuarios en `DATABASE_URL_AUTH` antes de escribir, derivando la prioridad desde `prioridadBase` de la categoría vigente. **Para ejecutar el seed contra el entorno remoto de producción/Kubernetes (UCT), DEBE realizarse desde la máquina local** abriendo túneles con `kubectl port-forward` (`postgres-incidentes-svc` y `postgres-auth-svc`), debido a la ausencia intencional de herramientas de desarrollo como `prisma`, `node` o `ts-node` dentro del contenedor de producción. El detalle completo está en [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md#6-seed-de-incidentes-demo-issue-152).
+
+### 9. Ejecución en Modo Desarrollo
 Puedes iniciar cada servicio de forma individual según se requiera:
 
 ```bash
@@ -99,7 +133,7 @@ npm run start:dev incidentes
 npm run start:dev notificaciones
 ```
 
-### 7. Pruebas y Calidad de Código
+### 10. Pruebas y Calidad de Código
 ```bash
 # Ejecutar suite de pruebas unitarias
 npm test
@@ -110,6 +144,16 @@ npm run lint
 
 ---
 
-## Documentación de Arquitectura
+## Documentación de Arquitectura y Gestión de Sprint
 
-Para conocer en detalle la arquitectura de 5 capas, los contratos de comunicación, el patrón Database-per-Service y las convenciones de codificación, consultar [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md).
+### Gestión y Cierre de Sprints
+* **Acta de Cierre del Sprint 2 (#161):** [docs/ACTA_CIERRE_SPRINT_2.md](docs/ACTA_CIERRE_SPRINT_2.md)
+* **Informe Final del Sprint 2 (#160):** [docs/INFORME_FINAL_SPRINT_2.md](docs/INFORME_FINAL_SPRINT_2.md)
+
+### Arquitectura y Convenciones Técnicas
+* **Convenciones y Arquitectura de Backend:** [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md)
+* **ADR-001 — Continuidad del Versionado `/api/v1` (#126):** [docs/ADR_VERSIONADO_API_V1.md](docs/ADR_VERSIONADO_API_V1.md)
+* **Checklist de Revisión Cruzada de Pull Requests (#159):** [docs/CHECKLIST_REVISION_CRUZADA_PR.md](docs/CHECKLIST_REVISION_CRUZADA_PR.md)
+* **Estrategia de Despliegue Web en Kubernetes UCT (#128):** [docs/ESTRATEGIA_DESPLIEGUE_WEB_K8S.md](docs/ESTRATEGIA_DESPLIEGUE_WEB_K8S.md)
+* **Configuración de Orígenes CORS y URLs por Entorno (#127):** [docs/CONFIGURACION_ENTORNOS_CORS.md](docs/CONFIGURACION_ENTORNOS_CORS.md)
+* **Migraciones de Base de Datos con Prisma:** [docs/MIGRACIONES_PRISMA.md](docs/MIGRACIONES_PRISMA.md)

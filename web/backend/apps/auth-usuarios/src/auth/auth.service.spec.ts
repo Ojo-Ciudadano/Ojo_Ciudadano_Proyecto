@@ -1,10 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { JwtService } from '@nestjs/jwt';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { UsuariosService } from '../usuarios/usuarios.service';
-import { PrismaService } from '../prisma/prisma.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -50,6 +47,7 @@ describe('AuthService', () => {
 
      expect(result).toEqual({
   access_token: 'jwt-firmado',
+  token_type: 'Bearer',
   usuario: {
     id: usuario.id,
     nombre: usuario.nombre,

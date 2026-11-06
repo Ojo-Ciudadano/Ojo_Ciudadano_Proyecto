@@ -62,14 +62,16 @@ model Incidente {
 }
 
 model Evidencia {
-  id           String   @id @default(uuid()) @db.Uuid
-  incidenteId  String   @map("incidente_id") @db.Uuid
-  urlArchivo   String   @map("url_archivo")
-  tipo         String
-  fechaSubida  DateTime @default(now()) @map("fecha_subida")
+  id            String   @id @default(uuid()) @db.Uuid
+  incidenteId   String   @map("incidente_id") @db.Uuid
+  claveArchivo  String   @map("clave_archivo")   // clave del objeto almacenado en Supabase Storage (bucket de evidencias)
+  tipoMime      String   @map("tipo_mime")       // tipo MIME del archivo (image/jpeg, image/png, ...)
+  tamanoArchivo Int      @map("tamano_archivo")  // tamaño del archivo en bytes
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion")
 
   incidente Incidente @relation(fields: [incidenteId], references: [id])
 
+  @@index([incidenteId])
   @@map("evidencia")
 }
 
