@@ -20,6 +20,21 @@ export interface LoginResponse {
   user: User
 }
 
+export interface RegisterRequest {
+  nombre: string
+  email: string
+  password: string
+  telefono?: string
+}
+
+export interface RegisterResponse {
+  id: string
+  nombre: string
+  email: string
+  telefono?: string | null
+  fechaRegistro?: string
+}
+
 export interface ApiError {
   statusCode: number
   timestamp: string

@@ -1,15 +1,28 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../components/notifications/NotificationProvider'
 import { getInitialRouteForRoles } from '../../config/navigation'
 import type { ApiError } from '../../types'
 import './LoginPage.css'
 
+interface LoginLocationState {
+  from?: { pathname: string }
+  registrationSuccess?: string
+  registeredEmail?: string
+}
+
 export function LoginPage() {
-  const [email, setEmail] = useState('')
+  const location = useLocation()
+  const locationState = location.state as LoginLocationState | null
+  const [email, setEmail] = useState(
+    locationState?.registeredEmail ?? '',
+  )
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(
+    locationState?.registrationSuccess ?? null,
+  )
   const {
     user,
     login,
@@ -20,7 +33,6 @@ export function LoginPage() {
   } = useAuth()
   const { showNotification } = useNotification()
   const navigate = useNavigate()
-  const location = useLocation()
 
   // Si ya está autenticado, redirige al destino previo o al inicio correspondiente por rol
   useEffect(() => {
@@ -34,6 +46,7 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    setSuccessMessage(null)
     clearSessionExpiredMessage()
 
     try {
@@ -88,6 +101,12 @@ export function LoginPage() {
             />
           </div>
 
+          {successMessage && !visibleMessage && (
+            <div className="success-message" role="status">
+              {successMessage}
+            </div>
+          )}
+
           {visibleMessage && (
             <div className="error-message" role="alert">
               {visibleMessage}
@@ -98,6 +117,10 @@ export function LoginPage() {
             {isLoading ? 'Cargando...' : 'Iniciar sesión'}
           </button>
         </form>
+
+        <div className="auth-switch">
+          ¿No tienes cuenta? <Link to="/registro">Regístrate aquí</Link>
+        </div>
       </div>
     </div>
   )
