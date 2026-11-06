@@ -12,7 +12,9 @@ import cl.uct.ojociudadano.data.model.Incident
 data class IncidentMapSummary(
     val title: String? = null,
     val description: String? = null,
+    val categoryId: String? = null,
     val categoryName: String? = null,
+    val statusId: String? = null,
     val statusName: String? = null,
     val createdAt: String? = null,
     val referenceAddress: String? = null
@@ -38,7 +40,9 @@ private fun String?.cleanedOrNull(): String? = this?.trim()?.takeIf { it.isNotEm
 private fun Incident.toMapSummary(): IncidentMapSummary = IncidentMapSummary(
     title = title.cleanedOrNull(),
     description = description.cleanedOrNull(),
+    categoryId = category.id.cleanedOrNull(),
     categoryName = category.name.cleanedOrNull(),
+    statusId = status.id.cleanedOrNull(),
     statusName = status.name.cleanedOrNull(),
     createdAt = createdAt.cleanedOrNull(),
     referenceAddress = location.referenceAddress.cleanedOrNull()

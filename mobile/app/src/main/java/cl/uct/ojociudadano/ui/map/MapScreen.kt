@@ -53,6 +53,15 @@ internal object MapTestTags {
     const val SUMMARY = "map_marker_summary"
     const val SUMMARY_CLOSE = "map_marker_summary_close"
     const val SUMMARY_DETAIL = "map_marker_summary_detail"
+    const val FILTERS = "map_filters"
+    const val FILTER_RESET = "map_filters_reset"
+    const val FILTERS_HIDE = "map_filters_hide"
+    const val FILTERS_TOGGLE = "map_filters_toggle"
+    const val FILTER_VISIBLE_COUNT = "map_filters_visible_count"
+    const val FILTER_CATEGORY_PREFIX = "map_filter_category_"
+    const val FILTER_STATUS_PREFIX = "map_filter_status_"
+    const val FILTERED_EMPTY = "map_state_filtered_empty"
+    const val FILTERED_EMPTY_RESET = "map_state_filtered_empty_reset"
 }
 
 @Composable
@@ -67,7 +76,7 @@ fun MapScreen(
     })
     val state by model.uiState.collectAsState()
     val success = state as? MapUiState.Success
-    val markers = success?.markers.orEmpty()
+    val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
 
     Box(modifier.fillMaxSize()) {
@@ -77,9 +86,39 @@ fun MapScreen(
             onMapClick = model::clearSelection,
             modifier = Modifier.fillMaxSize()
         )
+        if (success != null &&
+            (success.categoryOptions.isNotEmpty() || success.statusOptions.isNotEmpty())
+        ) {
+            if (success.filtersVisible) {
+                MapIncidentFilterBar(
+                    filters = success.filters,
+                    categoryOptions = success.categoryOptions,
+                    statusOptions = success.statusOptions,
+                    visibleCount = success.visibleMarkers.size,
+                    totalCount = success.markers.size,
+                    onCategorySelected = model::selectCategory,
+                    onStatusSelected = model::selectStatus,
+                    onReset = model::clearFilters,
+                    onHide = { model.setFiltersVisible(false) },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .widthIn(max = 480.dp)
+                        .padding(16.dp)
+                )
+            } else {
+                MapFilterToggle(
+                    activeFilterCount = success.filters.activeCount,
+                    onClick = { model.setFiltersVisible(true) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                )
+            }
+        }
         MapStatusOverlay(
             state = state,
             onRetry = model::loadIncidents,
+            onClearFilters = model::clearFilters,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
@@ -329,11 +368,17 @@ internal fun IncidentSummaryCard(
 private fun MapStatusOverlay(
     state: MapUiState,
     onRetry: () -> Unit,
+    onClearFilters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val filteredEmpty = (state as? MapUiState.Success)?.isFilteredEmpty == true
     Box(
         modifier = modifier,
-        contentAlignment = if (state == MapUiState.Loading) Alignment.Center else Alignment.TopCenter
+        contentAlignment = if (state == MapUiState.Loading || filteredEmpty) {
+            Alignment.Center
+        } else {
+            Alignment.TopCenter
+        }
     ) {
         when (state) {
             MapUiState.Loading -> MapStatusCard(Modifier.testTag(MapTestTags.LOADING)) {
@@ -368,7 +413,20 @@ private fun MapStatusOverlay(
                 }
             }
 
-            is MapUiState.Success -> Unit
+            is MapUiState.Success -> if (state.isFilteredEmpty) {
+                MapStatusCard(Modifier.testTag(MapTestTags.FILTERED_EMPTY)) {
+                    Text(
+                        "Ningún incidente coincide con los filtros seleccionados.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedButton(
+                        onClick = onClearFilters,
+                        modifier = Modifier.testTag(MapTestTags.FILTERED_EMPTY_RESET)
+                    ) {
+                        Text("Restablecer filtros")
+                    }
+                }
+            }
         }
     }
 }
