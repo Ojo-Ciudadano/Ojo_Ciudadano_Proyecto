@@ -78,6 +78,45 @@ class IncidentMapMarkersTest {
         assertEquals(listOf("valid"), markers.map { it.incidentId })
     }
 
+    @Test
+    fun `marker keeps the summary data needed to identify the incident`() {
+        val summary = incident(id = "incident-1").toMapMarkerOrNull()?.summary
+
+        assertEquals("Poste caído", summary?.title)
+        assertEquals("Poste caído en la vía pública", summary?.description)
+        assertEquals("Alumbrado", summary?.categoryName)
+        assertEquals("Nuevo", summary?.statusName)
+        assertEquals("2026-11-05T00:00:00Z", summary?.createdAt)
+        assertEquals("Plaza", summary?.referenceAddress)
+    }
+
+    @Test
+    fun `partial incidents keep their marker and normalize blank fields`() {
+        val partial = incident(id = "partial").copy(
+            title = " ",
+            description = "",
+            category = Category("category", "  ", "", 1, false, null),
+            status = IncidentStatus("status", "", 1),
+            createdAt = " ",
+            location = location().copy(referenceAddress = " ")
+        )
+
+        val marker = partial.toMapMarkerOrNull()
+
+        assertEquals("partial", marker?.incidentId)
+        assertEquals(
+            IncidentMapSummary(
+                title = null,
+                description = null,
+                categoryName = null,
+                statusName = null,
+                createdAt = null,
+                referenceAddress = null
+            ),
+            marker?.summary
+        )
+    }
+
     private fun incident(id: String) = Incident(
         id = id,
         title = "Poste caído",

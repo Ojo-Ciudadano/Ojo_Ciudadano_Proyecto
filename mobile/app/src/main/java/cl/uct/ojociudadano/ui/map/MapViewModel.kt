@@ -30,6 +30,7 @@ class MapViewModel(
     }
 
     fun loadIncidents() {
+        val previousSelectedId = (_uiState.value as? MapUiState.Success)?.selectedIncidentId
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _uiState.value = MapUiState.Loading
@@ -39,7 +40,12 @@ class MapViewModel(
                 _uiState.value = if (markers.isEmpty()) {
                     MapUiState.Empty
                 } else {
-                    MapUiState.Success(markers)
+                    MapUiState.Success(
+                        markers = markers,
+                        selectedIncidentId = previousSelectedId?.takeIf { selectedId ->
+                            markers.any { it.incidentId == selectedId }
+                        }
+                    )
                 }
             } catch (exception: CancellationException) {
                 throw exception
@@ -57,5 +63,26 @@ class MapViewModel(
                 _uiState.value = MapUiState.Error(exception.incidentMessage())
             }
         }
+    }
+
+    /**
+     * Marca como seleccionado el incidente representado por [incidentId].
+     *
+     * La información resumida ya vive en [MapUiState.Success.markers], por lo
+     * que seleccionar un marcador no dispara consultas adicionales.
+     */
+    fun selectIncident(incidentId: String) {
+        val current = _uiState.value as? MapUiState.Success ?: return
+        if (current.markers.none { it.incidentId == incidentId }) return
+
+        _uiState.value = current.copy(selectedIncidentId = incidentId)
+    }
+
+    /** Limpia la selección actual sin modificar los marcadores cargados. */
+    fun clearSelection() {
+        val current = _uiState.value as? MapUiState.Success ?: return
+        if (current.selectedIncidentId == null) return
+
+        _uiState.value = current.copy(selectedIncidentId = null)
     }
 }

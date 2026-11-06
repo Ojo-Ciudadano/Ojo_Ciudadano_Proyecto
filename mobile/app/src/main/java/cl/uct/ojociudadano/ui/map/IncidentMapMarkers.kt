@@ -3,15 +3,45 @@ package cl.uct.ojociudadano.ui.map
 import cl.uct.ojociudadano.data.model.Incident
 
 /**
+ * Información resumida del incidente asociado a un marcador.
+ *
+ * Todos los campos son opcionales porque la respuesta puede traer información
+ * parcial. Los valores en blanco se normalizan a `null` para que la interfaz
+ * omita los datos no disponibles.
+ */
+data class IncidentMapSummary(
+    val title: String? = null,
+    val description: String? = null,
+    val categoryName: String? = null,
+    val statusName: String? = null,
+    val createdAt: String? = null,
+    val referenceAddress: String? = null
+)
+
+/**
  * Datos mínimos que el mapa necesita para representar un incidente.
  *
- * [incidentId] conserva la referencia al incidente de origen para futuras
- * interacciones (resumen, navegación al detalle o filtros).
+ * [incidentId] conserva la referencia al incidente de origen para el resumen y
+ * para futuras interacciones (navegación al detalle o filtros). [summary]
+ * reutiliza la información ya cargada para el mapa, evitando consultas extra al
+ * seleccionar un marcador.
  */
 data class IncidentMapMarker(
     val incidentId: String,
     val latitude: Double,
-    val longitude: Double
+    val longitude: Double,
+    val summary: IncidentMapSummary = IncidentMapSummary()
+)
+
+private fun String?.cleanedOrNull(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+
+private fun Incident.toMapSummary(): IncidentMapSummary = IncidentMapSummary(
+    title = title.cleanedOrNull(),
+    description = description.cleanedOrNull(),
+    categoryName = category.name.cleanedOrNull(),
+    statusName = status.name.cleanedOrNull(),
+    createdAt = createdAt.cleanedOrNull(),
+    referenceAddress = location.referenceAddress.cleanedOrNull()
 )
 
 /** Verifica que las coordenadas sean finitas y estén dentro del rango geográfico válido. */
@@ -37,7 +67,8 @@ fun Incident.toMapMarkerOrNull(): IncidentMapMarker? {
     return IncidentMapMarker(
         incidentId = id,
         latitude = latitude,
-        longitude = longitude
+        longitude = longitude,
+        summary = toMapSummary()
     )
 }
 

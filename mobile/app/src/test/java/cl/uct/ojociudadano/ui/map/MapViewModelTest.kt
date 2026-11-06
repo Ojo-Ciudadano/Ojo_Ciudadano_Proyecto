@@ -55,7 +55,13 @@ class MapViewModelTest {
 
         val model = MapViewModel(repository)
 
-        assertEquals(MapUiState.Success(listOf(marker("valid"))), model.uiState.value)
+        val state = model.uiState.value
+        assertTrue(state is MapUiState.Success)
+        val success = state as MapUiState.Success
+        assertEquals(listOf("valid"), success.markers.map { it.incidentId })
+        assertEquals("Poste caído", success.markers.single().summary.title)
+        assertEquals("Alumbrado", success.markers.single().summary.categoryName)
+        assertEquals("Nuevo", success.markers.single().summary.statusName)
         assertEquals(1, repository.allQueryCount)
         assertEquals(0, repository.userQueryCount)
     }
@@ -108,16 +114,101 @@ class MapViewModelTest {
         val state = model.uiState.value
         assertTrue(state is MapUiState.Success)
         assertEquals(
-            listOf(
-                IncidentMapMarker("first", 10.0, 20.0),
-                marker("second")
-            ),
+            repository.rows.toMapMarkers(),
             (state as MapUiState.Success).markers
         )
         assertEquals(2, repository.allQueryCount)
     }
 
-    private fun marker(id: String) = IncidentMapMarker(id, -38.7359, -72.5904)
+    @Test
+    fun `selecting a marker exposes its id and summary without new queries`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(incident("first"), incident("second"))
+        )
+        val model = MapViewModel(repository)
+
+        model.selectIncident("second")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals("second", success.selectedIncidentId)
+        assertEquals("second", success.selectedMarker?.incidentId)
+        assertEquals("Poste caído", success.selectedMarker?.summary?.title)
+        assertEquals("Alumbrado", success.selectedMarker?.summary?.categoryName)
+        assertEquals("Nuevo", success.selectedMarker?.summary?.statusName)
+        assertEquals(1, repository.allQueryCount)
+        assertEquals(0, repository.userQueryCount)
+    }
+
+    @Test
+    fun `selecting a different marker updates the summary`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("first"),
+                incident("second").copy(title = "Semáforo sin luz")
+            )
+        )
+        val model = MapViewModel(repository)
+
+        model.selectIncident("first")
+        model.selectIncident("second")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals("second", success.selectedIncidentId)
+        assertEquals("Semáforo sin luz", success.selectedMarker?.summary?.title)
+        assertEquals(1, repository.allQueryCount)
+    }
+
+    @Test
+    fun `selecting an unknown marker keeps the current state`() = runTest {
+        val repository = FakeIncidents(rows = listOf(incident("first")))
+        val model = MapViewModel(repository)
+
+        model.selectIncident("missing")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(null, success.selectedIncidentId)
+        assertEquals(null, success.selectedMarker)
+    }
+
+    @Test
+    fun `clearing the selection hides the summary`() = runTest {
+        val model = MapViewModel(FakeIncidents(rows = listOf(incident("first"))))
+        model.selectIncident("first")
+
+        model.clearSelection()
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(null, success.selectedIncidentId)
+        assertEquals(null, success.selectedMarker)
+    }
+
+    @Test
+    fun `reload keeps the selection while the incident remains on the map`() = runTest {
+        val repository = FakeIncidents(rows = listOf(incident("first"), incident("second")))
+        val model = MapViewModel(repository)
+        model.selectIncident("second")
+
+        repository.rows = listOf(incident("first"), incident("second"))
+        model.loadIncidents()
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals("second", success.selectedIncidentId)
+        assertEquals(2, repository.allQueryCount)
+    }
+
+    @Test
+    fun `reload clears the selection when the incident is no longer represented`() = runTest {
+        val repository = FakeIncidents(rows = listOf(incident("first"), incident("second")))
+        val model = MapViewModel(repository)
+        model.selectIncident("second")
+
+        repository.rows = listOf(incident("first"))
+        model.loadIncidents()
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(null, success.selectedIncidentId)
+        assertEquals(null, success.selectedMarker)
+    }
 
     private fun incident(id: String) = Incident(
         id = id,
