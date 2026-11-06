@@ -163,3 +163,59 @@ export function interpretarErrorEvidencia(error: unknown): {
       }
   }
 }
+
+export type FotografiaGaleria =
+  | {
+      numero: number
+      evidencia: EvidenciaIncidente
+      error: null
+    }
+  | {
+      numero: number
+      evidencia: null
+      error: string
+    }
+
+export function prepararFotografiasGaleria(
+  payload: unknown,
+  incidenteId: string,
+): FotografiaGaleria[] {
+  const coleccion = payload ?? []
+
+  if (!Array.isArray(coleccion)) {
+    throw new Error(
+      'El servidor devolvió una colección de evidencias inválida.',
+    )
+  }
+
+  const identificadores = new Set<string>()
+
+  return coleccion.map((valor: unknown, indice): FotografiaGaleria => {
+    const numero = indice + 1
+
+    try {
+      const [evidencia] = normalizarEvidenciasIncidente(
+        [valor],
+        incidenteId,
+      )
+
+      if (identificadores.has(evidencia.id)) {
+        throw new Error('Identificador de evidencia duplicado.')
+      }
+
+      identificadores.add(evidencia.id)
+
+      return {
+        numero,
+        evidencia,
+        error: null,
+      }
+    } catch {
+      return {
+        numero,
+        evidencia: null,
+        error: `Fotografía ${numero} no disponible.`,
+      }
+    }
+  })
+}

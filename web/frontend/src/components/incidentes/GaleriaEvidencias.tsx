@@ -1,5 +1,8 @@
 import { useId } from 'react'
-import { normalizarEvidenciasIncidente } from '../../services/evidenciasIncidente.service'
+import {
+  prepararFotografiasGaleria,
+  type FotografiaGaleria,
+} from '../../services/evidenciasIncidente.service'
 import { FotografiaEvidencia } from './FotografiaEvidencia'
 import './GaleriaEvidencias.css'
 
@@ -14,22 +17,17 @@ export function GaleriaEvidencias({
 }: GaleriaEvidenciasProps) {
   const tituloId = useId()
 
-  const resultado = (() => {
-    try {
-      return {
-        evidencias: normalizarEvidenciasIncidente(
-          evidencias,
-          incidenteId,
-        ),
-        error: false,
-      }
-    } catch {
-      return {
-        evidencias: [],
-        error: true,
-      }
-    }
-  })()
+  let fotografias: FotografiaGaleria[] = []
+  let errorColeccion = false
+
+  try {
+    fotografias = prepararFotografiasGaleria(
+      evidencias,
+      incidenteId,
+    )
+  } catch {
+    errorColeccion = true
+  }
 
   return (
     <section
@@ -39,20 +37,18 @@ export function GaleriaEvidencias({
       <header className="galeria-evidencias-encabezado">
         <h2 id={tituloId}>Fotografías del incidente</h2>
 
-        <p>
-          Selecciona una fotografía para verla ampliada.
-        </p>
+        <p>Selecciona una fotografía para verla ampliada.</p>
       </header>
 
-      {resultado.error ? (
+      {errorColeccion ? (
         <div
           className="galeria-evidencias-aviso galeria-evidencias-error"
           role="alert"
         >
           No se pudo interpretar la información de las fotografías.
-          Puedes volver a consultar el detalle del incidente.
+          Los demás datos del incidente siguen disponibles.
         </div>
-      ) : resultado.evidencias.length === 0 ? (
+      ) : fotografias.length === 0 ? (
         <p
           className="galeria-evidencias-aviso"
           role="status"
@@ -64,15 +60,24 @@ export function GaleriaEvidencias({
           className="galeria-evidencias-lista"
           aria-label="Fotografías asociadas al incidente"
         >
-          {resultado.evidencias.map((evidencia, indice) => (
+          {fotografias.map((fotografia) => (
             <li
-              key={`${incidenteId}:${evidencia.id}`}
+              key={`${incidenteId}:${fotografia.numero}:${fotografia.evidencia?.id ?? 'invalida'}`}
               className="galeria-evidencias-elemento"
             >
-              <FotografiaEvidencia
-                evidencia={evidencia}
-                numero={indice + 1}
-              />
+              {fotografia.evidencia ? (
+                <FotografiaEvidencia
+                  evidencia={fotografia.evidencia}
+                  numero={fotografia.numero}
+                />
+              ) : (
+                <div
+                  className="galeria-evidencias-aviso galeria-evidencias-error"
+                  role="alert"
+                >
+                  {fotografia.error}
+                </div>
+              )}
             </li>
           ))}
         </ul>
