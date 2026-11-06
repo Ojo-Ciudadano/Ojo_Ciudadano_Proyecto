@@ -12,16 +12,18 @@
 
 ### Integrantes
 
-- Diego Álvarez
+# Taller II:
 - Bárbara Sáez
 - Cristóbal Santibáñez
 - Martín Maier
 - Bernardo Sandoval
-- Máximo Mora
 - Alejandra Marilao
 - Franchesca Marcial
-- Oscar Barra
 
+# Taller IV:
+- Oscar Barra
+- Máximo Mora
+- Diego Álvarez
 ---
 
 ## 1. Alcance comprometido vs. resultado alcanzado
