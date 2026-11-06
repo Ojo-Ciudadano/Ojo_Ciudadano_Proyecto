@@ -1,7 +1,7 @@
 package cl.uct.ojociudadano.ui.location
 
-import cl.uct.ojociudadano.data.location.LocationClient
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
