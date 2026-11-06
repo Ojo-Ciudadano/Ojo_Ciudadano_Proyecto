@@ -70,7 +70,7 @@ describe('Servicio de subida de fotografías (#137)', () => {
       headers: {
         'Content-Type': null,
       },
-      timeout: 0,
+      timeout: 120_000,
     })
   })
 

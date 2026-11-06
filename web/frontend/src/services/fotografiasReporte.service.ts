@@ -38,8 +38,8 @@ export async function subirFotografiaReporte(
       headers: {
         'Content-Type': null,
       },
-      // Esta subida no utiliza un límite de tiempo del cliente.
-      timeout: 0,
+      // Libera el formulario si el servidor no responde en dos minutos.
+      timeout: 120_000,
     },
   )
 
