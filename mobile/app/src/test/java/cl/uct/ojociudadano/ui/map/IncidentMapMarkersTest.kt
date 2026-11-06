@@ -84,7 +84,9 @@ class IncidentMapMarkersTest {
 
         assertEquals("Poste caído", summary?.title)
         assertEquals("Poste caído en la vía pública", summary?.description)
+        assertEquals("category", summary?.categoryId)
         assertEquals("Alumbrado", summary?.categoryName)
+        assertEquals("status", summary?.statusId)
         assertEquals("Nuevo", summary?.statusName)
         assertEquals("2026-11-05T00:00:00Z", summary?.createdAt)
         assertEquals("Plaza", summary?.referenceAddress)
@@ -108,7 +110,9 @@ class IncidentMapMarkersTest {
             IncidentMapSummary(
                 title = null,
                 description = null,
+                categoryId = "category",
                 categoryName = null,
+                statusId = "status",
                 statusName = null,
                 createdAt = null,
                 referenceAddress = null

@@ -210,6 +210,194 @@ class MapViewModelTest {
         assertEquals(null, success.selectedMarker)
     }
 
+    @Test
+    fun `category filter updates visible markers without new queries`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("lighting"),
+                incident("waste").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+
+        model.selectCategory("waste")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(MapIncidentFilters(categoryId = "waste"), success.filters)
+        assertEquals(listOf("waste"), success.visibleMarkers.map { it.incidentId })
+        assertEquals(listOf("lighting", "waste"), success.markers.map { it.incidentId })
+        assertEquals(1, repository.allQueryCount)
+    }
+
+    @Test
+    fun `status filter updates visible markers without new queries`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("open"),
+                incident("resolved").copy(
+                    status = IncidentStatus("resolved", "Resuelto", 2)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+
+        model.selectStatus("resolved")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(MapIncidentFilters(statusId = "resolved"), success.filters)
+        assertEquals(listOf("resolved"), success.visibleMarkers.map { it.incidentId })
+        assertEquals(1, repository.allQueryCount)
+    }
+
+    @Test
+    fun `combined filters are applied and can be reset`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("lighting"),
+                incident("waste-new").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null)
+                ),
+                incident("waste-resolved").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null),
+                    status = IncidentStatus("resolved", "Resuelto", 2)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+
+        model.selectCategory("waste")
+        model.selectStatus("resolved")
+
+        var success = model.uiState.value as MapUiState.Success
+        assertEquals(listOf("waste-resolved"), success.visibleMarkers.map { it.incidentId })
+        assertEquals(1, repository.allQueryCount)
+
+        model.clearFilters()
+
+        success = model.uiState.value as MapUiState.Success
+        assertEquals(MapIncidentFilters(), success.filters)
+        assertEquals(3, success.visibleMarkers.size)
+        assertEquals(1, repository.allQueryCount)
+    }
+
+    @Test
+    fun `no matching incidents keeps a controlled filtered empty state`() = runTest {
+        val model = MapViewModel(
+            FakeIncidents(
+                rows = listOf(
+                    incident("lighting").copy(
+                        status = IncidentStatus("new", "Nuevo", 1)
+                    ),
+                    incident("waste").copy(
+                        category = Category("waste", "Aseo", "", 1, false, null),
+                        status = IncidentStatus("resolved", "Resuelto", 2)
+                    )
+                )
+            )
+        )
+
+        model.selectCategory("waste")
+        model.selectStatus("new")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertTrue(success.isFilteredEmpty)
+        assertTrue(success.visibleMarkers.isEmpty())
+        assertEquals(2, success.markers.size)
+
+        model.clearFilters()
+
+        val restored = model.uiState.value as MapUiState.Success
+        assertEquals(listOf("lighting", "waste"), restored.visibleMarkers.map { it.incidentId })
+        assertTrue(!restored.isFilteredEmpty)
+    }
+
+    @Test
+    fun `filters survive a reload while the options remain available`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("lighting"),
+                incident("waste").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+        model.selectCategory("waste")
+
+        model.loadIncidents()
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(MapIncidentFilters(categoryId = "waste"), success.filters)
+        assertEquals(listOf("waste"), success.visibleMarkers.map { it.incidentId })
+        assertEquals(2, repository.allQueryCount)
+    }
+
+    @Test
+    fun `reload drops a filter whose category is no longer available`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("lighting"),
+                incident("waste").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+        model.selectCategory("waste")
+
+        repository.rows = listOf(incident("lighting"))
+        model.loadIncidents()
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(MapIncidentFilters(), success.filters)
+        assertEquals(listOf("lighting"), success.visibleMarkers.map { it.incidentId })
+    }
+
+    @Test
+    fun `filtering out the selected marker clears its selection`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("lighting").copy(
+                    category = Category("lighting", "Alumbrado", "", 1, false, null)
+                ),
+                incident("waste").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+        model.selectIncident("waste")
+
+        model.selectCategory("lighting")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(null, success.selectedIncidentId)
+        assertEquals(null, success.selectedMarker)
+    }
+
+    @Test
+    fun `hidden markers cannot be selected while a filter is active`() = runTest {
+        val repository = FakeIncidents(
+            rows = listOf(
+                incident("lighting").copy(
+                    category = Category("lighting", "Alumbrado", "", 1, false, null)
+                ),
+                incident("waste").copy(
+                    category = Category("waste", "Aseo", "", 1, false, null)
+                )
+            )
+        )
+        val model = MapViewModel(repository)
+        model.selectCategory("lighting")
+
+        model.selectIncident("waste")
+
+        val success = model.uiState.value as MapUiState.Success
+        assertEquals(null, success.selectedIncidentId)
+    }
+
     private fun incident(id: String) = Incident(
         id = id,
         title = "Poste caído",

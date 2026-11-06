@@ -13,18 +13,35 @@ sealed interface MapUiState {
 
     data class Success(
         val markers: List<IncidentMapMarker>,
-        val selectedIncidentId: String? = null
+        val selectedIncidentId: String? = null,
+        val filters: MapIncidentFilters = MapIncidentFilters()
     ) : MapUiState {
+
+        /** Marcadores que cumplen los filtros y deben dibujarse sobre el mapa. */
+        val visibleMarkers: List<IncidentMapMarker>
+            get() = markers.filteredBy(filters)
+
+        /** Opciones de categoría derivadas de los incidentes ya cargados. */
+        val categoryOptions: List<MapFilterOption>
+            get() = markers.availableCategoryOptions()
+
+        /** Opciones de estado derivadas de los incidentes ya cargados. */
+        val statusOptions: List<MapFilterOption>
+            get() = markers.availableStatusOptions()
+
+        /** Hay datos georreferenciados, pero ningún incidente cumple los filtros. */
+        val isFilteredEmpty: Boolean
+            get() = markers.isNotEmpty() && visibleMarkers.isEmpty()
 
         /**
          * Marcador seleccionado actualmente, o `null` si no hay selección.
          *
-         * Se deriva de [markers], de modo que el resumen nunca referencia un
-         * incidente que ya no está representado en el mapa.
+         * Se deriva de [visibleMarkers], de modo que el resumen nunca referencia
+         * un incidente que ya no está representado en el mapa.
          */
         val selectedMarker: IncidentMapMarker?
             get() = selectedIncidentId?.let { selectedId ->
-                markers.firstOrNull { it.incidentId == selectedId }
+                visibleMarkers.firstOrNull { it.incidentId == selectedId }
             }
     }
 
