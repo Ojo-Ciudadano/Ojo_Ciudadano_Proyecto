@@ -1,0 +1,71 @@
+.reporte-fotos {
+  min-width: 0;
+  margin-top: 24px;
+}
+
+.reporte-fotos h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
+.reporte-fotos-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reporte-fotos-tarjeta {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d8dee8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.reporte-fotos-imagen {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #f3f5f8;
+}
+
+.reporte-fotos-nombre {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.reporte-fotos-tarjeta p {
+  overflow-wrap: anywhere;
+}
+
+.reporte-fotos-estado {
+  font-weight: 600;
+}
+
+.reporte-fotos-estado-confirmada {
+  color: #146c43;
+}
+
+.reporte-fotos-estado-fallida {
+  color: #b42318;
+}
+
+.reporte-fotos-estado-subiendo {
+  color: #174ea6;
+}
+
+.reporte-fotos input[type='file'] {
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  .reporte-fotos-lista {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
