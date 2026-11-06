@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "tsx --tsconfig tsconfig.app.json --test src/tests/auth-permission-errors.test.ts src/tests/incident-map.test.ts src/tests/usuarios-listado.test.ts src/tests/usuarios-roles.test.ts src/tests/useUsuariosRol.test.tsx src/tests/notificaciones.test.ts src/tests/useNotificaciones.test.tsx src/tests/notificaciones-vista.test.ts src/tests/incidente-historial.test.tsx src/tests/fotografias-reporte.test.ts src/tests/useFotografiasReporte.test.tsx src/tests/fotografias-servicio.test.ts src/tests/reporte-fotografias-flujo.test.tsx"
+    "test": "tsx --tsconfig tsconfig.app.json --test src/tests/auth-permission-errors.test.ts src/tests/incident-map.test.ts src/tests/usuarios-listado.test.ts src/tests/usuarios-roles.test.ts src/tests/useUsuariosRol.test.tsx src/tests/notificaciones.test.ts src/tests/useNotificaciones.test.tsx src/tests/notificaciones-vista.test.ts src/tests/incidente-historial.test.tsx src/tests/fotografias-reporte.test.ts src/tests/useFotografiasReporte.test.tsx src/tests/fotografias-servicio.test.ts src/tests/reporte-fotografias-flujo.test.tsx src/tests/evidencias-servicio.test.ts src/tests/useFotografiaEvidencia.test.tsx"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
