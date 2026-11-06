@@ -1,0 +1,12 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# CLI de Prisma y dotenv (necesario para cargar prisma.config.ts de cada microservicio)
+RUN npm init -y > /dev/null && npm i prisma@7.10.0 dotenv@17.4.2
+
+# Esquemas, migraciones y configuracion de Prisma de cada microservicio
+COPY apps ./apps
+
+# Microservicio por defecto; el Pod de Kubernetes sobrescribe el workingDir
+WORKDIR /app/apps/incidentes
+CMD ["npx", "prisma", "migrate", "deploy"]

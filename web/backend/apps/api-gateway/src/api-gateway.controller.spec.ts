@@ -19,4 +19,8 @@ describe('ApiGatewayController', () => {
       expect(apiGatewayController.getHello()).toBe('Hello World!');
     });
   });
+
+  it('reports process health without checking external dependencies', () => {
+    expect(apiGatewayController.health()).toEqual({ status: 'ok' });
+  });
 });

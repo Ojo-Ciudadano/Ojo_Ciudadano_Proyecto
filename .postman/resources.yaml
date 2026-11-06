@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 38e6d57a-8d77-4c6f-88a4-2aceed8a40a4
+
+localResources:
+  collections:
+    - ../web/backend/postman/Ojo_Ciudadano_Sprint_2.postman_collection.json
+  environments:
+    - ../web/backend/postman/Ojo_Ciudadano_Sprint_2.postman_environment.json
+
+cloudResources:
+  collections:
+    ../postman/collections/Ojo Ciudadano - Sprint 2: e2503fb1-ec3f-47c7-8264-661ddb94a8ff

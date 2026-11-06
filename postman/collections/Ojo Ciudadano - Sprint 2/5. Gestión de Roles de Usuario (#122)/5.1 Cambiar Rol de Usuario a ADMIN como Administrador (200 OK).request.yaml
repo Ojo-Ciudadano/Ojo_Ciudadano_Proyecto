@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/usuarios/{{usuarioObjetivoId}}/rol"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "rol": "ADMIN"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Respuesta confirma asignación del rol ADMIN al usuario objetivo', function () {
+          pm.expect(jsonData).to.have.property('id', pm.environment.get('usuarioObjetivoId'));
+          pm.expect(jsonData.roles).to.be.an('array').that.includes('ADMIN');
+      });
+    language: text/javascript
+order: 1000

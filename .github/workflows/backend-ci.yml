@@ -7,14 +7,66 @@ on:
     paths:
       - 'web/backend/**'
       - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches:
+      - integration
+    paths:
+      - 'web/backend/**'
+      - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
+    inputs:
+      microservicio:
+        description: 'Microservicio al que se aplican las migraciones Prisma'
+        required: true
+        default: incidentes
+        type: choice
+        options:
+          - incidentes
+          - auth-usuarios
+          - notificaciones
+      desplegar:
+        description: 'Construir y desplegar las imagenes de los microservicios'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
   REPO: ojo-ciudadano/ojo_ciudadano_proyecto
 
 jobs:
+  pr-checks:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web/backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Generar clientes Prisma de los microservicios
+        run: |
+          for schema in $(find . -name "schema.prisma"); do
+            npx prisma generate --schema="$schema"
+          done
+
+      - name: Compilar (Build)
+        run: npm run build
+
+      - name: Ejecutar pruebas unitarias (Test)
+        run: npm test --if-present
+
   build-and-push:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.desplegar)
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
@@ -53,8 +105,115 @@ jobs:
           kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
           kubectl config use-context ci
 
+      - name: Aplicar recursos y secretos de Supabase
+        run: |
+          kubectl create configmap supabase-config \
+            --namespace=student-daalvarez \
+            --from-literal=SUPABASE_URL="https://mnqirqjxmamzhoenntnj.supabase.co/rest/v1/" \
+            --from-literal=SUPABASE_BUCKET_EVIDENCES="incident-evidences" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic supabase-credentials \
+            --namespace=student-daalvarez \
+            --from-literal=SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Desplegar en Kubernetes
         run: |
           kubectl set image deployment/${{ matrix.app }} ${{ matrix.app }}=${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.app }}:latest
           kubectl rollout restart deployment/${{ matrix.app }}
           kubectl rollout status deployment/${{ matrix.app }} --timeout=180s
+
+  migrate-prisma:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      MICROSERVICIO: ${{ inputs.microservicio }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar kubectl
+        run: |
+          echo "${{ secrets.K8S_CA }}" | base64 -d > "$RUNNER_TEMP/ca.crt"
+          kubectl config set-cluster uct --server=https://k8s-estudiantes.dev.censei.cl --certificate-authority="$RUNNER_TEMP/ca.crt"
+          kubectl config set-credentials ci --token="${{ secrets.K8S_TOKEN }}"
+          kubectl config set-context ci --cluster=uct --user=ci --namespace=student-daalvarez
+          kubectl config use-context ci
+
+      - name: Construir imagen de migraciones
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web/backend
+          file: ./web/backend/Dockerfile.migrate
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO }}/migrate-prisma:${{ github.sha }}
+
+      - name: Aplicar migraciones Prisma en el clúster
+        run: |
+          set -euo pipefail
+
+          case "$MICROSERVICIO" in
+            incidentes)      PG_USER=incidentes_user;      PG_DB=incidentes;      PG_HOST=postgres-incidentes-svc;    SECRET_KEY=postgres-incidentes ;    DB_ENV=DATABASE_URL_INCIDENTES ;;
+            auth-usuarios)  PG_USER=auth_user;              PG_DB=auth_usuarios;  PG_HOST=postgres-auth-svc;            SECRET_KEY=postgres-auth; DB_ENV=DATABASE_URL_AUTH ;;
+            notificaciones) PG_USER=notificaciones_user;   PG_DB=notificaciones; PG_HOST=postgres-notificaciones-svc; SECRET_KEY=postgres-notificaciones; DB_ENV=DATABASE_URL_NOTIFICACIONES ;;
+            *) echo "Microservicio no soportado: $MICROSERVICIO" >&2; exit 1 ;;
+          esac
+
+          DEPLOYMENT="$MICROSERVICIO"
+          NAMESPACE="student-daalvarez"
+
+          MIGRATION_CONTAINER=$(cat <<INNER_EOF
+          {
+            "name": "prisma-migrate",
+            "image": "${REGISTRY}/${REPO}/migrate-prisma:${GITHUB_SHA}",
+            "workingDir": "/app/apps/${MICROSERVICIO}",
+            "command": ["npx", "prisma", "migrate", "deploy"],
+            "resources": {
+              "requests": { "cpu": "25m", "memory": "64Mi" },
+              "limits": { "cpu": "250m", "memory": "128Mi" }
+            },
+            "env": [
+              {
+                "name": "DB_PASSWORD",
+                "valueFrom": { "secretKeyRef": { "name": "backend-secrets", "key": "${SECRET_KEY}" } }
+              },
+              {
+                "name": "${DB_ENV}",
+                "value": "postgresql://${PG_USER}:\$(DB_PASSWORD)@${PG_HOST}:5432/${PG_DB}?schema=public"
+              }
+            ]
+          }
+          INNER_EOF
+          )
+
+          kubectl patch deployment "$DEPLOYMENT" -n "$NAMESPACE" --type=strategic -p "{\"spec\":{\"template\":{\"spec\":{\"initContainers\":[${MIGRATION_CONTAINER}]}}}}"
+
+          POD=""
+          MIGRATION_EXIT=""
+          for i in $(seq 1 40); do
+            POD=$(kubectl get pods -n "$NAMESPACE" -l "app=$DEPLOYMENT" --sort-by=.metadata.creationTimestamp -o name 2>/dev/null | tail -1)
+            if [ -n "$POD" ]; then
+              MIGRATION_EXIT=$(kubectl get "$POD" -n "$NAMESPACE" -o jsonpath='{.status.initContainerStatuses[?(@.name=="prisma-migrate")].state.terminated.exitCode}' 2>/dev/null || echo "")
+              if [ -n "$MIGRATION_EXIT" ]; then break; fi
+            fi
+            sleep 15
+          done
+
+          kubectl patch deployment "$DEPLOYMENT" -n "$NAMESPACE" --type=strategic -p '{"spec":{"template":{"spec":{"initContainers":[]}}}}'
+          kubectl rollout status "deployment/$DEPLOYMENT" -n "$NAMESPACE" --timeout=300s || true
+
+          if [ "$MIGRATION_EXIT" != "0" ]; then exit 1; fi

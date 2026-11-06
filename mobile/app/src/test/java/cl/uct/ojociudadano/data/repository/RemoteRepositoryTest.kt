@@ -2,29 +2,37 @@ package cl.uct.ojociudadano.data.repository
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
+import cl.uct.ojociudadano.data.model.IncidentFilters
+import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.dto.CategoryDto
 import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
+import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentLocationDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentStatusDto
 import cl.uct.ojociudadano.data.remote.dto.AuthUserDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
-import cl.uct.ojociudadano.data.session.AuthenticatedSession
-import cl.uct.ojociudadano.data.session.SessionStorage
+import cl.uct.ojociudadano.data.remote.dto.NotificationDto
+import cl.uct.ojociudadano.data.session.TokenSnapshot
+import cl.uct.ojociudadano.data.session.testSession
+import cl.uct.ojociudadano.data.session.testSessionManager
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody
+import cl.uct.ojociudadano.data.remote.dto.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
+import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
 
 class RemoteRepositoryTest {
 
     @Test
-    fun `login forwards credentials then persists mapped authenticated session`() = runTest {
+    fun `login forwards credentials and maps the authenticated session`() = runTest {
         val apiService = FakeApiService()
-        val sessionStorage = FakeSessionStorage()
-        val repository = RemoteAuthRepository(apiService, sessionStorage)
+        val repository = RemoteAuthRepository(apiService)
 
         val session = repository.login(
             email = "usuario@example.invalid",
@@ -36,7 +44,6 @@ class RemoteRepositoryTest {
         assertEquals("jwt-value", session.accessToken)
         assertEquals("Administrador", session.name)
         assertEquals(listOf("CIUDADANO"), session.roles)
-        assertEquals(session, sessionStorage.currentSession())
     }
 
     @Test
@@ -44,9 +51,9 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incidents = listOf(sampleIncidentDto())
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
-        val incidents = repository.getIncidents()
+        val incidents = repository.getIncidents(IncidentFilters())
 
         assertNull(apiService.lastReporterUserId)
         assertEquals(1, incidents.size)
@@ -54,17 +61,60 @@ class RemoteRepositoryTest {
         assertEquals("Alumbrado público", incidents.single().category.name)
         assertEquals("Nuevo", incidents.single().status.name)
         assertEquals("Temuco", incidents.single().location.commune)
+
+        val evidence = incidents.single().evidences.single()
+        assertEquals("evidencia-1", evidence.id)
+        assertEquals(incidents.single().id, evidence.incidentId)
+        assertEquals("image/jpeg", evidence.mimeType)
+        assertEquals(2048L, evidence.size)
+        assertEquals("/evidencias/evidencia-1/archivo", evidence.fileUrl)
     }
 
     @Test
-    fun `getIncidentsByReporter forwards reporter user id`() = runTest {
-        val apiService = FakeApiService()
-        val repository = RemoteIncidentRepository(apiService)
-        val userId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+    fun `getIncidents forwards selected filters and omits unselected criteria`() = runTest {
+        val apiService = FakeApiService(incidents = listOf(sampleIncidentDto()))
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
-        repository.getIncidentsByReporter(userId)
+        repository.getIncidents(IncidentFilters(estadoId = "estado-1", categoriaId = "cat-1", comuna = "Temuco"))
+
+        assertNull(apiService.lastReporterUserId)
+        assertEquals("estado-1", apiService.lastEstadoId)
+        assertEquals("cat-1", apiService.lastCategoriaId)
+        assertEquals("Temuco", apiService.lastComuna)
+    }
+
+    @Test
+    fun `getIncidents with empty filters sends null criteria`() = runTest {
+        val apiService = FakeApiService(incidents = listOf(sampleIncidentDto()))
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+
+        repository.getIncidents(IncidentFilters())
+
+        assertNull(apiService.lastReporterUserId)
+        assertNull(apiService.lastEstadoId)
+        assertNull(apiService.lastCategoriaId)
+        assertNull(apiService.lastComuna)
+    }
+
+    @Test
+    fun `getCurrentUserIncidents uses session identity`() = runTest {
+        val apiService = FakeApiService()
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+        val userId = testSession().userId
+
+        repository.getCurrentUserIncidents()
 
         assertEquals(userId, apiService.lastReporterUserId)
+    }
+
+    @Test
+    fun `own incident results exclude other users even when server ignores filter`() = runTest {
+        val mine = sampleIncidentDto().copy(usuarioReportaId = testSession().userId)
+        val other = mine.copy(id = "other", usuarioReportaId = "another-user")
+        val api = FakeApiService(incidents = listOf(mine, other))
+        val repository = RemoteIncidentRepository(api, testSessionManager())
+        assertEquals(listOf(mine.id), repository.getCurrentUserIncidents().map { it.id })
+        assertEquals(2, repository.getIncidents(IncidentFilters()).size)
     }
 
     @Test
@@ -72,7 +122,7 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val incident = repository.getIncidentById(
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -84,6 +134,7 @@ class RemoteRepositoryTest {
         )
         assertEquals("Poste caído", incident.title)
         assertEquals(-38.7359, incident.location.latitude, 0.0)
+        assertEquals("evidencia-1", incident.evidences.single().id)
     }
 
     @Test
@@ -91,13 +142,12 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             incident = sampleIncidentDto()
         )
-        val repository = RemoteIncidentRepository(apiService)
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
 
         val input = CreateIncidentInput(
             title = "Poste caído",
             description = "Poste bloqueando parcialmente la calle",
             categoryId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            reporterUserId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
             location = CreateIncidentLocationInput(
                 latitude = -38.7359,
                 longitude = -72.5904,
@@ -122,7 +172,7 @@ class RemoteRepositoryTest {
             request.categoriaId
         )
         assertEquals(
-            "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+            testSession().userId,
             request.usuarioReportaId
         )
 
@@ -162,12 +212,78 @@ class RemoteRepositoryTest {
         assertNull(category.officialContactChannel)
     }
 
+    @Test
+    fun `updatePriority forwards level and session token and maps confirmed incident`() = runTest {
+        val apiService = FakeApiService()
+        val manager = testSessionManager()
+        manager.establish(testSession().copy(roles = listOf("ADMIN")))
+        val repository = RemoteIncidentRepository(apiService, manager)
+
+        val updated = repository.updatePriority(sampleIncidentDto().id, 4)
+
+        assertEquals(4, apiService.lastPriorityRequest?.nivelPrioridad)
+        assertEquals(testSession().accessToken, apiService.lastPrioritySession?.value)
+        assertEquals(4, updated.priorityLevel)
+    }
+
+    @Test
+    fun `getProfile forwards session token and maps the me contract`() = runTest {
+        val apiService = FakeApiService()
+        val repository = RemoteProfileRepository(apiService, testSessionManager())
+
+        val profile = repository.getProfile()
+
+        assertEquals(testSession().accessToken, apiService.lastProfileSession?.value)
+        assertEquals("a0000000-0000-4000-8000-000000000001", profile.id)
+        assertEquals("Ciudadano de Prueba", profile.name)
+        assertEquals("ciudadano@example.invalid", profile.email)
+        assertEquals("+56911111111", profile.phone)
+        assertEquals("2026-10-01T00:00:00.000Z", profile.registeredAt)
+        assertEquals(listOf("CIUDADANO"), profile.roles)
+    }
+
+    @Test
+    fun `getNotifications forwards session token and maps response`() = runTest {
+        val apiService = FakeApiService(
+            notifications = listOf(sampleNotificationDto())
+        )
+        val repository = RemoteNotificationRepository(apiService, testSessionManager())
+
+        val notifications = repository.getNotifications()
+
+        assertEquals(testSession().accessToken, apiService.lastNotificationsSession?.value)
+        assertEquals(1, notifications.size)
+
+        val notification = notifications.single()
+        assertEquals("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", notification.id)
+        assertEquals("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", notification.userId)
+        assertEquals("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", notification.incidentId)
+        assertEquals("Su incidente cambió de estado", notification.message)
+        assertEquals(false, notification.isRead)
+        assertEquals("2026-09-24T01:00:00.000Z", notification.createdAt)
+    }
+
+    @Test
+    fun `getNotifications maps empty response to empty list`() = runTest {
+        val apiService = FakeApiService(notifications = emptyList())
+        val repository = RemoteNotificationRepository(apiService, testSessionManager())
+
+        val notifications = repository.getNotifications()
+
+        assertEquals(emptyList<Notification>(), notifications)
+    }
+
     private class FakeApiService(
         private val incidents: List<IncidentDto> = emptyList(),
         private val incident: IncidentDto = sampleIncidentDto(),
         private val categories: List<CategoryDto> = emptyList(),
+        private val notifications: List<NotificationDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+        override suspend fun updateIncidentStatus(incidentId: String, request: cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto, expectedSession: cl.uct.ojociudadano.data.session.TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.IncidentDto = error("Unused")
+
+        override suspend fun register(request: RegisterRequestDto): RegisterResponseDto =
+            error("Registration is not used by this test")
 
         var lastLoginRequest: LoginRequestDto? = null
             private set
@@ -177,24 +293,69 @@ class RemoteRepositoryTest {
             return loginResponse
         }
 
+        override suspend fun uploadEvidence(
+            incidenteId: String,
+            file: okhttp3.MultipartBody.Part,
+            expectedSession: TokenSnapshot?
+        ): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
+        override suspend fun getEvidencesByIncident(incidenteId: String, expectedSession: TokenSnapshot?): List<cl.uct.ojociudadano.data.remote.dto.EvidenceDto> {
+            return emptyList()
+        }
+
+        override suspend fun getEvidenceById(id: String, expectedSession: TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
+        override suspend fun downloadEvidenceFile(id: String, expectedSession: TokenSnapshot?): ResponseBody {
+            throw NotImplementedError("No implementado para esta prueba")
+        }
+
         var lastReporterUserId: String? = null
+            private set
+
+        var lastEstadoId: String? = null
+            private set
+
+        var lastCategoriaId: String? = null
+            private set
+
+        var lastComuna: String? = null
             private set
 
         var lastIncidentId: String? = null
             private set
 
+        var lastProfileSession: TokenSnapshot? = null
+            private set
+
+        override suspend fun getMyProfile(expectedSession: TokenSnapshot?): UsuarioDto {
+            lastProfileSession = expectedSession
+            return sampleUsuarioDto()
+        }
+
         var lastCreateRequest: CreateIncidentRequestDto? = null
             private set
 
         override suspend fun getIncidents(
-            usuarioReportaId: String?
+            usuarioReportaId: String?,
+            estadoId: String?,
+            categoriaId: String?,
+            comuna: String?,
+            expectedSession: TokenSnapshot?
         ): List<IncidentDto> {
             lastReporterUserId = usuarioReportaId
+            lastEstadoId = estadoId
+            lastCategoriaId = categoriaId
+            lastComuna = comuna
             return incidents
         }
 
         override suspend fun getIncidentById(
-            id: String
+            id: String,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             lastIncidentId = id
             return incident
@@ -205,27 +366,58 @@ class RemoteRepositoryTest {
         }
 
         override suspend fun createIncident(
-            request: CreateIncidentRequestDto
+            request: CreateIncidentRequestDto,
+            expectedSession: TokenSnapshot?
         ): IncidentDto {
             lastCreateRequest = request
             return incident
         }
-    }
 
-    private class FakeSessionStorage : SessionStorage {
+        var lastNotificationsSession: TokenSnapshot? = null
+            private set
 
-        private var session: AuthenticatedSession? = null
-
-        override fun currentToken(): String? = session?.accessToken
-
-        override fun currentSession(): AuthenticatedSession? = session
-
-        override fun save(session: AuthenticatedSession) {
-            this.session = session
+        override suspend fun getNotifications(expectedSession: TokenSnapshot?): List<NotificationDto> {
+            lastNotificationsSession = expectedSession
+            return notifications
         }
 
-        override fun clear() {
-            session = null
+        override suspend fun getUsuarios(
+            page: Int?,
+            limit: Int?,
+            rol: String?,
+            expectedSession: TokenSnapshot?
+        ): PaginatedResponseDto<UsuarioDto> {
+            throw NotImplementedError()
+        }
+
+        override suspend fun getIncidentHistory(
+            incidentId: String,
+            expectedSession: TokenSnapshot?
+        ): List<HistorialEstadoDto> {
+            throw NotImplementedError()
+        }
+
+        override suspend fun assignResponsible(
+            incidentId: String,
+            request: AssignResponsibleRequestDto,
+            expectedSession: TokenSnapshot?
+        ): AsignacionDto {
+            throw NotImplementedError()
+        }
+
+        var lastPriorityRequest: UpdatePriorityRequestDto? = null
+            private set
+        var lastPrioritySession: TokenSnapshot? = null
+            private set
+
+        override suspend fun updatePriority(
+            incidentId: String,
+            request: UpdatePriorityRequestDto,
+            expectedSession: TokenSnapshot?
+        ): IncidentDto {
+            lastPriorityRequest = request
+            lastPrioritySession = expectedSession
+            return incident.copy(nivelPrioridad = request.nivelPrioridad)
         }
     }
 
@@ -255,6 +447,28 @@ class RemoteRepositoryTest {
             )
         }
 
+        private fun sampleUsuarioDto(): UsuarioDto {
+            return UsuarioDto(
+                id = "a0000000-0000-4000-8000-000000000001",
+                nombre = "Ciudadano de Prueba",
+                email = "ciudadano@example.invalid",
+                telefono = "+56911111111",
+                fechaRegistro = "2026-10-01T00:00:00.000Z",
+                roles = listOf("CIUDADANO")
+            )
+        }
+
+        private fun sampleNotificationDto(): NotificationDto {
+            return NotificationDto(
+                id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                usuarioId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                incidenteId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                mensaje = "Su incidente cambió de estado",
+                leido = false,
+                fecha = "2026-09-24T01:00:00.000Z"
+            )
+        }
+
         private fun sampleIncidentDto(): IncidentDto {
             return IncidentDto(
                 id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -281,6 +495,16 @@ class RemoteRepositoryTest {
                     comuna = "Temuco",
                     region = "La Araucanía",
                     sector = "Centro"
+                ),
+                evidencias = listOf(
+                    EvidenceDto(
+                        id = "evidencia-1",
+                        incidenteId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        tipoMime = "image/jpeg",
+                        tamanoArchivo = 2048L,
+                        fechaCreacion = "2026-09-24T01:00:00.000Z",
+                        url = "/evidencias/evidencia-1/archivo"
+                    )
                 )
             )
         }

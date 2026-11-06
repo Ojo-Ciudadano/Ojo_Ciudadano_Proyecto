@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import cl.uct.ojociudadano.ui.startup.SessionStartupGate
 
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -43,11 +45,12 @@ class MainActivity : ComponentActivity() {
     private fun showApp() {
 
         setContent {
+
             OjoCiudadanoTheme {
+                val container = (application as OjoCiudadanoApplication).container
                 SessionStartupGate(
-                    sessionBootstrapper = (
-                        application as OjoCiudadanoApplication
-                    ).container.sessionBootstrapper
+                    sessionManager = container.sessionManager,
+                    authRepository = container.authRepository
                 )
             }
         }

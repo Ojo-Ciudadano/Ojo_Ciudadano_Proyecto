@@ -19,4 +19,8 @@ describe('AuthUsuariosController', () => {
       expect(authUsuariosController.getHello()).toBe('Hello World!');
     });
   });
+
+  it('reports process health without checking external dependencies', () => {
+    expect(authUsuariosController.health()).toEqual({ status: 'ok' });
+  });
 });

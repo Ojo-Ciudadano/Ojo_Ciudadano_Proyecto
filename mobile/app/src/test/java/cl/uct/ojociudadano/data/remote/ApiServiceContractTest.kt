@@ -5,9 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
 class ApiServiceContractTest {
 
@@ -23,7 +25,7 @@ class ApiServiceContractTest {
     }
 
     @Test
-    fun `getIncidents uses incidents endpoint and optional user query`() {
+    fun `getIncidents uses incidents endpoint and optional filter queries`() {
         val method = ApiService::class.java.declaredMethods
             .single { it.name == "getIncidents" }
 
@@ -31,11 +33,13 @@ class ApiServiceContractTest {
 
         assertEquals("api/v1/incidentes", get.value)
 
-        val query = method.parameterAnnotations[0]
-            .filterIsInstance<Query>()
-            .single()
+        val queryValues = method.parameterAnnotations
+            .mapNotNull { params -> params.filterIsInstance<Query>().singleOrNull()?.value }
 
-        assertEquals("usuarioReportaId", query.value)
+        assertEquals(
+            listOf("usuarioReportaId", "estadoId", "categoriaId", "comuna"),
+            queryValues
+        )
     }
 
     @Test
@@ -77,5 +81,50 @@ class ApiServiceContractTest {
             .any { it is Body }
 
         assertTrue(hasBody)
+    }
+
+    @Test
+    fun `updatePriority uses incident priority endpoint with body and session tag`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "updatePriority" }
+
+        val patch = requireNotNull(method.getAnnotation(PATCH::class.java))
+
+        assertEquals("api/v1/incidentes/{id}/prioridad", patch.value)
+
+        val path = method.parameterAnnotations[0]
+            .filterIsInstance<Path>()
+            .single()
+
+        assertEquals("id", path.value)
+        assertTrue(method.parameterAnnotations[1].any { it is Body })
+        assertTrue(method.parameterAnnotations[2].any { it is Tag })
+    }
+
+    @Test
+    fun `getNotifications uses notifications endpoint with session tag`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "getNotifications" }
+
+        val get = requireNotNull(method.getAnnotation(GET::class.java))
+
+        assertEquals("api/v1/notificaciones", get.value)
+
+        assertTrue(method.parameterAnnotations[0].any { it is Tag })
+    }
+
+    @Test
+    fun `getMyProfile uses the me endpoint with session tag and no user id`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "getMyProfile" }
+
+        val get = requireNotNull(method.getAnnotation(GET::class.java))
+
+        assertEquals("api/v1/usuarios/me", get.value)
+        // La identidad viaja en el JWT: el endpoint no acepta un id arbitrario.
+        assertTrue(
+            method.parameterAnnotations.flatten().none { it is Path || it is Query }
+        )
+        assertTrue(method.parameterAnnotations[0].any { it is Tag })
     }
 }

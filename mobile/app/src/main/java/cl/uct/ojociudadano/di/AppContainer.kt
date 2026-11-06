@@ -2,44 +2,76 @@ package cl.uct.ojociudadano.di
 
 import android.content.Context
 import cl.uct.ojociudadano.BuildConfig
+import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
+import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
+import cl.uct.ojociudadano.data.location.DefaultLocationClient
+import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
+import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.data.repository.NotificationRepository
+import cl.uct.ojociudadano.data.repository.ProfileRepository
 import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
+import cl.uct.ojociudadano.data.repository.RemoteNotificationRepository
+import cl.uct.ojociudadano.data.repository.RemoteProfileRepository
+import cl.uct.ojociudadano.data.session.DefaultSessionManager
+import cl.uct.ojociudadano.data.session.EncryptedSharedPreferencesSessionStorage
+import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionStorage
-import cl.uct.ojociudadano.data.session.SharedPreferencesSessionStorage
-import cl.uct.ojociudadano.data.session.DevelopmentAuthCredentials
-import cl.uct.ojociudadano.data.session.SessionBootstrapper
+import cl.uct.ojociudadano.domain.repository.LocationClient
+import coil3.ImageLoader
+import com.google.android.gms.location.LocationServices
 
 class AppContainer(
     context: Context,
     baseUrl: String = BuildConfig.API_BASE_URL
 ) {
-
     val sessionStorage: SessionStorage by lazy {
-        SharedPreferencesSessionStorage(context)
+        EncryptedSharedPreferencesSessionStorage(
+            context = context,
+            environmentBaseUrl = baseUrl
+        )
     }
 
-    val apiService: ApiService by lazy {
-        RetrofitClient.createApiService(baseUrl, sessionStorage)
+    private val authApiService: ApiService by lazy {
+        RetrofitClient.createApiService(baseUrl = baseUrl)
     }
 
     val authRepository: AuthRepository by lazy {
-        RemoteAuthRepository(apiService, sessionStorage)
+        RemoteAuthRepository(authApiService)
     }
 
-    val sessionBootstrapper: SessionBootstrapper by lazy {
-        SessionBootstrapper(
-            sessionStorage = sessionStorage,
-            authRepository = authRepository,
-            developmentCredentials = DevelopmentAuthCredentials(
-                email = BuildConfig.DEV_AUTH_EMAIL,
-                password = BuildConfig.DEV_AUTH_PASSWORD
+    val sessionManager: SessionManager by lazy {
+        DefaultSessionManager(sessionStorage)
+    }
+
+    val evidencePhotoStore: EvidencePhotoFileStore by lazy {
+        CacheEvidencePhotoFileStore(context.applicationContext)
+    }
+
+    /**
+     * Fuente única de ubicación del dispositivo. Los ViewModels consumen esta
+     * abstracción y nunca acceden directamente a los servicios de Google Play.
+     */
+    val locationClient: LocationClient by lazy {
+        DefaultLocationClient(
+            context = context.applicationContext,
+            client = LocationServices.getFusedLocationProviderClient(
+                context.applicationContext
             )
+        )
+    }
+
+    val apiService: ApiService by lazy {
+        RetrofitClient.createApiService(
+            baseUrl = baseUrl,
+            tokenProvider = sessionManager,
+            onUnauthorized = sessionManager::invalidateIfCurrent
         )
     }
 
@@ -48,6 +80,29 @@ class AppContainer(
     }
 
     val incidentRepository: IncidentRepository by lazy {
-        RemoteIncidentRepository(apiService)
+        RemoteIncidentRepository(apiService, sessionManager)
+    }
+
+    val notificationRepository: NotificationRepository by lazy {
+        RemoteNotificationRepository(apiService, sessionManager)
+    }
+
+    val profileRepository: ProfileRepository by lazy {
+        RemoteProfileRepository(apiService, sessionManager)
+    }
+
+    /**
+     * Coil descarga las evidencias mediante el repositorio y mantiene los
+     * resultados solo en memoria. El disco se desactiva para no persistir
+     * fotografías autenticadas fuera de la sesión.
+     */
+    val imageLoader: ImageLoader by lazy {
+        ImageLoader.Builder(context.applicationContext)
+            .components {
+                add(EvidenceImageFetcher.Factory(incidentRepository))
+                add(EvidenceImageKeyer())
+            }
+            .diskCache(null)
+            .build()
     }
 }

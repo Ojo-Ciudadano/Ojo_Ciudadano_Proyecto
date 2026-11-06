@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ProxyService } from './proxy.service';
+import { MAX_PROXY_PAYLOAD_BYTES, ProxyService } from './proxy.service';
 import type { Request, Response } from 'express';
 
 describe('ProxyService', () => {
@@ -140,6 +140,130 @@ describe('ProxyService', () => {
       );
       expect(mockStatus).toHaveBeenCalledWith(201);
       expect(mockJson).toHaveBeenCalledWith(mockCreated);
+    });
+
+    it('debe reenviar una subida multipart/form-data preservando el stream binario (#86)', async () => {
+      const mockEvidencia = {
+        id: 'ev-1',
+        incidenteId: 'inc-1',
+        tipoMime: 'image/jpeg',
+        tamanoArchivo: 12,
+        url: '/evidencias/ev-1/archivo',
+      };
+      global.fetch = jest.fn().mockResolvedValue({
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: jest.fn().mockResolvedValue(mockEvidencia),
+      });
+
+      const rawMultipart = Buffer.from('--boundary\r\ncontent\r\n--boundary--');
+      const mockReq = {
+        path: '/api/v1/incidentes/inc-1/evidencias',
+        query: {},
+        headers: {
+          'content-type': 'multipart/form-data; boundary=boundary',
+          authorization: 'Bearer token-test',
+        },
+        method: 'POST',
+        body: {},
+        async *[Symbol.asyncIterator]() {
+          yield rawMultipart;
+        },
+      } as unknown as Request;
+
+      const mockJson = jest.fn();
+      const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
+      const mockRes = {
+        status: mockStatus,
+        json: mockJson,
+      } as unknown as Response;
+
+      await service.forward(mockReq, mockRes);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:3002/incidentes/inc-1/evidencias',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'content-type': 'multipart/form-data; boundary=boundary',
+          }),
+          body: new Uint8Array(rawMultipart),
+        }),
+      );
+      expect(mockStatus).toHaveBeenCalledWith(201);
+      expect(mockJson).toHaveBeenCalledWith(mockEvidencia);
+    });
+
+    it('debe reenviar una respuesta binaria de imagen preservando Content-Type y Buffer (#86)', async () => {
+      const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+      global.fetch = jest.fn().mockResolvedValue({
+        status: 200,
+        headers: new Headers({
+          'content-type': 'image/jpeg',
+          'content-length': imageBytes.length.toString(),
+          'cache-control': 'private, max-age=3600',
+        }),
+        arrayBuffer: jest.fn().mockResolvedValue(
+          imageBytes.buffer.slice(
+            imageBytes.byteOffset,
+            imageBytes.byteOffset + imageBytes.byteLength,
+          ),
+        ),
+      });
+
+      const mockReq = {
+        path: '/api/v1/evidencias/ev-1/archivo',
+        query: {},
+        headers: { authorization: 'Bearer token-test' },
+        method: 'GET',
+      } as unknown as Request;
+
+      const mockSend = jest.fn();
+      const mockSetHeader = jest.fn();
+      const mockStatus = jest.fn().mockReturnValue({ send: mockSend });
+      const mockRes = {
+        status: mockStatus,
+        send: mockSend,
+        setHeader: mockSetHeader,
+      } as unknown as Response;
+
+      await service.forward(mockReq, mockRes);
+
+      expect(mockStatus).toHaveBeenCalledWith(200);
+      expect(mockSetHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+      expect(mockSetHeader).toHaveBeenCalledWith(
+        'Content-Length',
+        imageBytes.length.toString(),
+      );
+      expect(mockSend).toHaveBeenCalledWith(imageBytes);
+    });
+
+    it('debe responder 413 si el payload binario excede 12 MB (#86)', async () => {
+      const oversized = Buffer.alloc(MAX_PROXY_PAYLOAD_BYTES + 1);
+      const mockReq = {
+        path: '/api/v1/incidentes/inc-1/evidencias',
+        query: {},
+        headers: { 'content-type': 'multipart/form-data; boundary=x' },
+        method: 'POST',
+        body: oversized,
+      } as unknown as Request;
+
+      const mockJson = jest.fn();
+      const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
+      const mockRes = {
+        status: mockStatus,
+        json: mockJson,
+      } as unknown as Response;
+
+      await service.forward(mockReq, mockRes);
+
+      expect(mockStatus).toHaveBeenCalledWith(413);
+      expect(mockJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 413,
+          error: 'Payload Too Large',
+        }),
+      );
     });
 
     it('debe responder 503 si el microservicio destino esta caido o falla la conexion', async () => {

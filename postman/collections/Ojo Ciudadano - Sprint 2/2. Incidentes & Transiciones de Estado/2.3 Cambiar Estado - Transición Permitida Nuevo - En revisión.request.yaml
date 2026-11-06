@@ -1,0 +1,31 @@
+$kind: http-request
+name: 2.3 Cambiar Estado - Transición Permitida Nuevo -> En revisión (200 OK)
+url: "{{baseUrl}}/incidentes/{{incidenteId}}/estado"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "estado": "En revisión",
+      "observacion": "Se inicia la evaluación técnica del reporte en terreno"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code es 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+      const jsonData = pm.response.json();
+      pm.test('Estado del incidente se actualiza a En revisión', function () {
+          pm.expect(jsonData).to.have.property('id', pm.environment.get('incidenteId'));
+          pm.expect(jsonData).to.have.property('estado').that.is.an('object');
+          pm.expect(jsonData.estado).to.have.property('nombre', 'En revisión');
+      });
+    language: text/javascript
+order: 3000

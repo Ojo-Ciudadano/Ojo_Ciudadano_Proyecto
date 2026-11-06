@@ -1,0 +1,34 @@
+# Ingress del API Gateway para clientes que lo consumen por su host dedicado
+# (por ejemplo la app Android: BuildConfig.API_BASE_URL apunta aqui).
+#
+# NOTA: este objeto se llamaba "api-gateway-ingress", igual que el Ingress del
+# host de la Web (api-gateway-ingress.yaml). Al compartir kind+name+namespace,
+# el orden de aplicacion decidia cual sobrevivia. Se renombra para que ambos
+# Ingress coexistan sin colision. El host, el Service y el puerto NO cambian:
+# el flujo Android no se ve afectado.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ojociudadano-ingress
+  namespace: student-daalvarez
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+    external-dns.alpha.kubernetes.io/target: "proxy.inf.uct.cl"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api-ojociudadano.dev.censei.cl
+    secretName: uct-ingress-tls
+  rules:
+  - host: api-ojociudadano.dev.censei.cl
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-svc
+            port:
+              number: 3000

@@ -3,7 +3,9 @@ package cl.uct.ojociudadano.integration
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.Sprint1TemporaryLocation
 import cl.uct.ojociudadano.data.remote.RetrofitClient
-import cl.uct.ojociudadano.data.remote.Sprint1ApiDefaults
+import cl.uct.ojociudadano.data.session.DefaultSessionManager
+import cl.uct.ojociudadano.data.session.TestSessionStorage
+import cl.uct.ojociudadano.data.repository.RemoteAuthRepository
 import cl.uct.ojociudadano.data.repository.RemoteCategoryRepository
 import cl.uct.ojociudadano.data.repository.RemoteIncidentRepository
 import java.util.UUID
@@ -19,16 +21,29 @@ class RealIncidentCreationIntegrationTest {
     @Test
     fun `createIncident persists incident through API Gateway`() = runBlocking {
         assumeTrue(
-            "La prueba requiere RUN_API_INTEGRATION_TESTS=true",
-            System.getenv("RUN_API_INTEGRATION_TESTS") == "true"
+            "La prueba de escritura requiere RUN_API_INTEGRATION_TESTS=true y RUN_WRITE_INTEGRATION_TESTS=true",
+            System.getenv("RUN_API_INTEGRATION_TESTS") == "true" &&
+                    System.getenv("RUN_WRITE_INTEGRATION_TESTS") == "true"
+        )
+
+        val email = System.getenv("AUTH_EMAIL").orEmpty()
+        val password = System.getenv("AUTH_PASSWORD").orEmpty()
+
+        assumeTrue(
+            "La prueba requiere AUTH_EMAIL y AUTH_PASSWORD",
+            email.isNotBlank() && password.isNotBlank()
         )
 
         val baseUrl = System.getenv("API_BASE_URL")
-            ?: "http://localhost:3000/"
+            ?: RetrofitClient.DEFAULT_BASE_URL
 
-        val apiService = RetrofitClient.createApiService(baseUrl)
+        val session = RemoteAuthRepository(RetrofitClient.createApiService(baseUrl))
+            .login(email, password)
+        val manager = DefaultSessionManager(TestSessionStorage())
+        manager.establish(session)
+        val apiService = RetrofitClient.createApiService(baseUrl, manager, manager::invalidateIfCurrent)
         val categoryRepository = RemoteCategoryRepository(apiService)
-        val incidentRepository = RemoteIncidentRepository(apiService)
+        val incidentRepository = RemoteIncidentRepository(apiService, manager)
 
         val category = categoryRepository
             .getCategories()
@@ -40,7 +55,6 @@ class RealIncidentCreationIntegrationTest {
             title = "Prueba integración móvil $marker",
             description = "Incidente creado para validar el POST real desde Android",
             categoryId = category.id,
-            reporterUserId = Sprint1ApiDefaults.USER_ID,
             location = Sprint1TemporaryLocation.incidentLocation
         )
 
@@ -49,7 +63,7 @@ class RealIncidentCreationIntegrationTest {
         assertNotNull(UUID.fromString(created.id))
         assertEquals(input.title, created.title)
         assertEquals(input.description, created.description)
-        assertEquals(Sprint1ApiDefaults.USER_ID, created.reporterUserId)
+        assertEquals(session.userId, created.reporterUserId)
 
         assertEquals(category.id, created.category.id)
         assertEquals("Alumbrado público", created.category.name)
@@ -71,11 +85,9 @@ class RealIncidentCreationIntegrationTest {
 
         assertEquals(created.id, persisted.id)
         assertEquals(input.title, persisted.title)
-        assertEquals(Sprint1ApiDefaults.USER_ID, persisted.reporterUserId)
+        assertEquals(session.userId, persisted.reporterUserId)
 
-        val userIncidents = incidentRepository.getIncidentsByReporter(
-            Sprint1ApiDefaults.USER_ID
-        )
+        val userIncidents = incidentRepository.getCurrentUserIncidents()
 
         assertTrue(
             userIncidents.any { it.id == created.id }

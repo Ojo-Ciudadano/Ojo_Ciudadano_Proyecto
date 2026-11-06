@@ -39,10 +39,32 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3001
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
-              memory: 128Mi
+              memory: 96Mi
             limits:
               cpu: 150m
               memory: 256Mi
@@ -78,12 +100,35 @@ spec:
       labels:
         app: incidentes
     spec:
+      initContainers:
+        - name: prisma-migrate
+          image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/migrate-prisma:d2d3a0a1a06c1f116305d7eca822e2099aa7e860
+          command: ["npx", "prisma", "migrate", "deploy"]
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: postgres-incidentes
+            - name: DATABASE_URL_INCIDENTES
+              value: "postgresql://incidentes_user:$(DB_PASSWORD)@postgres-incidentes-svc:5432/incidentes?schema=public"
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
       containers:
         - name: incidentes
           image: ghcr.io/ojo-ciudadano/ojo_ciudadano_proyecto/incidentes:latest
           envFrom:
             - configMapRef:
                 name: backend-config
+            - configMapRef:
+                name: supabase-config
+            - secretRef:
+                name: supabase-credentials
           env:
             - name: DB_PASSWORD
               valueFrom:
@@ -101,10 +146,32 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3002
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
-              memory: 128Mi
+              memory: 96Mi
             limits:
               cpu: 150m
               memory: 256Mi
@@ -163,10 +230,32 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3003
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
-              memory: 128Mi
+              memory: 96Mi
             limits:
               cpu: 150m
               memory: 256Mi
@@ -216,10 +305,32 @@ spec:
                   key: jwt-secret
           ports:
             - containerPort: 3000
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           resources:
             requests:
               cpu: 25m
-              memory: 128Mi
+              memory: 96Mi
             limits:
               cpu: 150m
               memory: 192Mi

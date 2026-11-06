@@ -1,5 +1,7 @@
 package cl.uct.ojociudadano.ui.report
 
+import cl.uct.ojociudadano.ui.components.CitizenHeader
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,8 +27,10 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
@@ -35,10 +40,15 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -54,7 +64,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import cl.uct.ojociudadano.data.model.Category
+import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
+import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
+import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -73,31 +88,41 @@ fun CreateReportScreen(
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onCategorySelected: (Category) -> Unit,
+    onTakePhotoClick: () -> Unit,
+    onPickPhotoClick: () -> Unit,
+    onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
+    onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit,
     onCreateReportClick: () -> Unit,
+    onConfirmRetry: () -> Unit,
+    onFinishWithoutPendingEvidence: () -> Unit,
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onRefreshLocation: () -> Unit = {},
+    onRequestLocationPermission: () -> Unit = {},
+    onOpenLocationSettings: () -> Unit = {},
+    onLocationDetailsChange: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+    onRetryCategories: () -> Unit = {},
+    onViewReport: (String) -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    var showFinishConfirmation by rememberSaveable { mutableStateOf(false) }
+    var showRetryConfirmation by rememberSaveable { mutableStateOf(false) }
+    val canEditForm = submissionState.canEditForm
+    val isSubmitEnabled = !submissionState.isInProgress &&
+        submissionState !is CreateReportSubmissionState.Success &&
+        state.activePhotoOperation == null
     Column(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
+            .animateContentSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
-            }
-            Text(
-                text = "Crear reporte",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        CitizenHeader("Crear reporte", onBack = onBack)
 
         ReportTextField(
             value = state.title,
@@ -114,7 +139,8 @@ fun CreateReportScreen(
                 onNext = { descriptionFocusRequester.requestFocus() }
             ),
             errorMessage = state.titleError,
-            leadingIcon = Icons.Filled.Edit
+            leadingIcon = Icons.Filled.Edit,
+            enabled = canEditForm
         )
 
         ReportTextField(
@@ -137,7 +163,8 @@ fun CreateReportScreen(
                 }
             ),
             errorMessage = state.descriptionError,
-            leadingIcon = Icons.Filled.Description
+            leadingIcon = Icons.Filled.Description,
+            enabled = canEditForm
         )
 
         CategorySelector(
@@ -146,31 +173,49 @@ fun CreateReportScreen(
             isLoading = isLoadingCategories,
             loadErrorMessage = categoryLoadError,
             errorMessage = state.categoryError,
-            onCategorySelected = onCategorySelected
+            onCategorySelected = onCategorySelected,
+            enabled = canEditForm
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "Ubicación",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text("Ubicación pendiente", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+        if (categoryLoadError != null || (!isLoadingCategories && categories.isEmpty())) {
+            TextButton(onClick = onRetryCategories, enabled = canEditForm && !isLoadingCategories) {
+                Text("Reintentar categorías")
             }
         }
+
+        EvidencePhotoSection(
+            evidencePhotos = state.evidencePhotos,
+            activePhotoOperation = state.activePhotoOperation,
+            errorMessage = state.photoError,
+            enabled = canEditForm,
+            onTakePhotoClick = onTakePhotoClick,
+            onPickPhotoClick = onPickPhotoClick,
+            onRemovePhoto = onRemovePhoto,
+            onPhotoPreviewError = onPhotoPreviewError
+        )
+
+        ReportLocationSection(
+            state = state,
+            onRefreshLocation = onRefreshLocation,
+            onRequestLocationPermission = onRequestLocationPermission,
+            onOpenLocationSettings = onOpenLocationSettings
+        )
+
+        Text("Referencia de ubicación", style = MaterialTheme.typography.titleMedium)
+        Text("Completa los datos del lugar asociados a la ubicación GPS.")
+        OutlinedTextField(value = state.referenceAddress,
+            onValueChange = { onLocationDetailsChange(it, state.commune, state.region, state.sector) },
+            label = { Text("Dirección de referencia") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = state.commune,
+            onValueChange = { onLocationDetailsChange(state.referenceAddress, it, state.region, state.sector) },
+            label = { Text("Comuna") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = state.region,
+            onValueChange = { onLocationDetailsChange(state.referenceAddress, state.commune, it, state.sector) },
+            label = { Text("Región") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = state.sector,
+            onValueChange = { onLocationDetailsChange(state.referenceAddress, state.commune, state.region, it) },
+            label = { Text("Sector") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        state.locationDetailsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -178,34 +223,266 @@ fun CreateReportScreen(
             onClick = {
                 keyboardController?.hide()
                 focusManager.clearFocus()
-                onCreateReportClick()
+                val failedState =
+                    submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+                if (failedState?.hasUncertainEvidence == true) {
+                    showRetryConfirmation = true
+                } else {
+                    onCreateReportClick()
+                }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = submissionState !is CreateReportSubmissionState.Loading
+            enabled = isSubmitEnabled
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))
-            Text(
-                if (submissionState is CreateReportSubmissionState.Loading) {
-                    "Creando reporte..."
-                } else {
-                    "Crear reporte"
+            Text(submitButtonLabel(submissionState))
+        }
+
+        when (submissionState) {
+            is CreateReportSubmissionState.Success -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(successMessage(submissionState.uploadedEvidenceCount, submissionState.discardedEvidenceCount))
+                OutlinedButton(onClick = { onViewReport(submissionState.incidentId) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Ver reporte creado")
                 }
-            )
-        }
+            }
 
-        if (submissionState is CreateReportSubmissionState.Success) {
-            Text("Reporte creado correctamente")
-        }
+            is CreateReportSubmissionState.EvidenceUploadFailed -> Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = submissionState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                OutlinedButton(
+                    onClick = { showFinishConfirmation = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        finishWithoutPendingEvidenceLabel(
+                            submissionState.uploadedEvidenceCount
+                        )
+                    )
+                }
+            }
 
-        if (submissionState is CreateReportSubmissionState.Error) {
-            Text(
+            is CreateReportSubmissionState.Error -> Text(
                 text = submissionState.message,
                 color = MaterialTheme.colorScheme.error
             )
+
+            else -> Unit
+        }
+    }
+
+    val partialState = submissionState as? CreateReportSubmissionState.EvidenceUploadFailed
+
+    if (showRetryConfirmation && partialState?.hasUncertainEvidence == true) {
+        AlertDialog(
+            onDismissRequest = { showRetryConfirmation = false },
+            title = { Text("Reintentar evidencias") },
+            text = { Text(EvidenceUploadErrors.UNCERTAIN_RETRY_WARNING) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRetryConfirmation = false
+                        onConfirmRetry()
+                    }
+                ) {
+                    Text("Reintentar de todas formas")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRetryConfirmation = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showFinishConfirmation && partialState != null) {
+        AlertDialog(
+            onDismissRequest = { showFinishConfirmation = false },
+            title = { Text("Finalizar reporte") },
+            text = {
+                Text(
+                    finishWithoutPendingEvidenceMessage(
+                        uploadedEvidenceCount = partialState.uploadedEvidenceCount,
+                        failedEvidenceCount = partialState.failedEvidenceCount,
+                        hasUncertainEvidence = partialState.hasUncertainEvidence
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFinishConfirmation = false
+                        onFinishWithoutPendingEvidence()
+                    }
+                ) {
+                    Text("Finalizar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishConfirmation = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ReportLocationSection(
+    state: CreateReportFormState,
+    onRefreshLocation: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
+    onOpenLocationSettings: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Ubicación",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Filled.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    when {
+                        state.isLoadingLocation -> Text(
+                            text = "Obteniendo ubicación GPS...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        state.location is LocationResult.Success -> {
+                            val location = state.location
+                            Text(
+                                text = "Ubicación GPS obtenida",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Lat: ${location.latitude}, Lng: ${location.longitude}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        else -> Text(
+                            text = state.locationError ?: "Ubicación no disponible",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                if (!state.isLoadingLocation && !state.hasValidLocation) {
+                    val action = when (state.location) {
+                        LocationResult.MissingPermissions ->
+                            "Dar permiso" to onRequestLocationPermission
+
+                        LocationResult.NotAvailable ->
+                            "Activar ubicación" to onOpenLocationSettings
+
+                        else -> "Reintentar" to onRefreshLocation
+                    }
+
+                    TextButton(onClick = action.second) {
+                        Text(action.first)
+                    }
+                }
+            }
         }
     }
 }
+
+private fun submitButtonLabel(
+    submissionState: CreateReportSubmissionState
+): String = when (submissionState) {
+    CreateReportSubmissionState.CreatingIncident -> "Creando reporte..."
+    is CreateReportSubmissionState.UploadingEvidence ->
+        "Subiendo evidencias (${submissionState.processed}/${submissionState.total})..."
+    is CreateReportSubmissionState.EvidenceUploadFailed ->
+        "Reintentar evidencias (${submissionState.failedEvidenceCount})"
+    is CreateReportSubmissionState.Success -> "Reporte creado"
+    else -> "Crear reporte"
+}
+
+private fun successMessage(
+    uploadedEvidenceCount: Int,
+    discardedEvidenceCount: Int
+): String = buildString {
+    append("Reporte creado correctamente")
+
+    if (uploadedEvidenceCount > 0) {
+        append(" con ${photoCount(uploadedEvidenceCount)}")
+    }
+
+    append(".")
+
+    if (discardedEvidenceCount > 0) {
+        append(" ${discardedEvidenceMessage(discardedEvidenceCount)}")
+    }
+}
+
+private fun finishWithoutPendingEvidenceLabel(uploadedEvidenceCount: Int): String =
+    if (uploadedEvidenceCount > 0) {
+        "Finalizar con las fotografías subidas"
+    } else {
+        "Finalizar sin fotografías"
+    }
+
+private fun finishWithoutPendingEvidenceMessage(
+    uploadedEvidenceCount: Int,
+    failedEvidenceCount: Int,
+    hasUncertainEvidence: Boolean
+): String = buildString {
+    append("El reporte ya fue creado")
+
+    if (uploadedEvidenceCount > 0) {
+        append(" con ${photoCount(uploadedEvidenceCount)}")
+    }
+
+    if (failedEvidenceCount == 1) {
+        append(". Se descartará 1 fotografía pendiente")
+    } else {
+        append(". Se descartarán $failedEvidenceCount fotografías pendientes")
+    }
+
+    if (hasUncertainEvidence) {
+        append(
+            ". Algunas de estas fotografías podrían haberse guardado en el " +
+                "servidor, aunque no se recibió confirmación."
+        )
+    } else {
+        append(".")
+    }
+}
+
+private fun discardedEvidenceMessage(discardedEvidenceCount: Int): String =
+    if (discardedEvidenceCount == 1) {
+        "Se omitió 1 fotografía pendiente."
+    } else {
+        "Se omitieron $discardedEvidenceCount fotografías pendientes."
+    }
+
+private fun photoCount(count: Int): String =
+    if (count == 1) "1 fotografía" else "$count fotografías"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -216,9 +493,11 @@ private fun CategorySelector(
     loadErrorMessage: String?,
     errorMessage: String?,
     onCategorySelected: (Category) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val isEnabled = enabled && !isLoading
     val supportingMessage = listOfNotNull(errorMessage, loadErrorMessage)
         .joinToString("\n")
         .ifBlank { null }
@@ -226,7 +505,7 @@ private fun CategorySelector(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = {
-            if (!isLoading) {
+            if (isEnabled) {
                 expanded = !expanded
             }
         },
@@ -238,11 +517,11 @@ private fun CategorySelector(
             modifier = Modifier
                 .menuAnchor(
                     type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = !isLoading
+                    enabled = isEnabled
                 )
                 .fillMaxWidth(),
             readOnly = true,
-            enabled = !isLoading,
+            enabled = isEnabled,
             label = { Text("Categoría") },
             leadingIcon = { Icon(Icons.Filled.Category, contentDescription = null) },
             placeholder = {
@@ -278,7 +557,8 @@ private fun CategorySelector(
                         onClick = {
                             onCategorySelected(category)
                             expanded = false
-                        }
+                        },
+                        enabled = isEnabled
                     )
                 }
             }
@@ -298,12 +578,14 @@ private fun ReportTextField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
     errorMessage: String? = null,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
         label = { Text(label) },
         placeholder = { Text(placeholder) },
         singleLine = singleLine,
@@ -321,16 +603,77 @@ private fun ReportTextField(
  * la pantalla tenga un propietario de estado dedicado.
  */
 @Composable
-fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
+fun CreateReportScreen(
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
+    onExitRiskChanged: (CreateReportExitRisk?) -> Unit = {},
+    onViewReport: (String) -> Unit = {}
+) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
+    val fileStore = application.container.evidencePhotoStore
     val viewModel: CreateReportViewModel = viewModel(
         factory = remember(application) {
             CreateReportViewModelFactory(
                 categoryRepository = application.container.categoryRepository,
                 incidentRepository = application.container.incidentRepository,
-                sessionStorage = application.container.sessionStorage
+                photoFileStore = fileStore,
+                locationClient = application.container.locationClient
             )
         }
+    )
+
+    var hasRequestedLocationPermission by rememberSaveable { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLocationPermissionLauncher(
+        onPermissionResult = { granted ->
+            if (granted) {
+                viewModel.refreshLocation()
+            } else {
+                viewModel.onLocationPermissionDenied()
+            }
+        },
+        onReturnFromSettings = viewModel::refreshLocation
+    )
+
+    LaunchedEffect(viewModel) {
+        if (
+            !hasRequestedLocationPermission &&
+            !locationPermissionLauncher.isGranted()
+        ) {
+            hasRequestedLocationPermission = true
+            locationPermissionLauncher.request()
+        }
+    }
+
+    val currentOnExitRiskChanged by rememberUpdatedState(onExitRiskChanged)
+    val exitRisk = CreateReportExitPolicy.riskOf(
+        state = viewModel.submissionState,
+        visiblePhotos = viewModel.formState.evidencePhotos
+    )
+
+    LaunchedEffect(exitRisk) {
+        currentOnExitRiskChanged(exitRisk)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { currentOnExitRiskChanged(null) }
+    }
+
+    BackHandler { onBack() }
+
+    val photoCaptureLauncher = rememberPhotoCaptureLauncher(
+        fileStore = fileStore,
+        onStart = viewModel::onPhotoCaptureStarted,
+        onCaptured = viewModel::onPhotoCaptured,
+        onCancelled = viewModel::onPhotoCaptureCancelled,
+        onError = viewModel::onPhotoCaptureError
+    )
+
+    val galleryPhotoPickerLauncher = rememberGalleryPhotoPickerLauncher(
+        onStart = viewModel::onGallerySelectionStarted,
+        onSelected = viewModel::onGalleryPhotoSelected,
+        onCancelled = viewModel::onGallerySelectionCancelled,
+        onError = viewModel::onGallerySelectionError
     )
 
     CreateReportScreen(
@@ -342,9 +685,21 @@ fun CreateReportScreen(modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
         onTitleChange = viewModel::onTitleChange,
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
+        onTakePhotoClick = photoCaptureLauncher::launch,
+        onPickPhotoClick = galleryPhotoPickerLauncher::launch,
+        onRemovePhoto = viewModel::onRemovePhoto,
+        onPhotoPreviewError = viewModel::onPhotoPreviewError,
         onCreateReportClick = viewModel::createReport,
+        onConfirmRetry = viewModel::confirmRetryAfterPossibleDuplicate,
+        onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
-        onBack = onBack
+        onBack = onBack,
+        onRefreshLocation = viewModel::refreshLocation,
+        onRequestLocationPermission = locationPermissionLauncher::request,
+        onOpenLocationSettings = locationPermissionLauncher::openLocationSettings,
+        onLocationDetailsChange = viewModel::onLocationDetailsChange,
+        onRetryCategories = viewModel::loadCategories,
+        onViewReport = onViewReport
     )
 }
 
@@ -356,7 +711,8 @@ private fun CreateReportScreenPreview() {
             state = CreateReportFormState(
                 title = "Poste de alumbrado dañado",
                 description = "La luminaria lleva varios días sin funcionar",
-                selectedCategory = previewCategory
+                selectedCategory = previewCategory,
+                evidencePhotos = listOf(previewEvidencePhoto)
             ),
             categories = listOf(previewCategory),
             isLoadingCategories = false,
@@ -365,10 +721,23 @@ private fun CreateReportScreenPreview() {
             onTitleChange = {},
             onDescriptionChange = {},
             onCategorySelected = {},
-            onCreateReportClick = {}
+            onTakePhotoClick = {},
+            onPickPhotoClick = {},
+            onRemovePhoto = {},
+            onPhotoPreviewError = {},
+            onCreateReportClick = {},
+            onConfirmRetry = {},
+            onFinishWithoutPendingEvidence = {}
         )
     }
 }
+
+private val previewEvidencePhoto = IncidentPhotoEvidence(
+    localUri = "content://cl.uct.ojociudadano.fileprovider/evidence_photos/evidence_preview.jpg",
+    fileName = "evidence_preview.jpg",
+    sizeBytes = 1_258_291L,
+    capturedAt = 0L
+)
 
 private val previewCategory = Category(
     id = "preview-category",

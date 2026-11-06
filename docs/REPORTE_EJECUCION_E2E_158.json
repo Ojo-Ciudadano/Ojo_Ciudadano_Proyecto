@@ -1,0 +1,64 @@
+{
+  "issue": "#158",
+  "runTag": "E2E-158-1793590822966",
+  "executedAt": "2026-11-02T03:40:22.966Z",
+  "environment": {
+    "apiGatewayBaseUrl": "https://api.ojociudadano.dev.censei.cl/api/v1",
+    "tlsRejectUnauthorizedDisabled": true
+  },
+  "actors": {
+    "ciudadano": {
+      "id": "",
+      "email": "ciudadano.e2e@ojociudadano.cl",
+      "roles": []
+    },
+    "administrador": {
+      "id": "",
+      "email": "admin@ojociudadano.cl",
+      "roles": []
+    }
+  },
+  "persistedData": {
+    "incidenteId": "",
+    "titulo": "",
+    "categoriaId": "",
+    "categoriaNombre": "",
+    "comuna": "Temuco",
+    "estadoInicial": "",
+    "estadoConfirmado": "",
+    "observacionCambioEstado": "",
+    "historialRegistroId": "",
+    "historialFechaCambio": "",
+    "totalRegistrosHistorial": 0
+  },
+  "checks": [
+    {
+      "step": "01",
+      "description": "Autenticación real de usuario con rol CIUDADANO",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "url": "https://api.ojociudadano.dev.censei.cl/api/v1/auth/login",
+      "expectedStatus": 200,
+      "actualStatus": 404,
+      "passed": false,
+      "details": {
+        "requestedUrl": "https://api.ojociudadano.dev.censei.cl/api/v1/auth/login",
+        "responseHeaders": {
+          "date": "Mon, 02 Nov 2026 03:40:23 GMT",
+          "content-type": "text/html",
+          "content-length": "146",
+          "connection": "close",
+          "strict-transport-security": "max-age=31536000; includeSubDomains"
+        },
+        "responseBody": "<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+      }
+    }
+  ],
+  "summary": {
+    "totalChecks": 1,
+    "passedChecks": 0,
+    "failedChecks": 1,
+    "status": "FAILED",
+    "errorMessage": "Fallo en [01] POST /api/v1/auth/login: se esperaba HTTP 200 y se recibió HTTP 404"
+  }
+}

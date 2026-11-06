@@ -26,10 +26,8 @@ fun String.asBuildConfigString(): String {
 
 val apiBaseUrl = configurationValue(
     name = "API_BASE_URL",
-    fallback = "http://10.0.2.2:3000/"
+    fallback = "https://api-ojociudadano.dev.censei.cl/"
 )
-val devAuthEmail = configurationValue("DEV_AUTH_EMAIL")
-val devAuthPassword = configurationValue("DEV_AUTH_PASSWORD")
 
 android {
     namespace = "cl.uct.ojociudadano"
@@ -50,23 +48,9 @@ android {
             "API_BASE_URL",
             apiBaseUrl.asBuildConfigString()
         )
-        buildConfigField("String", "DEV_AUTH_EMAIL", "\"\"")
-        buildConfigField("String", "DEV_AUTH_PASSWORD", "\"\"")
     }
 
     buildTypes {
-        debug {
-            buildConfigField(
-                "String",
-                "DEV_AUTH_EMAIL",
-                devAuthEmail.asBuildConfigString()
-            )
-            buildConfigField(
-                "String",
-                "DEV_AUTH_PASSWORD",
-                devAuthPassword.asBuildConfigString()
-            )
-        }
         release {
             optimization {
                 enable = false
@@ -92,6 +76,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     testImplementation(libs.junit)
@@ -105,5 +90,13 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
+    implementation(libs.coil.compose)
     testImplementation(libs.okhttp.mockwebserver)
+
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 }
