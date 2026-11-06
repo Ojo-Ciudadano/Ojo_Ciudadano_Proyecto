@@ -18,6 +18,8 @@
 - Martín Maier
 - Bernardo Sandoval
 - Máximo Mora
+- Alejandra Marilao
+- Franchesca Marcial
 - Oscar Barra
 
 ---
