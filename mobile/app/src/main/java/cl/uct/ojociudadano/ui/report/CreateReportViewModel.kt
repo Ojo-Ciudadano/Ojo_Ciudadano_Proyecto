@@ -19,6 +19,7 @@ import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.domain.model.LocationResult
 import cl.uct.ojociudadano.domain.repository.LocationClient
+import cl.uct.ojociudadano.ui.reports.incidentMessage
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
 import kotlinx.coroutines.CancellationException
@@ -68,6 +69,12 @@ class CreateReportViewModel(
         loadCategories()
         refreshLocation()
         cleanupExpiredPhotoFiles()
+    }
+
+    fun onLocationDetailsChange(referenceAddress: String, commune: String, region: String, sector: String) {
+        formState = formState.copy(referenceAddress = referenceAddress, commune = commune,
+            region = region, sector = sector, locationDetailsError = null)
+        onFormEdited()
     }
 
     fun onTitleChange(title: String) {
@@ -374,15 +381,6 @@ class CreateReportViewModel(
 
         viewModelScope.launch {
             val incident = try {
-                // Temporary diagnostic log: verifies the API UUID selected in the dropdown.
-                runCatching {
-                    Log.d(
-                        "CreateReportViewModel",
-                        "Creating incident: selectedCategory=$selectedCategory, " +
-                            "categoryName=${selectedCategory.name}, " +
-                            "categoriaId=${input.categoryId}"
-                    )
-                }
                 incidentRepository.createIncident(input)
             } catch (exception: CancellationException) {
                 throw exception
@@ -396,7 +394,7 @@ class CreateReportViewModel(
                     )
                 }
                 submissionState = CreateReportSubmissionState.Error(
-                    exception.message ?: "No fue posible crear el reporte"
+                    exception.reportOperationMessage("crear el reporte")
                 )
                 return@launch
             }
@@ -681,8 +679,7 @@ class CreateReportViewModel(
                 }
                 categoryUiState = categoryUiState.copy(
                     isLoading = false,
-                    errorMessage = exception.message
-                        ?: "No fue posible cargar las categorías"
+                    errorMessage = exception.reportOperationMessage("cargar las categorías")
                 )
             }
         }
@@ -839,10 +836,10 @@ class CreateReportViewModel(
         CreateIncidentLocationInput(
             latitude = latitude,
             longitude = longitude,
-            referenceAddress = "Ubicación GPS del dispositivo",
-            commune = "No determinada",
-            region = "No determinada",
-            sector = "No determinado"
+            referenceAddress = formState.referenceAddress.trim(),
+            commune = formState.commune.trim(),
+            region = formState.region.trim(),
+            sector = formState.sector.trim()
         )
 
     private fun PhotoImportException.toUserMessage(): String = when (failure) {
@@ -854,6 +851,19 @@ class CreateReportViewModel(
     }
 
     private fun CreateReportFormState.hasValidationErrors(): Boolean =
-        titleError != null || descriptionError != null || categoryError != null
+        titleError != null || descriptionError != null || categoryError != null || locationDetailsError != null
 
+}
+
+/** Controlled messages shared by category loading and incident creation. */
+private fun Throwable.reportOperationMessage(operation: String): String = when (this) {
+    is cl.uct.ojociudadano.data.session.SessionRequiredException -> incidentMessage()
+    is ApiException.Http -> when (statusCode) {
+        401 -> "Tu sesión expiró. Inicia sesión nuevamente."
+        403 -> "No tienes autorización para $operation."
+        in 400..499 -> "No se pudo $operation. Revisa los datos e intenta nuevamente."
+        else -> "El servicio no está disponible. Intenta más tarde."
+    }
+    is ApiException.Network, is java.io.IOException -> "No fue posible conectar con el servidor. Revisa tu conexión e intenta nuevamente."
+    else -> "No fue posible $operation. Intenta nuevamente."
 }

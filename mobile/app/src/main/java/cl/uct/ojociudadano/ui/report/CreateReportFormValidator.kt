@@ -7,6 +7,8 @@ class CreateReportFormValidator {
 
     fun validate(state: CreateReportFormState): CreateReportFormState {
         return state.copy(
+            locationDetailsError = if (listOf(state.referenceAddress, state.commune, state.region, state.sector).any { it.isBlank() })
+                "Completa la dirección de referencia, comuna, región y sector" else null,
             titleError = state.title.requiredFieldError("El título es obligatorio"),
             descriptionError = state.description.requiredFieldError("La descripción es obligatoria"),
             categoryError = if (state.selectedCategory == null) "La categoría es obligatoria" else null

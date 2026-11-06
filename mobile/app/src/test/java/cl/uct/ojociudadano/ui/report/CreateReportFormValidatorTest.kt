@@ -10,6 +10,16 @@ class CreateReportFormValidatorTest {
     private val validator = CreateReportFormValidator()
 
     @Test
+    fun `each location reference field is required and whitespace does not satisfy the contract`() {
+        val valid = CreateReportFormState(referenceAddress = "Plaza", commune = "Temuco", region = "Araucanía", sector = "Centro")
+        assertNull(validator.validate(valid).locationDetailsError)
+        for (invalid in listOf(valid.copy(referenceAddress = " "), valid.copy(commune = ""),
+            valid.copy(region = ""), valid.copy(sector = ""))) {
+            assertEquals("Completa la dirección de referencia, comuna, región y sector", validator.validate(invalid).locationDetailsError)
+        }
+    }
+
+    @Test
     fun `category is required when no selection exists`() {
         val validatedState = validator.validate(CreateReportFormState())
 

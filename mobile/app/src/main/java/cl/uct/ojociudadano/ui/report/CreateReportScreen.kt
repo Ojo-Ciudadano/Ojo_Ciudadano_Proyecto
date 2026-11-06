@@ -99,7 +99,10 @@ fun CreateReportScreen(
     onBack: () -> Unit = {},
     onRefreshLocation: () -> Unit = {},
     onRequestLocationPermission: () -> Unit = {},
-    onOpenLocationSettings: () -> Unit = {}
+    onOpenLocationSettings: () -> Unit = {},
+    onLocationDetailsChange: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+    onRetryCategories: () -> Unit = {},
+    onViewReport: (String) -> Unit = {}
 ) {
     val descriptionFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -174,6 +177,12 @@ fun CreateReportScreen(
             enabled = canEditForm
         )
 
+        if (categoryLoadError != null || (!isLoadingCategories && categories.isEmpty())) {
+            TextButton(onClick = onRetryCategories, enabled = canEditForm && !isLoadingCategories) {
+                Text("Reintentar categorías")
+            }
+        }
+
         EvidencePhotoSection(
             evidencePhotos = state.evidencePhotos,
             activePhotoOperation = state.activePhotoOperation,
@@ -191,6 +200,22 @@ fun CreateReportScreen(
             onRequestLocationPermission = onRequestLocationPermission,
             onOpenLocationSettings = onOpenLocationSettings
         )
+
+        Text("Referencia de ubicación", style = MaterialTheme.typography.titleMedium)
+        Text("Completa los datos del lugar asociados a la ubicación GPS.")
+        OutlinedTextField(value = state.referenceAddress,
+            onValueChange = { onLocationDetailsChange(it, state.commune, state.region, state.sector) },
+            label = { Text("Dirección de referencia") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = state.commune,
+            onValueChange = { onLocationDetailsChange(state.referenceAddress, it, state.region, state.sector) },
+            label = { Text("Comuna") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = state.region,
+            onValueChange = { onLocationDetailsChange(state.referenceAddress, state.commune, it, state.sector) },
+            label = { Text("Región") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = state.sector,
+            onValueChange = { onLocationDetailsChange(state.referenceAddress, state.commune, state.region, it) },
+            label = { Text("Sector") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
+        state.locationDetailsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -215,12 +240,12 @@ fun CreateReportScreen(
         }
 
         when (submissionState) {
-            is CreateReportSubmissionState.Success -> Text(
-                text = successMessage(
-                    uploadedEvidenceCount = submissionState.uploadedEvidenceCount,
-                    discardedEvidenceCount = submissionState.discardedEvidenceCount
-                )
-            )
+            is CreateReportSubmissionState.Success -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(successMessage(submissionState.uploadedEvidenceCount, submissionState.discardedEvidenceCount))
+                OutlinedButton(onClick = { onViewReport(submissionState.incidentId) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Ver reporte creado")
+                }
+            }
 
             is CreateReportSubmissionState.EvidenceUploadFailed -> Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -581,7 +606,8 @@ private fun ReportTextField(
 fun CreateReportScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
-    onExitRiskChanged: (CreateReportExitRisk?) -> Unit = {}
+    onExitRiskChanged: (CreateReportExitRisk?) -> Unit = {},
+    onViewReport: (String) -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val fileStore = application.container.evidencePhotoStore
@@ -670,7 +696,10 @@ fun CreateReportScreen(
         onBack = onBack,
         onRefreshLocation = viewModel::refreshLocation,
         onRequestLocationPermission = locationPermissionLauncher::request,
-        onOpenLocationSettings = locationPermissionLauncher::openLocationSettings
+        onOpenLocationSettings = locationPermissionLauncher::openLocationSettings,
+        onLocationDetailsChange = viewModel::onLocationDetailsChange,
+        onRetryCategories = viewModel::loadCategories,
+        onViewReport = onViewReport
     )
 }
 

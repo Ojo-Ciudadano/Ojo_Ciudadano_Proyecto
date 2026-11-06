@@ -240,7 +240,13 @@ fun AppNavigation(
             protectedComposable(sessionManager, navController, AppRoutes.CREATE_REPORT) {
                 CreateReportScreen(
                     onBack = { requestNavigation { navigateToHome() } },
-                    onExitRiskChanged = { createReportExitRisk = it }
+                    onExitRiskChanged = { createReportExitRisk = it },
+                    onViewReport = { id ->
+                        navController.navigateIfAllowed(sessionManager, "incident/${Uri.encode(id)}", navOptions {
+                            popUpTo(AppRoutes.CREATE_REPORT) { inclusive = true }
+                            launchSingleTop = true
+                        })
+                    }
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.NOTIFICATIONS) {

@@ -29,6 +29,15 @@ class IncidentBrowsingTest {
         }
     }
 
+    @Test fun refreshLoadsReportsCreatedSinceOpeningTheList() {
+        show()
+        compose.onNodeWithText("Todos los incidentes").performClick()
+        compose.onNodeWithText("No hay incidentes en esta sección.").assertIsDisplayed()
+        compose.runOnIdle { repository.other = true }
+        compose.onNodeWithText("Actualizar").performClick()
+        compose.onNodeWithText("Luminaria de prueba").assertIsDisplayed()
+    }
+
     @Test fun emptyAndErrorKeepTabsRetryAndBackAvailable() {
         repository.failAll = true
         var backs = 0

@@ -154,7 +154,7 @@ class RemoteIncidentRepository(
     }
 
     override suspend fun getIncidentHistory(incidentId: String): List<IncidentStateHistory> {
-        val response = withCurrentIdentity { identity ->
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
             apiService.getIncidentHistory(incidentId, identity.token)
         }
         return response.map { it.toDomain() }
@@ -165,7 +165,7 @@ class RemoteIncidentRepository(
         assignedUserId: String
     ): IncidentAssignment {
         val request = AssignResponsibleRequestDto(usuarioAsignadoId = assignedUserId)
-        val response = withCurrentIdentity { identity ->
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
             apiService.assignResponsible(incidentId, request, identity.token)
         }
         return response.toDomain()
@@ -173,14 +173,14 @@ class RemoteIncidentRepository(
 
     override suspend fun updatePriority(incidentId: String, priorityLevel: Int): Incident {
         val request = UpdatePriorityRequestDto(nivelPrioridad = priorityLevel)
-        val response = withCurrentIdentity { identity ->
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
             apiService.updatePriority(incidentId, request, identity.token)
         }
         return response.toDomain()
     }
 
     override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {
-        val response = withCurrentIdentity { identity ->
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
             apiService.getUsuarios(
                 page = page,
                 limit = limit,

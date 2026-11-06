@@ -83,6 +83,38 @@ class EvidenceUploadFlowTest {
     }
 
     @Test
+    fun `citizen creates without photos then finds the incident in own reports and detail`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201).setBody(incidentJson()))
+        val model = createViewModel()
+        model.onTitleChange("Poste dañado")
+        model.onDescriptionChange("El poste bloquea la vereda")
+        model.onCategorySelected(category)
+        model.onLocationDetailsChange("Plaza", "Temuco", "Araucanía", "Centro")
+        model.createReport()
+        awaitTerminalState(model)
+        assertEquals(CreateReportSubmissionState.Success(INCIDENT_ID, 0), model.submissionState)
+        val created = takeRequest()
+        assertEquals("POST", created.method)
+        assertEquals("Bearer ${session.accessToken}", created.getHeader("Authorization"))
+        val body = com.google.gson.JsonParser.parseString(created.body.readUtf8()).asJsonObject
+        assertEquals(session.userId, body["usuarioReportaId"].asString)
+        assertEquals("Temuco", body["ubicacion"].asJsonObject["comuna"].asString)
+        val manager = DefaultSessionManager(TestSessionStorage(session))
+        manager.restore()
+        val repository = RemoteIncidentRepository(RetrofitClient.createApiService(
+            server.url("/").toString(), manager, manager::invalidateIfCurrent), manager)
+        server.enqueue(MockResponse().setBody("[${incidentJson()}]"))
+        assertEquals(INCIDENT_ID, repository.getCurrentUserIncidents().single().id)
+        val mine = takeRequest()
+        assertEquals(session.userId, mine.requestUrl?.queryParameter("usuarioReportaId"))
+        assertEquals("Bearer ${session.accessToken}", mine.getHeader("Authorization"))
+        server.enqueue(MockResponse().setBody(incidentJson()))
+        assertEquals(INCIDENT_ID, repository.getIncidentById(INCIDENT_ID).id)
+        assertEquals("/api/v1/incidentes/$INCIDENT_ID", takeRequest().path)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
     fun `creates the incident and uploads all evidences with the created id`() = runBlocking {
         server.enqueue(
             MockResponse()
@@ -105,6 +137,7 @@ class EvidenceUploadFlowTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(category)
+        viewModel.onLocationDetailsChange("Plaza", "Temuco", "Araucanía", "Centro")
         seedPhoto(viewModel, firstFile)
         seedPhoto(viewModel, secondFile)
 
@@ -177,6 +210,7 @@ class EvidenceUploadFlowTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(category)
+        viewModel.onLocationDetailsChange("Plaza", "Temuco", "Araucanía", "Centro")
         seedPhoto(viewModel, firstFile)
         seedPhoto(viewModel, secondFile)
 
@@ -235,6 +269,7 @@ class EvidenceUploadFlowTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(category)
+        viewModel.onLocationDetailsChange("Plaza", "Temuco", "Araucanía", "Centro")
 
         val token = viewModel.onPhotoCaptureStarted()
         viewModel.onPhotoCaptured(

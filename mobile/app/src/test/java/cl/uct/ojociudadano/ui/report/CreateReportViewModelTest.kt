@@ -65,6 +65,59 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `missing reference details prevent sending fabricated location metadata`() = runTest {
+        val repository = FakeIncidentRepository()
+        val model = createViewModel(categoryRepository = FakeCategoryRepository(), incidentRepository = repository)
+        model.onTitleChange("Luminaria")
+        model.onDescriptionChange("No enciende")
+        model.onCategorySelected(sampleCategory)
+        model.createReport()
+        assertTrue(repository.createInputs.isEmpty())
+        assertEquals("Completa la dirección de referencia, comuna, región y sector", model.formState.locationDetailsError)
+        model.onLocationDetailsChange(" Plaza central ", " Temuco ", " La Araucanía ", " Centro ")
+        model.createReport()
+        val location = repository.createInputs.single().location
+        assertEquals("Plaza central", location.referenceAddress)
+        assertEquals("Temuco", location.commune)
+        assertEquals("La Araucanía", location.region)
+        assertEquals("Centro", location.sector)
+    }
+
+    @Test
+    fun `creation errors hide server diagnostics and explain authorization`() = runTest {
+        for ((status, message) in listOf(
+            401 to "Tu sesión expiró. Inicia sesión nuevamente.",
+            403 to "No tienes autorización para crear el reporte.",
+            400 to "No se pudo crear el reporte. Revisa los datos e intenta nuevamente.",
+            503 to "El servicio no está disponible. Intenta más tarde."
+        )) {
+            val model = createViewModel(categoryRepository = FakeCategoryRepository(), incidentRepository = FakeIncidentRepository(
+                failure = ApiException.Http(status, listOf("private database diagnostics"), null, null)))
+            model.fillValidForm()
+            model.createReport()
+            assertEquals(CreateReportSubmissionState.Error(message), model.submissionState)
+        }
+    }
+
+    @Test
+    fun `category retry recovers after a connection error without resetting the form`() = runTest {
+        var unavailable = true
+        val model = createViewModel(categoryRepository = object : CategoryRepository {
+            override suspend fun getCategories(): List<Category> {
+                if (unavailable) throw IOException("internal diagnostic")
+                return listOf(sampleCategory)
+            }
+        })
+        model.onTitleChange("Conservar título")
+        assertEquals("No fue posible conectar con el servidor. Revisa tu conexión e intenta nuevamente.", model.categoryUiState.errorMessage)
+        unavailable = false
+        model.loadCategories()
+        assertEquals(listOf(sampleCategory), model.categoryUiState.categories)
+        assertNull(model.categoryUiState.errorMessage)
+        assertEquals("Conservar título", model.formState.title)
+    }
+
+    @Test
     fun `loads categories returned by the repository`() = runTest {
         val category = sampleCategory
         val viewModel = createViewModel(
@@ -97,7 +150,7 @@ class CreateReportViewModelTest {
 
         assertTrue(viewModel.categoryUiState.categories.isEmpty())
         assertFalse(viewModel.categoryUiState.isLoading)
-        assertEquals("Error de red", viewModel.categoryUiState.errorMessage)
+        assertEquals("No fue posible cargar las categorías. Intenta nuevamente.", viewModel.categoryUiState.errorMessage)
     }
 
     @Test
@@ -109,6 +162,7 @@ class CreateReportViewModelTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
+        viewModel.onLocationDetailsChange("Plaza central", "Temuco", "La Araucanía", "Centro")
 
         assertEquals("Poste dañado", viewModel.formState.title)
         assertEquals("El poste bloquea la vereda", viewModel.formState.description)
@@ -143,6 +197,7 @@ class CreateReportViewModelTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
+        viewModel.onLocationDetailsChange("Plaza central", "Temuco", "La Araucanía", "Centro")
 
         viewModel.createReport()
 
@@ -162,10 +217,10 @@ class CreateReportViewModelTest {
         assertEquals(sampleCategory.id, input.categoryId)
         assertEquals(GPS_LATITUDE, input.location.latitude, 0.0)
         assertEquals(GPS_LONGITUDE, input.location.longitude, 0.0)
-        assertEquals("Ubicación GPS del dispositivo", input.location.referenceAddress)
-        assertEquals("No determinada", input.location.commune)
-        assertEquals("No determinada", input.location.region)
-        assertEquals("No determinado", input.location.sector)
+        assertEquals("Plaza central", input.location.referenceAddress)
+        assertEquals("Temuco", input.location.commune)
+        assertEquals("La Araucanía", input.location.region)
+        assertEquals("Centro", input.location.sector)
     }
 
     @Test
@@ -312,12 +367,13 @@ class CreateReportViewModelTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
+        viewModel.onLocationDetailsChange("Plaza central", "Temuco", "La Araucanía", "Centro")
         viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
 
         viewModel.createReport()
 
         assertEquals(
-            CreateReportSubmissionState.Error("Error de red"),
+            CreateReportSubmissionState.Error("No fue posible crear el reporte. Intenta nuevamente."),
             viewModel.submissionState
         )
         assertTrue(incidentRepository.uploadAttempts.isEmpty())
@@ -337,6 +393,7 @@ class CreateReportViewModelTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
+        viewModel.onLocationDetailsChange("Plaza central", "Temuco", "La Araucanía", "Centro")
 
         viewModel.createReport()
 
@@ -361,6 +418,7 @@ class CreateReportViewModelTest {
         viewModel.onTitleChange("Poste dañado")
         viewModel.onDescriptionChange("El poste bloquea la vereda")
         viewModel.onCategorySelected(sampleCategory)
+        viewModel.onLocationDetailsChange("Plaza central", "Temuco", "La Araucanía", "Centro")
 
         viewModel.createReport()
         creationStarted.await()
@@ -1919,6 +1977,7 @@ private fun CreateReportViewModel.fillValidForm() {
     onTitleChange("Poste dañado")
     onDescriptionChange("El poste bloquea la vereda")
     onCategorySelected(sampleCategory)
+    onLocationDetailsChange("Plaza central", "Temuco", "La Araucanía", "Centro")
 }
 
 private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {
@@ -2117,10 +2176,10 @@ private const val GPS_LONGITUDE = -72.5984
 private val GPS_INCIDENT_LOCATION = CreateIncidentLocationInput(
     latitude = GPS_LATITUDE,
     longitude = GPS_LONGITUDE,
-    referenceAddress = "Ubicación GPS del dispositivo",
-    commune = "No determinada",
-    region = "No determinada",
-    sector = "No determinado"
+    referenceAddress = "Plaza central",
+    commune = "Temuco",
+    region = "La Araucanía",
+    sector = "Centro"
 )
 
 private val sampleCategory = Category(
