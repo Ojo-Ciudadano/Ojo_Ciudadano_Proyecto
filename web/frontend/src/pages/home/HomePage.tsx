@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { CarruselEvidencias } from '../../components/incidentes/CarruselEvidencias'
 import { IncidentMap } from '../../components/map/IncidentMap'
 import { mapearIncidentesAMarcadores } from '../../components/map/incidentMarkers'
 import { useInicioCiudadano } from '../../hooks/useInicioCiudadano'
@@ -208,7 +209,12 @@ export function HomePage() {
                     >
                       <div className="inicio-ciudadano-tarjeta-encabezado">
                         <h2 id={`incidente-titulo-${incidente.id}`}>
-                          {texto(incidente.titulo)}
+                          <Link
+                            className="inicio-ciudadano-titulo-enlace"
+                            to={`/incidentes/${encodeURIComponent(incidente.id)}`}
+                          >
+                            {texto(incidente.titulo)}
+                          </Link>
                         </h2>
 
                         <span className="inicio-ciudadano-estado">
@@ -236,6 +242,19 @@ export function HomePage() {
                           <dd>{fecha(incidente.fechaCreacion)}</dd>
                         </div>
                       </dl>
+
+                      <CarruselEvidencias
+                        key={incidente.id}
+                        incidenteId={incidente.id}
+                      />
+
+                      <Link
+                        className="inicio-ciudadano-ver-detalle"
+                        to={`/incidentes/${encodeURIComponent(incidente.id)}`}
+                        aria-label={`Ver detalle de ${texto(incidente.titulo)}`}
+                      >
+                        Ver detalle
+                      </Link>
                     </article>
                   </li>
                 ))}

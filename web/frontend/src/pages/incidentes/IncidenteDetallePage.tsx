@@ -11,6 +11,7 @@ import {
   resolverEnlaceRetornoDetalle,
 } from './detalleIncidenteAcceso'
 import './IncidenteDetallePage.css'
+import { GaleriaEvidencias } from '../../components/incidentes/GaleriaEvidencias'
 
 function texto(valor?: string | null): string {
   return valor?.trim() || 'Sin información'
@@ -185,6 +186,12 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
           )}
         </section>
       </div>
+
+      <GaleriaEvidencias
+        key={`galeria-${incidente.id}`}
+        incidenteId={incidente.id}
+        evidencias={incidente.evidencias}
+      />
 
       <HistorialIncidente
         key={`historial-${incidente.id}`}
