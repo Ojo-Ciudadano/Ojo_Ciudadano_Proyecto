@@ -17,7 +17,7 @@
 - Cristóbal Santibáñez
 - Martín Maier
 - Bernardo Sandoval
-- Alejandra Marilao
+- María Marilao
 - Franchesca Marcial
 
 # Taller IV:
