@@ -31,8 +31,8 @@ Contratos comprobados en `web/backend/apps/incidentes/src`:
 Una sesión ausente, en restauración, expirada o sin UUID válido impide enviar
 solicitudes de incidentes. Las respuestas de sesiones anteriores se descartan.
 Los errores se muestran mediante los estados existentes y los HTTP 401 siguen
-utilizando la invalidación y navegación de #94/#95. La ubicación temporal de
-Sprint 1 sigue fuera del alcance de la sustitución de identidad.
+utilizando la invalidación y navegación de #94/#95. La creación usa las coordenadas del GPS y solicita dirección de referencia,
+comuna, región y sector, campos obligatorios del contrato API.
 
 Pruebas locales (sin servidor de producción), desde `mobile/`:
 
@@ -119,3 +119,11 @@ Validación local:
 ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.startup.RoleNavigationTest,cl.uct.ojociudadano.ui.startup.SessionStartupGateTest
 ```
 
+
+## Flujo Ciudadano (#101)
+
+La auditoría, cambios, criterios de aceptación, pruebas y riesgos pendientes se
+encuentran en [docs/issue-101-citizen-flow.md](docs/issue-101-citizen-flow.md).
+El formulario conserva GPS y evidencias existentes, solicita las referencias
+reales del lugar y permite consultar el reporte creado. La lista permite
+actualizar y alternar consultas generales y propias mediante el repositorio.
