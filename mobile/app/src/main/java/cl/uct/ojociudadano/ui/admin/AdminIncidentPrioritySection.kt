@@ -49,6 +49,7 @@ internal fun AdminIncidentPrioritySection(
         }
         OutlinedButton(
             onClick = actions.onOpen,
+            enabled = state.canStartAction,
             modifier = Modifier.testTag("admin_priority_open")
         ) {
             Text("Modificar prioridad")
@@ -105,8 +106,9 @@ internal fun PriorityPickerDialog(
                 state.priorityError?.let { CitizenMessage(it, isError = true) }
                 if (state.savingPriority) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                     ) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                         Text("Guardando prioridad…")

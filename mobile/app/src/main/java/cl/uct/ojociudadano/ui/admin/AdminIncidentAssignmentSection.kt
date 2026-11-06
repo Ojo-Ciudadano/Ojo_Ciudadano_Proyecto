@@ -58,6 +58,7 @@ internal fun AdminIncidentAssignmentSection(
         }
         OutlinedButton(
             onClick = actions.onOpen,
+            enabled = state.canStartAction,
             modifier = Modifier.fillMaxWidth().testTag("admin_assignment_open")
         ) {
             Text(if (assignment == null) "Asignar responsable" else "Reasignar responsable")
@@ -81,8 +82,9 @@ private fun AssignmentPickerDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (val candidates = state.candidates) {
                     AssignmentCandidates.Loading -> Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
                     ) {
                         CircularProgressIndicator(Modifier.size(20.dp))
                         Text("Cargando administradores…")
@@ -125,8 +127,9 @@ private fun AssignmentPickerDialog(
                 }
                 if (state.assigning) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
                     ) {
                         CircularProgressIndicator(Modifier.size(20.dp))
                         Text("Asignando…")

@@ -33,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.ui.components.CitizenHeader
+import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.IncidentLoadState
 import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.reports.incidentDate
@@ -84,36 +85,36 @@ fun AdminIncidentsContent(
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Incidentes", subtitle = "Administrador", onBack = onBack)
-        LazyColumn(
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Listado de incidentes",
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Consulta los incidentes disponibles para tu sesión administrativa.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            AdminIncidentFilterBar(
+                state = state,
+                onEstadoSelected = onEstadoSelected,
+                onComunaSelected = onComunaSelected,
+                onCategoriaSelected = onCategoriaSelected,
+                onClearFilters = onClearFilters,
+                onRetryCategories = onRetryCategories
+            )
+        }
+        if (state.status == IncidentsUiState.Loading) {
+            LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
+        } else LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Listado de incidentes",
-                        modifier = Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Consulta los incidentes disponibles para tu sesión administrativa.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            item {
-                AdminIncidentFilterBar(
-                    state = state,
-                    onEstadoSelected = onEstadoSelected,
-                    onComunaSelected = onComunaSelected,
-                    onCategoriaSelected = onCategoriaSelected,
-                    onClearFilters = onClearFilters,
-                    onRetryCategories = onRetryCategories
-                )
-            }
             if (state.status == IncidentsUiState.Success) {
                 items(state.incidents, key = { it.id }) { incident ->
                     AdminIncidentCard(incident, onIncidentSelected)

@@ -57,8 +57,9 @@ internal fun AdminIncidentHistorySection(
 @Composable
 private fun HistoryLoading() {
     Row(
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
     ) {
         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         Text("Cargando historial…", style = MaterialTheme.typography.bodyMedium)

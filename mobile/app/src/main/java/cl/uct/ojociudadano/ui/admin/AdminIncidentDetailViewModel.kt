@@ -68,7 +68,10 @@ data class AdminIncidentDetailState(
     val currentStatus get() = incident?.status
     val availableTransitions get() = if (actionsBlocked || syncError != null) emptyList()
         else IncidentStatusTransitions.availableFrom(currentStatus?.name.orEmpty())
-    val busy get() = submitting || synchronizing || savingPriority
+    val busy get() = submitting || synchronizing || savingPriority || assigning
+    val canMutate get() = status is IncidentsUiState.Success && incident != null &&
+        !busy && !actionsBlocked && syncError == null
+    val canStartAction get() = canMutate && selectedStatus == null && !pickerVisible && !priorityDialogVisible
     val currentPriority get() = incident?.priorityLevel
 
     /** Temporary UI selection; it is never the persisted responsible. */
@@ -83,9 +86,7 @@ data class AdminIncidentDetailState(
 
     /** A write is only possible with a loaded incident and a different valid level. */
     val canConfirmPriority: Boolean
-        get() = status is IncidentsUiState.Success &&
-            incident != null &&
-            !savingPriority &&
+        get() = canMutate && selectedStatus == null && !pickerVisible &&
             selectedPriority != null &&
             selectedPriority != currentPriority &&
             (priorityError == null || priorityCanRetry)
@@ -106,7 +107,7 @@ class AdminIncidentDetailViewModel(
     init { load() }
 
     fun openAssignmentPicker() {
-        if (_state.value.assigning) return
+        if (!_state.value.canStartAction) return
         _state.update {
             it.copy(
                 pickerVisible = true,
@@ -137,11 +138,12 @@ class AdminIncidentDetailViewModel(
         val current = _state.value
         val incidentId = current.incidentId
         val candidateId = current.selectedCandidateId
-        if (current.assigning || current.incident == null || incidentId == null || candidateId == null) return
+        if (!current.canMutate || current.selectedStatus != null || current.priorityDialogVisible ||
+            incidentId == null || candidateId == null) return
         if (assignmentJob?.isActive == true) return
+        _state.update { it.copy(assigning = true, assignmentError = null) }
         assignmentJob = viewModelScope.launch {
             // Keep the previous responsible visible until the backend confirms the new one.
-            _state.update { it.copy(assigning = true, assignmentError = null) }
             try {
                 val confirmed = repository.assignResponsible(incidentId, candidateId)
                 _state.update {
@@ -182,7 +184,7 @@ class AdminIncidentDetailViewModel(
 
     fun selectStatus(destination: String) {
         val current = _state.value
-        if (current.busy || current.selectedStatus != null || destination !in current.availableTransitions) return
+        if (!current.canStartAction || destination !in current.availableTransitions) return
         _state.value = current.copy(selectedStatus = destination, observation = "", validationError = null,
             changeError = null, successMessage = null)
     }
@@ -213,7 +215,9 @@ class AdminIncidentDetailViewModel(
             try {
                 val confirmed = repository.updateStatus(incident.id, destination, current.observation.trim())
                 check(confirmed.id == incident.id && IncidentStatusTransitions.isCanonical(confirmed.status.name))
-                _state.value = _state.value.copy(incident = confirmed, submitting = false,
+                // El PATCH resume el incidente; el GET posterior recupera sus datos ampliados.
+                val updated = incident.copy(status = confirmed.status, updatedAt = confirmed.updatedAt)
+                _state.value = _state.value.copy(incident = updated, submitting = false,
                     selectedStatus = null, observation = "", successMessage = "Estado actualizado correctamente.")
             } catch (exception: CancellationException) {
                 throw exception
@@ -223,6 +227,10 @@ class AdminIncidentDetailViewModel(
                         (exception is ApiException.Http && exception.statusCode in setOf(401, 403, 404)))
                 return@launch
             }
+            // Descarta una consulta anterior para que no publique un historial obsoleto.
+            historyJob?.cancel()
+            historyJob = null
+            loadHistory(incident.id)
             synchronize()
         }
     }
@@ -235,8 +243,7 @@ class AdminIncidentDetailViewModel(
 
     fun openPriorityDialog() {
         val current = _state.value
-        if (current.status !is IncidentsUiState.Success || current.incident == null) return
-        if (current.savingPriority) return
+        if (!current.canStartAction) return
         _state.update {
             it.copy(
                 priorityDialogVisible = true,
@@ -275,10 +282,10 @@ class AdminIncidentDetailViewModel(
         if (priorityJob?.isActive == true) return
         val incident = current.incident ?: return
         if (level !in ADMIN_PRIORITY_LEVELS) return
+        _state.update {
+            it.copy(savingPriority = true, priorityError = null, priorityCanRetry = false, priorityUpdated = false)
+        }
         priorityJob = viewModelScope.launch {
-            _state.update {
-                it.copy(savingPriority = true, priorityError = null, priorityCanRetry = false, priorityUpdated = false)
-            }
             try {
                 val confirmed = repository.updatePriority(incident.id, level)
                 // The PATCH response omits history and the active assignment, so keep the

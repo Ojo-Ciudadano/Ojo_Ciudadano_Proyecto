@@ -13,7 +13,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.ui.components.CitizenHeader
+import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.evidence.IncidentEvidenceGallery
+import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 
 @Composable
 fun IncidentDetailScreen(id: String, onBack: () -> Unit) {
@@ -28,7 +30,9 @@ fun IncidentDetailScreen(id: String, onBack: () -> Unit) {
     val state by model.state.collectAsState()
     Column(Modifier.fillMaxSize()) {
         CitizenHeader("Detalle del incidente", onBack = onBack)
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (state.status == IncidentsUiState.Loading) {
+            LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
+        } else Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             IncidentLoadState(state.status, model::load)
             state.incident?.let { incident ->
                 Text(incident.category.name, color = MaterialTheme.colorScheme.primary)

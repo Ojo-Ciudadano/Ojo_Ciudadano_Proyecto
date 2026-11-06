@@ -697,6 +697,123 @@ class AdminIncidentDetailViewModelTest {
         assertEquals(incident.createdAt, updated.createdAt)
     }
 
+    @Test fun `cambio de estado bloquea asignacion y prioridad antes de iniciar la coroutine`() = runTest {
+        val repository = Repository().apply { updatePending = CompletableDeferred() }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.selectStatus("En atención")
+        model.editObservation("Evaluación completada")
+        model.openAssignmentPicker()
+        model.openPriorityDialog()
+        assertFalse(model.state.value.pickerVisible)
+        assertFalse(model.state.value.priorityDialogVisible)
+        model.confirmChange()
+        model.selectCandidate(admin.id)
+        model.confirmAssignment()
+        model.selectPriority(4)
+        model.confirmPriority()
+        runCurrent()
+        assertTrue(repository.assignments.isEmpty())
+        assertTrue(repository.priorityLevels.isEmpty())
+        repository.result = incident.copy(status = incident.status.copy(name = "En atención"))
+        repository.updatePending?.complete(repository.result)
+        runCurrent()
+        model.openAssignmentPicker()
+        assertTrue(model.state.value.pickerVisible)
+    }
+
+    @Test fun `asignacion y prioridad impiden iniciar un cambio de estado simultaneo`() = runTest {
+        for (assigning in listOf(true, false)) {
+            val repository = Repository()
+            val model = AdminIncidentDetailViewModel(repository, incident.id)
+            runCurrent()
+            if (assigning) {
+                model.openAssignmentPicker()
+                model.selectCandidate(admin.id)
+                repository.assignPending = CompletableDeferred()
+                model.confirmAssignment()
+            } else {
+                model.openPriorityDialog()
+                model.selectPriority(4)
+                repository.priorityPending = CompletableDeferred()
+                model.confirmPriority()
+            }
+            model.selectStatus("En atención")
+            assertNull(model.state.value.selectedStatus)
+            assertTrue(model.state.value.busy)
+            runCurrent()
+            model.selectStatus("En atención")
+            assertNull(model.state.value.selectedStatus)
+            assertTrue(repository.changes.isEmpty())
+            repository.assignPending?.complete(assignment)
+            repository.priorityPending?.complete(incident)
+            runCurrent()
+        }
+    }
+
+    @Test fun `respuesta resumida conserva datos administrativos si falla la recarga`() = runTest {
+        val original = assignedIncident.copy(priorityLevel = 4, history = listOf(history("h1", "2026-11-02T12:00:00Z")))
+        val repository = Repository().apply { result = original }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.selectStatus("En atención")
+        model.editObservation("Evaluación completada")
+        repository.updateResult = incident.copy(status = incident.status.copy(name = "En atención"), updatedAt = "2026-11-05T12:00:00Z")
+        repository.failure = IOException()
+        model.confirmChange()
+        runCurrent()
+        assertEquals(original.copy(status = repository.updateResult!!.status, updatedAt = repository.updateResult!!.updatedAt), model.state.value.incident)
+        assertNotNull(model.state.value.successMessage)
+        assertNotNull(model.state.value.syncError)
+        model.openAssignmentPicker()
+        model.openPriorityDialog()
+        assertFalse(model.state.value.pickerVisible)
+        assertFalse(model.state.value.priorityDialogVisible)
+    }
+
+    @Test fun `cambio confirmado reemplaza consulta de historial pendiente por historial actualizado`() = runTest {
+        val obsolete = CompletableDeferred<List<IncidentStateHistory>>()
+        val repository = Repository().apply { historyPending = obsolete }
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        val updatedHistory = listOf(history("h2", "2026-11-05T12:00:00Z"))
+        repository.historyPending = null
+        repository.historyRows = updatedHistory
+        repository.result = incident.copy(status = incident.status.copy(name = "En atención"))
+        model.selectStatus("En atención")
+        model.editObservation("Evaluación completada")
+        model.confirmChange()
+        runCurrent()
+        obsolete.complete(emptyList())
+        runCurrent()
+        assertEquals(updatedHistory, model.state.value.history)
+        assertEquals(IncidentsUiState.Success, model.state.value.historyStatus)
+        assertEquals(2, repository.historyIds.size)
+        assertEquals(1, repository.changes.size)
+    }
+
+    @Test fun `fallo de historial despues del cambio permite reintentar solo la consulta`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentDetailViewModel(repository, incident.id)
+        runCurrent()
+        model.selectStatus("En atención")
+        model.editObservation("Evaluación completada")
+        repository.result = incident.copy(status = incident.status.copy(name = "En atención"))
+        repository.historyFailure = IOException()
+        model.confirmChange()
+        runCurrent()
+        assertEquals(repository.result, model.state.value.incident)
+        assertNotNull(model.state.value.successMessage)
+        assertTrue(model.state.value.historyStatus is IncidentsUiState.Error)
+        assertTrue(model.state.value.historyCanRetry)
+        repository.historyFailure = null
+        repository.historyRows = listOf(history("h2", "2026-11-05T12:00:00Z"))
+        model.retryHistory()
+        runCurrent()
+        assertEquals(repository.historyRows, model.state.value.history)
+        assertEquals(1, repository.changes.size)
+    }
+
     private class Repository : IncidentRepository {
         val ids = mutableListOf<String>()
         val historyIds = mutableListOf<String>()

@@ -14,6 +14,7 @@ import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
+import cl.uct.ojociudadano.ui.components.LoadingContent
 
 @Composable
 fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
@@ -66,7 +67,9 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
                 }
             }
         }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (state == IncidentsUiState.Loading) {
+            LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
+        } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Text(if (scope == IncidentScope.MINE) "Reportes de tu cuenta" else "Reportes disponibles para tu sesión",
                 style = MaterialTheme.typography.bodyMedium) }
             if (state != IncidentsUiState.Success) {

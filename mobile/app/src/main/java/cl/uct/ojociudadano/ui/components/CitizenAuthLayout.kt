@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.*
@@ -33,13 +32,6 @@ fun CitizenAuthLayout(modifier: Modifier = Modifier, content: @Composable Column
 }
 
 @Composable
-fun CitizenAuthProgress(message: String, indicatorModifier: Modifier = Modifier) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        CircularProgressIndicator(modifier = indicatorModifier)
-        Text(message)
-    }
+fun CitizenAuthProgress(message: String, modifier: Modifier = Modifier, indicatorModifier: Modifier = Modifier) {
+    LoadingContent(message = message, modifier = modifier.fillMaxWidth().padding(vertical = 8.dp), indicatorModifier = indicatorModifier)
 }
