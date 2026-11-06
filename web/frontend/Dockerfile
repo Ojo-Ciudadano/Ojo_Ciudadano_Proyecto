@@ -23,9 +23,13 @@ RUN if [ "${VITE_API_URL}" = "https://api-ojociudadano.dev.censei.cl" ]; then \
     esac
 
 COPY package.json package-lock.json ./
-# `typescript` ya viene en devDependencies (lo usa `tsc -b`); no hace falta
-# instalarlo globalmente y se evita una segunda descarga desde npm.
-RUN npm install
+# Se usa npm ci --no-audit --no-fund con reintentos de red para evitar saturar
+# el resolver DNS de Alpine (EAI_AGAIN) y garantizar que node_modules/.bin/tsc
+# quede instalado de forma determinista desde package-lock.json.
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci --no-audit --no-fund
 
 COPY . .
 RUN npm run build

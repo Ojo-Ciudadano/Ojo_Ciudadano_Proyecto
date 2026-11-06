@@ -2,8 +2,8 @@ package cl.uct.ojociudadano.ui.location
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cl.uct.ojociudadano.data.location.LocationClient
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

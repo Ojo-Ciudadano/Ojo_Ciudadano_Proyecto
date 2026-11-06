@@ -271,7 +271,27 @@ class AdminIncidentsViewModelTest {
         assertEquals(IncidentFilters(estadoId = "status"), model.state.value.filters)
     }
 
+    @Test fun `refresh after a status change preserves filters and removes incidents excluded by server`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentsViewModel(repository, FakeCategoryRepository())
+        runCurrent()
+        val filters = IncidentFilters(estadoId = "status", categoriaId = "category", comuna = "Temuco")
+        model.applyFilters(filters)
+        runCurrent()
+        assertEquals(listOf(incident), model.state.value.incidents)
+        // The PATCH moved this incident out of the active state filter.
+        repository.rows = emptyList()
+        model.loadIncidents()
+        runCurrent()
+        assertEquals(filters, repository.requestedFilters.last())
+        assertEquals(filters, model.state.value.filters)
+        assertTrue(model.state.value.incidents.isEmpty())
+        assertEquals(IncidentsUiState.Empty, model.state.value.status)
+    }
+
     private class Repository : IncidentRepository {
+        override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
+
         var calls = 0
         var rows = listOf(incident)
         var failure: Exception? = null

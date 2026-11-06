@@ -213,6 +213,18 @@ class RemoteRepositoryTest {
     }
 
     @Test
+    fun `updatePriority forwards level and session token and maps confirmed incident`() = runTest {
+        val apiService = FakeApiService()
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+
+        val updated = repository.updatePriority(sampleIncidentDto().id, 4)
+
+        assertEquals(4, apiService.lastPriorityRequest?.nivelPrioridad)
+        assertEquals(testSession().accessToken, apiService.lastPrioritySession?.value)
+        assertEquals(4, updated.priorityLevel)
+    }
+
+    @Test
     fun `getNotifications forwards session token and maps response`() = runTest {
         val apiService = FakeApiService(
             notifications = listOf(sampleNotificationDto())
@@ -250,6 +262,8 @@ class RemoteRepositoryTest {
         private val notifications: List<NotificationDto> = emptyList(),
         private val loginResponse: LoginResponseDto = sampleLoginResponse()
     ) : ApiService {
+        override suspend fun updateIncidentStatus(incidentId: String, request: cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto, expectedSession: cl.uct.ojociudadano.data.session.TokenSnapshot?): cl.uct.ojociudadano.data.remote.dto.IncidentDto = error("Unused")
+
         override suspend fun register(request: RegisterRequestDto): RegisterResponseDto =
             error("Registration is not used by this test")
 
@@ -365,12 +379,19 @@ class RemoteRepositoryTest {
             throw NotImplementedError()
         }
 
+        var lastPriorityRequest: UpdatePriorityRequestDto? = null
+            private set
+        var lastPrioritySession: TokenSnapshot? = null
+            private set
+
         override suspend fun updatePriority(
             incidentId: String,
             request: UpdatePriorityRequestDto,
             expectedSession: TokenSnapshot?
         ): IncidentDto {
-            throw NotImplementedError()
+            lastPriorityRequest = request
+            lastPrioritySession = expectedSession
+            return incident.copy(nivelPrioridad = request.nivelPrioridad)
         }
     }
 

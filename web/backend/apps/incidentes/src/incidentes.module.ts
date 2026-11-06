@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { HttpModule } from '@nestjs/axios';
 import { AuthUsuariosClient } from './auth/auth-usuarios.client';
 import { IncidentesController } from './incidentes.controller';
+import { HealthController } from './health.controller';
 import { IncidentesService } from './incidentes.service';
 import { CategoriasModule } from './categorias/categorias.module';
 import { EvidenciasModule } from './evidencias/evidencias.module';
@@ -29,7 +30,7 @@ import { IncidentesNotificacionesClient } from './notificaciones/incidentes-noti
     CategoriasModule,
     EvidenciasModule,
   ],
-  controllers: [IncidentesController],
+  controllers: [IncidentesController, HealthController],
   providers: [
     IncidentesService,
     IncidentesNotificacionesClient,

@@ -121,6 +121,55 @@ class AdminContractsDeserializationTest {
     }
 
     @Test
+    fun `update priority request serializes the backend field name`() {
+        val json = gson.toJson(UpdatePriorityRequestDto(nivelPrioridad = 4))
+
+        assertEquals("""{"nivelPrioridad":4}""", json)
+    }
+
+    @Test
+    fun `priority patch response deserializes confirmed level without history or assignment`() {
+        val json = """
+            {
+              "id": "incident-123",
+              "titulo": "Poste caído",
+              "descripcion": "Poste bloqueando parcialmente la calle",
+              "categoriaId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+              "estadoId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+              "ubicacionId": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+              "usuarioReportaId": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+              "nivelPrioridad": 5,
+              "fechaCreacion": "2026-11-01T09:00:00.000Z",
+              "fechaActualizacion": "2026-11-03T09:00:00.000Z",
+              "categoria": {
+                "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "nombre": "Alumbrado público",
+                "descripcion": "Fallas de alumbrado",
+                "prioridadBase": 2,
+                "esEmergenciaCritica": false,
+                "canalOficialContacto": null
+              },
+              "estado": { "id": "cccccccc-cccc-cccc-cccc-cccccccccccc", "nombre": "En revisión", "orden": 2 },
+              "ubicacion": {
+                "id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                "latitud": -38.7359,
+                "longitud": -72.5904,
+                "direccionReferencia": "Frente a la plaza",
+                "comuna": "Temuco",
+                "region": "La Araucanía",
+                "sector": "Centro"
+              }
+            }
+        """.trimIndent()
+
+        val incident = gson.fromJson(json, IncidentDto::class.java)
+
+        assertEquals(5, incident.nivelPrioridad)
+        assertNull(incident.historial)
+        assertNull(incident.asignacionActiva)
+    }
+
+    @Test
     fun `incident detail deserializes historial and asignacionActiva`() {
         val json = """
             {
