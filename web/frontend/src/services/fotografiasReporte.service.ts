@@ -4,10 +4,15 @@ import {
   type EvidenciaCreada,
 } from '../types/fotografiaReporte'
 
+type ConfirmacionFotografia = Pick<
+  EvidenciaCreada,
+  'id' | 'incidenteId'
+>
+
 export async function subirFotografiaReporte(
   incidenteId: string,
   archivo: File,
-): Promise<EvidenciaCreada> {
+): Promise<ConfirmacionFotografia> {
   const identificador = incidenteId.trim()
 
   if (!identificador) {
@@ -29,9 +34,12 @@ export async function subirFotografiaReporte(
     `/incidentes/${encodeURIComponent(identificador)}/evidencias`,
     formulario,
     {
+      // El navegador establece multipart/form-data y su boundary.
       headers: {
         'Content-Type': null,
       },
+      // Esta subida no utiliza un límite de tiempo del cliente.
+      timeout: 0,
     },
   )
 
@@ -44,22 +52,17 @@ export async function subirFotografiaReporte(
     typeof evidencia.id !== 'string' ||
     !evidencia.id.trim() ||
     !('incidenteId' in evidencia) ||
-    evidencia.incidenteId !== identificador ||
-    !('tipoMime' in evidencia) ||
-    evidencia.tipoMime !== archivo.type ||
-    !('tamanoArchivo' in evidencia) ||
-    evidencia.tamanoArchivo !== archivo.size ||
-    !('fechaCreacion' in evidencia) ||
-    typeof evidencia.fechaCreacion !== 'string' ||
-    !('url' in evidencia) ||
-    typeof evidencia.url !== 'string'
+    evidencia.incidenteId !== identificador
   ) {
     throw new Error(
-      'No se pudo verificar la confirmación de la fotografía. El incidente creado se conserva.',
+      'El servidor respondió, pero no se pudo verificar la confirmación de la fotografía. Puede haberse guardado; comprueba las evidencias del incidente antes de reenviarla.',
     )
   }
 
-  return evidencia as EvidenciaCreada
+  return {
+    id: evidencia.id,
+    incidenteId: identificador,
+  }
 }
 
 export function mensajeErrorFotografia(error: unknown): string {
@@ -83,10 +86,8 @@ export function mensajeErrorFotografia(error: unknown): string {
       return 'La fotografía supera el máximo permitido de 10 MB.'
     case 502:
     case 503:
-      return 'El servicio no pudo almacenar la fotografía. Puedes reintentar su subida.'
+      return 'El servicio no pudo confirmar el almacenamiento de la fotografía. El incidente creado se conserva.'
     default:
-      return error instanceof Error
-        ? error.message
-        : 'No se pudo confirmar la subida. El incidente se conserva; puedes reintentar esta fotografía.'
+      return 'No se pudo confirmar la subida. La fotografía podría haberse guardado; comprueba las evidencias del incidente antes de reenviarla.'
   }
 }

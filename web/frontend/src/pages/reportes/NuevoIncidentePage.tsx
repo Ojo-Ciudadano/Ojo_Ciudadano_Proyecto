@@ -85,9 +85,11 @@ export function NuevoIncidentePage() {
   const [error, setError] = useState<string | null>(null)
   const [creado, setCreado] = useState<IncidenteCreado | null>(null)
 
-  // null indica que el flujo de fotografías aún no está completo.
+  // null indica que el flujo de fotografías sigue pendiente.
   const [totalFotografiasConfirmadas, setTotalFotografiasConfirmadas] =
     useState<number | null>(null)
+
+  const [totalSinConfirmar, setTotalSinConfirmar] = useState(0)
 
   const bloqueoEnvio = useRef(false)
 
@@ -120,6 +122,16 @@ export function NuevoIncidentePage() {
     !errorCategorias &&
     creado === null
 
+  const hayFallidas = fotografias.some(
+    (fotografia) => fotografia.estado === 'fallida',
+  )
+
+  const hayPendientes = fotografias.some(
+    (fotografia) =>
+      fotografia.estado === 'pendiente' ||
+      fotografia.estado === 'subiendo',
+  )
+
   async function completarFotografias(incidenteId: string) {
     try {
       const resultado = await subirPendientes(incidenteId)
@@ -131,6 +143,7 @@ export function NuevoIncidentePage() {
         resultado.confirmadas === resultado.total
       ) {
         setTotalFotografiasConfirmadas(resultado.confirmadas)
+        setTotalSinConfirmar(0)
         limpiarFotografias()
       }
     } catch {
@@ -193,7 +206,7 @@ export function NuevoIncidentePage() {
         return
       }
 
-      // Desde aquí no se vuelve a ejecutar la creación del incidente.
+      // Los reintentos posteriores usan este mismo incidente.
       setCreado(incidente)
       await completarFotografias(incidente.id)
     } finally {
@@ -222,6 +235,34 @@ export function NuevoIncidentePage() {
       bloqueoEnvio.current = false
       setEnviando(false)
     }
+  }
+
+  function continuarSinFotografiasFallidas() {
+    if (
+      bloqueoEnvio.current ||
+      ocupado ||
+      !creado ||
+      totalFotografiasConfirmadas !== null ||
+      !hayFallidas ||
+      hayPendientes
+    ) {
+      return
+    }
+
+    const confirmadas = fotografias.filter(
+      (fotografia) => fotografia.estado === 'confirmada',
+    ).length
+
+    const sinConfirmar = fotografias.filter(
+      (fotografia) => fotografia.estado === 'fallida',
+    ).length
+
+    setTotalFotografiasConfirmadas(confirmadas)
+    setTotalSinConfirmar(sinConfirmar)
+    setError(null)
+
+    // Libera archivos locales; no elimina evidencias del backend.
+    limpiarFotografias()
   }
 
   return (
@@ -261,15 +302,35 @@ export function NuevoIncidentePage() {
             </p>
 
             {totalFotografiasConfirmadas !== null ? (
-              <p>
-                {totalFotografiasConfirmadas > 0
-                  ? `Se confirmó la subida de ${totalFotografiasConfirmadas} fotografía(s).`
-                  : 'El reporte se creó sin fotografías.'}
-              </p>
+              <>
+                <p>
+                  {totalFotografiasConfirmadas > 0
+                    ? `Se confirmó la subida de ${totalFotografiasConfirmadas} ${
+                        totalFotografiasConfirmadas === 1
+                          ? 'fotografía'
+                          : 'fotografías'
+                      }.`
+                    : totalSinConfirmar > 0
+                      ? 'El reporte se conserva. No se confirmó ninguna fotografía.'
+                      : 'El reporte se creó sin fotografías.'}
+                </p>
+
+                {totalSinConfirmar > 0 && (
+                  <p>
+                    Finalizaste sin reenviar{' '}
+                    {totalSinConfirmar === 1
+                      ? '1 fotografía no confirmada'
+                      : `${totalSinConfirmar} fotografías no confirmadas`}.
+                    Los archivos locales se liberaron. Las evidencias
+                    que ya estuvieran guardadas se conservan.
+                  </p>
+                )}
+              </>
             ) : (
               <p>
-                El incidente está guardado. Estamos gestionando
-                sus fotografías.
+                {ocupado
+                  ? 'El incidente está guardado. Estamos gestionando sus fotografías.'
+                  : 'El incidente está guardado. Quedan fotografías sin confirmar.'}
               </p>
             )}
           </div>
@@ -298,12 +359,34 @@ export function NuevoIncidentePage() {
           {!ocupado && (
             <>
               {totalFotografiasConfirmadas === null && (
-                <p>
-                  Si sales de esta página o la recargas, los archivos
-                  pendientes dejarán de estar disponibles para reintentar.
-                  El incidente creado se conservará.
-                </p>
+                <>
+                  {hayFallidas && !hayPendientes && (
+                    <div>
+                      <p>
+                        Puedes finalizar sin reenviar las fotografías
+                        no confirmadas. El incidente y las evidencias
+                        guardadas se conservarán. Los archivos locales
+                        se liberarán y ya no podrás reintentarlos desde
+                        este formulario.
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={continuarSinFotografiasFallidas}
+                      >
+                        Continuar sin las fotografías fallidas
+                      </button>
+                    </div>
+                  )}
+
+                  <p>
+                    Si sales de esta página o la recargas, los archivos
+                    pendientes dejarán de estar disponibles para
+                    reintentar. El incidente creado se conservará.
+                  </p>
+                </>
               )}
+
               <Link to="/">Volver al inicio</Link>
             </>
           )}
