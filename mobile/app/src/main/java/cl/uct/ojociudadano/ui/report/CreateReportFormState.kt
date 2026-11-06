@@ -24,6 +24,11 @@ enum class PhotoOperation {
 }
 
 data class CreateReportFormState(
+    val referenceAddress: String = "",
+    val commune: String = "",
+    val region: String = "",
+    val sector: String = "",
+    val locationDetailsError: String? = null,
     val title: String = "",
     val description: String = "",
     val selectedCategory: Category? = null,

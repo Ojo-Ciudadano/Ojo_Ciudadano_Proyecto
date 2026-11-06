@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.report
 
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -16,6 +17,29 @@ class CreateReportEvidenceRetryTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun successOpensTheCreatedReportWithoutSubmittingAgain() {
+        var opened = ""
+        var submits = 0
+        setScreen(CreateReportSubmissionState.Success("created-id", 0),
+            onCreateReportClick = { submits++ }, onConfirmRetry = {}, onViewReport = { opened = it })
+        composeTestRule.onNodeWithText("Reporte creado").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Ver reporte creado").performScrollTo().performClick()
+        composeTestRule.runOnIdle {
+            assertEquals("created-id", opened)
+            assertEquals(0, submits)
+        }
+    }
+
+    @Test
+    fun categoryFailureOffersAnExplicitRetry() {
+        var retries = 0
+        setScreen(CreateReportSubmissionState.Idle, {}, {}, categoryError = "No fue posible cargar las categorías.",
+            onRetryCategories = { retries++ })
+        composeTestRule.onNodeWithText("Reintentar categorías").performScrollTo().performClick()
+        composeTestRule.runOnIdle { assertEquals(1, retries) }
+    }
 
     @Test
     fun uncertainRetryRequiresConfirmationBeforeCallingTheViewModel() {
@@ -85,7 +109,10 @@ class CreateReportEvidenceRetryTest {
     private fun setScreen(
         submissionState: CreateReportSubmissionState,
         onCreateReportClick: () -> Unit,
-        onConfirmRetry: () -> Unit
+        onConfirmRetry: () -> Unit,
+        onViewReport: (String) -> Unit = {},
+        categoryError: String? = null,
+        onRetryCategories: () -> Unit = {}
     ) {
         composeTestRule.setContent {
             OjoCiudadanoTheme {
@@ -97,7 +124,7 @@ class CreateReportEvidenceRetryTest {
                     ),
                     categories = listOf(category),
                     isLoadingCategories = false,
-                    categoryLoadError = null,
+                    categoryLoadError = categoryError,
                     submissionState = submissionState,
                     onTitleChange = {},
                     onDescriptionChange = {},
@@ -108,7 +135,9 @@ class CreateReportEvidenceRetryTest {
                     onPhotoPreviewError = {},
                     onCreateReportClick = onCreateReportClick,
                     onConfirmRetry = onConfirmRetry,
-                    onFinishWithoutPendingEvidence = {}
+                    onFinishWithoutPendingEvidence = {},
+                    onViewReport = onViewReport,
+                    onRetryCategories = onRetryCategories
                 )
             }
         }

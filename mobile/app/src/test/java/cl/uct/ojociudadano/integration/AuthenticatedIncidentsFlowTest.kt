@@ -54,6 +54,39 @@ class AuthenticatedIncidentsFlowTest {
         RemoteIncidentRepository(api(sessionManager), sessionManager)
 
     @Test
+    fun `citizen cannot send administrative operations even through repository calls`() = runTest {
+        manager.establish(userA)
+        val repo = repository()
+        val operations: List<suspend () -> Any> = listOf(
+            { repo.updateStatus("incident", "En revisión", "Revisión") },
+            { repo.updatePriority("incident", 2) },
+            { repo.assignResponsible("incident", userB.userId) },
+            { repo.getCandidates(1, 20) },
+            { repo.getIncidentHistory("incident") }
+        )
+        operations.forEach { operation ->
+            val failure = runCatching { operation() }.exceptionOrNull()
+            assertTrue(failure is ApiException.Http)
+            assertEquals(403, (failure as ApiException.Http).statusCode)
+        }
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `administrator keeps priority and history access with the active JWT`() = runTest {
+        manager.establish(userA.copy(roles = listOf("ADMIN")))
+        val repo = repository()
+        server.enqueue(MockResponse().setBody(incidentJson(userA)))
+        assertEquals("d0000000-0000-4000-8000-000000000004", repo.updatePriority("incident-id", 2).id)
+        val priority = takeRequest()
+        assertEquals("/api/v1/incidentes/incident-id/prioridad", priority.path)
+        assertEquals("Bearer ${userA.accessToken}", priority.getHeader("Authorization"))
+        server.enqueue(MockResponse().setBody("[]"))
+        assertTrue(repo.getIncidentHistory("incident-id").isEmpty())
+        assertEquals("/api/v1/incidentes/incident-id/historial", takeRequest().path)
+    }
+
+    @Test
     fun `login identity is used in query and creation with the same JWT`() = runTest {
         server.enqueue(MockResponse().setBody("""{
             "access_token":"${userA.accessToken}","token_type":"Bearer",

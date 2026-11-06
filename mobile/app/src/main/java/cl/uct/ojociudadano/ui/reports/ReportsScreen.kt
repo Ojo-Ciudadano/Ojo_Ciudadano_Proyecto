@@ -32,6 +32,7 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var categoryMenu by remember { mutableStateOf(false) }
     var dateMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(model) { model.loadIncidents() }
     val category = categories.firstOrNull { it.id == categoryId }
     Column(Modifier.fillMaxSize()) {
         CitizenHeader("Incidentes", onBack = onBack)
@@ -41,6 +42,7 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { showFilters = !showFilters }) { Text(if (showFilters) "Ocultar filtros" else "Filtrar") }
+            TextButton(onClick = model::loadIncidents, enabled = state != IncidentsUiState.Loading) { Text("Actualizar") }
             TextButton(onClick = onCreateReportClick) { Text("+ Nuevo reporte") }
         }
         if (showFilters) {

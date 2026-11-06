@@ -215,7 +215,9 @@ class RemoteRepositoryTest {
     @Test
     fun `updatePriority forwards level and session token and maps confirmed incident`() = runTest {
         val apiService = FakeApiService()
-        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+        val manager = testSessionManager()
+        manager.establish(testSession().copy(roles = listOf("ADMIN")))
+        val repository = RemoteIncidentRepository(apiService, manager)
 
         val updated = repository.updatePriority(sampleIncidentDto().id, 4)
 
