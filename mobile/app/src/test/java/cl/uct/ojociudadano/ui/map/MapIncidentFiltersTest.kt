@@ -55,6 +55,16 @@ class MapIncidentFiltersTest {
     }
 
     @Test
+    fun `active count reflects the selected criteria`() {
+        assertEquals(0, MapIncidentFilters().activeCount)
+        assertEquals(1, MapIncidentFilters(categoryId = "lighting").activeCount)
+        assertEquals(
+            2,
+            MapIncidentFilters(categoryId = "lighting", statusId = "new").activeCount
+        )
+    }
+
+    @Test
     fun `markers without the filtered attribute do not match`() {
         val marker = marker("partial", category = null, status = null)
 

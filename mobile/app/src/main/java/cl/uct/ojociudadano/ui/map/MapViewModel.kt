@@ -33,7 +33,9 @@ class MapViewModel(
     }
 
     fun loadIncidents() {
-        val previousSelectedId = (_uiState.value as? MapUiState.Success)?.selectedIncidentId
+        val previous = _uiState.value as? MapUiState.Success
+        val previousSelectedId = previous?.selectedIncidentId
+        val previousFiltersVisible = previous?.filtersVisible ?: false
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _uiState.value = MapUiState.Loading
@@ -52,7 +54,8 @@ class MapViewModel(
                 val success = MapUiState.Success(
                     markers = markers,
                     selectedIncidentId = previousSelectedId,
-                    filters = filters
+                    filters = filters,
+                    filtersVisible = previousFiltersVisible
                 )
                 _uiState.value = success.copy(
                     selectedIncidentId = previousSelectedId?.takeIf { selectedId ->
@@ -90,6 +93,17 @@ class MapViewModel(
     /** Restablece todos los filtros y vuelve a representar los incidentes cargados. */
     fun clearFilters() {
         updateFilters { MapIncidentFilters() }
+    }
+
+    /**
+     * Muestra u oculta los controles de filtrado sin modificar los criterios
+     * seleccionados ni realizar nuevas consultas.
+     */
+    fun setFiltersVisible(visible: Boolean) {
+        val current = _uiState.value as? MapUiState.Success ?: return
+        if (current.filtersVisible == visible) return
+
+        _uiState.value = current.copy(filtersVisible = visible)
     }
 
     /**

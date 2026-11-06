@@ -14,7 +14,8 @@ sealed interface MapUiState {
     data class Success(
         val markers: List<IncidentMapMarker>,
         val selectedIncidentId: String? = null,
-        val filters: MapIncidentFilters = MapIncidentFilters()
+        val filters: MapIncidentFilters = MapIncidentFilters(),
+        val filtersVisible: Boolean = false
     ) : MapUiState {
 
         /** Marcadores que cumplen los filtros y deben dibujarse sobre el mapa. */

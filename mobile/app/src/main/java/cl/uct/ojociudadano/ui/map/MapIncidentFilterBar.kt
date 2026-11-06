@@ -6,9 +6,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +45,7 @@ internal fun MapIncidentFilterBar(
     onCategorySelected: (String?) -> Unit,
     onStatusSelected: (String?) -> Unit,
     onReset: () -> Unit,
+    onHide: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -79,6 +87,15 @@ internal fun MapIncidentFilterBar(
                 ) {
                     Text("Restablecer")
                 }
+                IconButton(
+                    onClick = onHide,
+                    modifier = Modifier.testTag(MapTestTags.FILTERS_HIDE)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Ocultar filtros"
+                    )
+                }
             }
 
             if (categoryOptions.isNotEmpty()) {
@@ -104,6 +121,41 @@ internal fun MapIncidentFilterBar(
             }
         }
     }
+}
+
+/**
+ * Botón compacto que vuelve a mostrar los filtros cuando están ocultos.
+ *
+ * Mantiene visible de forma discreta cuántos criterios están activos sin tapar
+ * el mapa con el panel completo.
+ */
+@Composable
+internal fun MapFilterToggle(
+    activeFilterCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FilterChip(
+        selected = activeFilterCount > 0,
+        onClick = onClick,
+        label = {
+            Text(
+                if (activeFilterCount > 0) {
+                    "Filtros ($activeFilterCount)"
+                } else {
+                    "Filtros"
+                }
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.FilterList,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize)
+            )
+        },
+        modifier = modifier.testTag(MapTestTags.FILTERS_TOGGLE)
+    )
 }
 
 @Composable

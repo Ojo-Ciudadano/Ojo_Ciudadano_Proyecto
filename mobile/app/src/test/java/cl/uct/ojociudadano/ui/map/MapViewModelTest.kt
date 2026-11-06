@@ -398,6 +398,40 @@ class MapViewModelTest {
         assertEquals(null, success.selectedIncidentId)
     }
 
+    @Test
+    fun `filters start hidden and visibility can be toggled without queries`() = runTest {
+        val repository = FakeIncidents(rows = listOf(incident("first")))
+        val model = MapViewModel(repository)
+
+        var success = model.uiState.value as MapUiState.Success
+        assertEquals(false, success.filtersVisible)
+
+        model.setFiltersVisible(true)
+
+        success = model.uiState.value as MapUiState.Success
+        assertEquals(true, success.filtersVisible)
+        assertEquals(1, repository.allQueryCount)
+
+        model.setFiltersVisible(false)
+
+        success = model.uiState.value as MapUiState.Success
+        assertEquals(false, success.filtersVisible)
+        assertEquals(1, repository.allQueryCount)
+    }
+
+    @Test
+    fun `filter visibility survives a reload`() = runTest {
+        val repository = FakeIncidents(rows = listOf(incident("first")))
+        val model = MapViewModel(repository)
+        model.setFiltersVisible(true)
+
+        model.loadIncidents()
+
+        val success = model.uiState.value as MapUiState.Success
+        assertTrue(success.filtersVisible)
+        assertEquals(2, repository.allQueryCount)
+    }
+
     private fun incident(id: String) = Incident(
         id = id,
         title = "Poste caído",

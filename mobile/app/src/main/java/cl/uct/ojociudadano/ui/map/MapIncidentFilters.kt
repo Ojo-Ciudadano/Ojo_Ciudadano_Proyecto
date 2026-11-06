@@ -25,6 +25,10 @@ data class MapIncidentFilters(
     val isEmpty: Boolean
         get() = categoryId == null && statusId == null
 
+    /** Cantidad de criterios activos, usada para indicar filtros aplicados. */
+    val activeCount: Int
+        get() = listOfNotNull(categoryId, statusId).size
+
     /** Indica si el incidente representado por [marker] cumple ambos criterios. */
     fun matches(marker: IncidentMapMarker): Boolean {
         if (categoryId != null && marker.summary.categoryId != categoryId) return false
