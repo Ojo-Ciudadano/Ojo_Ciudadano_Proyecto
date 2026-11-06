@@ -8,12 +8,14 @@ Sistema colaborativo para el reporte, seguimiento y gestión de incidentes urban
 
 ```text
 Ojo_Ciudadano_Proyecto/
-├── docs/                      # Documentación transversal de arquitectura y contratos
+├── docs/                      # Documentación transversal de arquitectura, gestión y contratos
+│   ├── ACTA_CIERRE_SPRINT_2.md
 │   ├── ADR_VERSIONADO_API_V1.md
 │   ├── CHECKLIST_REVISION_CRUZADA_PR.md
 │   ├── CONVENCIONES_ARQUITECTURA.md
 │   ├── CONFIGURACION_ENTORNOS_CORS.md
 │   ├── ESTRATEGIA_DESPLIEGUE_WEB_K8S.md
+│   ├── INFORME_FINAL_SPRINT_2.md
 │   └── MIGRACIONES_PRISMA.md
 ├── mobile/                    # Aplicación Móvil Android (4° Año) - Kotlin nativo, GPS, Cámara
 ├── web/                       # Plataforma Web y Backend de Microservicios (2° Año)
@@ -142,8 +144,13 @@ npm run lint
 
 ---
 
-## Documentación de Arquitectura
+## Documentación de Arquitectura y Gestión de Sprint
 
+### Gestión y Cierre de Sprints
+* **Acta de Cierre del Sprint 2 (#161):** [docs/ACTA_CIERRE_SPRINT_2.md](docs/ACTA_CIERRE_SPRINT_2.md)
+* **Informe Final del Sprint 2 (#160):** [docs/INFORME_FINAL_SPRINT_2.md](docs/INFORME_FINAL_SPRINT_2.md)
+
+### Arquitectura y Convenciones Técnicas
 * **Convenciones y Arquitectura de Backend:** [docs/CONVENCIONES_ARQUITECTURA.md](docs/CONVENCIONES_ARQUITECTURA.md)
 * **ADR-001 — Continuidad del Versionado `/api/v1` (#126):** [docs/ADR_VERSIONADO_API_V1.md](docs/ADR_VERSIONADO_API_V1.md)
 * **Checklist de Revisión Cruzada de Pull Requests (#159):** [docs/CHECKLIST_REVISION_CRUZADA_PR.md](docs/CHECKLIST_REVISION_CRUZADA_PR.md)
