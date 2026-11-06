@@ -225,6 +225,22 @@ class RemoteRepositoryTest {
     }
 
     @Test
+    fun `getProfile forwards session token and maps the me contract`() = runTest {
+        val apiService = FakeApiService()
+        val repository = RemoteProfileRepository(apiService, testSessionManager())
+
+        val profile = repository.getProfile()
+
+        assertEquals(testSession().accessToken, apiService.lastProfileSession?.value)
+        assertEquals("a0000000-0000-4000-8000-000000000001", profile.id)
+        assertEquals("Ciudadano de Prueba", profile.name)
+        assertEquals("ciudadano@example.invalid", profile.email)
+        assertEquals("+56911111111", profile.phone)
+        assertEquals("2026-10-01T00:00:00.000Z", profile.registeredAt)
+        assertEquals(listOf("CIUDADANO"), profile.roles)
+    }
+
+    @Test
     fun `getNotifications forwards session token and maps response`() = runTest {
         val apiService = FakeApiService(
             notifications = listOf(sampleNotificationDto())
@@ -309,6 +325,14 @@ class RemoteRepositoryTest {
 
         var lastIncidentId: String? = null
             private set
+
+        var lastProfileSession: TokenSnapshot? = null
+            private set
+
+        override suspend fun getMyProfile(expectedSession: TokenSnapshot?): UsuarioDto {
+            lastProfileSession = expectedSession
+            return sampleUsuarioDto()
+        }
 
         var lastCreateRequest: CreateIncidentRequestDto? = null
             private set
@@ -418,6 +442,17 @@ class RemoteRepositoryTest {
                 prioridadBase = 2,
                 esEmergenciaCritica = false,
                 canalOficialContacto = null
+            )
+        }
+
+        private fun sampleUsuarioDto(): UsuarioDto {
+            return UsuarioDto(
+                id = "a0000000-0000-4000-8000-000000000001",
+                nombre = "Ciudadano de Prueba",
+                email = "ciudadano@example.invalid",
+                telefono = "+56911111111",
+                fechaRegistro = "2026-10-01T00:00:00.000Z",
+                roles = listOf("CIUDADANO")
             )
         }
 
