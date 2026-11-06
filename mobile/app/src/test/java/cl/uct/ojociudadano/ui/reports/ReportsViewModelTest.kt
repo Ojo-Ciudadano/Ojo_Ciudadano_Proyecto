@@ -125,10 +125,25 @@ class ReportsViewModelTest {
         val repository = FakeIncidents()
         val detail = IncidentDetailViewModel(repository, "selected-id")
         assertEquals("selected-id", detail.state.value.incident?.id)
+        assertEquals(1, repository.detailQueryCount)
         repository.failure = ApiException.Http(404, emptyList(), null, null)
         detail.load()
         assertNull(detail.state.value.incident)
         assertTrue(detail.state.value.status is IncidentsUiState.Error)
+        assertEquals(2, repository.detailQueryCount)
+    }
+
+    @Test fun `detail rejects a blank incident identifier without querying the backend`() = runTest {
+        val repository = FakeIncidents()
+
+        val detail = IncidentDetailViewModel(repository, "   ")
+
+        assertNull(detail.state.value.incident)
+        assertEquals(
+            IncidentsUiState.Error(INVALID_INCIDENT_ID_MESSAGE),
+            detail.state.value.status
+        )
+        assertEquals(0, repository.detailQueryCount)
     }
 
     @Test fun `invalid date cannot crash filtering and filters survive reload`() = runTest {
@@ -170,7 +185,9 @@ class ReportsViewModelTest {
             failure?.let { throw it }
             return incidents + incident.copy(id = "other", reporterUserId = "other-user")
         }
+        var detailQueryCount = 0
         override suspend fun getIncidentById(id: String): Incident {
+            detailQueryCount++
             failure?.let { throw it }
             return incident.copy(id = id)
         }

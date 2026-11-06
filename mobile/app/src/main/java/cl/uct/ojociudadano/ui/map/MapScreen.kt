@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -51,11 +52,13 @@ internal object MapTestTags {
     const val RETRY = "map_state_retry"
     const val SUMMARY = "map_marker_summary"
     const val SUMMARY_CLOSE = "map_marker_summary_close"
+    const val SUMMARY_DETAIL = "map_marker_summary_detail"
 }
 
 @Composable
 fun MapScreen(
     modifier: Modifier = Modifier,
+    onIncidentDetail: (String) -> Unit = {},
     mapViewModel: MapViewModel? = null
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
@@ -85,6 +88,9 @@ fun MapScreen(
             IncidentSummaryCard(
                 marker = marker,
                 onClose = model::clearSelection,
+                onOpenDetail = { requestedIncidentId ->
+                    success?.selectedDetailIncidentId(requestedIncidentId)?.let(onIncidentDetail)
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
@@ -210,9 +216,10 @@ private fun createIncidentMarker(
  * mensaje controlado en lugar de filas vacías.
  */
 @Composable
-private fun IncidentSummaryCard(
+internal fun IncidentSummaryCard(
     marker: IncidentMapMarker,
     onClose: () -> Unit,
+    onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val summary = marker.summary
@@ -304,6 +311,15 @@ private fun IncidentSummaryCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Button(
+                onClick = { onOpenDetail(marker.incidentId) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MapTestTags.SUMMARY_DETAIL)
+            ) {
+                Text("Ver detalle del incidente")
             }
         }
     }

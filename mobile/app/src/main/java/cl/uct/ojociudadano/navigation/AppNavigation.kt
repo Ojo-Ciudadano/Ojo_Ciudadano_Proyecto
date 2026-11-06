@@ -57,6 +57,17 @@ object AppRoutes {
     const val PROFILE = "profile"
     const val REGISTER = "register"
     const val LOGIN = "login"
+
+    /**
+     * Construye la ruta concreta del detalle ciudadano.
+     *
+     * Devuelve `null` cuando no hay un identificador utilizable, evitando
+     * navegar a `incident/` con un argumento vacío.
+     */
+    fun incidentDetail(id: String?): String? {
+        val normalized = id?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return "incident/${Uri.encode(normalized)}"
+    }
 }
 
 @Composable
@@ -72,6 +83,9 @@ fun AppNavigation(
     val sessionState by sessionManager.state.collectAsState()
     fun navigate(route: String) {
         navController.navigateIfAllowed(sessionManager, route)
+    }
+    fun navigateToIncidentDetail(id: String?) {
+        AppRoutes.incidentDetail(id)?.let(::navigate)
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -210,14 +224,14 @@ fun AppNavigation(
                     onCreateReportClick = { navigate(AppRoutes.CREATE_REPORT) },
                     onNotificationsClick = { navigate(AppRoutes.NOTIFICATIONS) },
                     onMapClick = { navigate(AppRoutes.MAP) },
-                    onIncidentClick = { navigate("incident/${Uri.encode(it)}") }
+                    onIncidentClick = ::navigateToIncidentDetail
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.REPORTS) {
                 ReportsScreen(
                     onBack = ::navigateToHome,
                     onCreateReportClick = { navigate(AppRoutes.CREATE_REPORT) },
-                    onIncidentClick = { navigate("incident/${Uri.encode(it)}") }
+                    onIncidentClick = ::navigateToIncidentDetail
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.INCIDENT_DETAIL) { entry ->
@@ -232,7 +246,9 @@ fun AppNavigation(
             protectedComposable(sessionManager, navController, AppRoutes.NOTIFICATIONS) {
                 NotificationsScreen(onBack = navController::navigateUp)
             }
-            protectedComposable(sessionManager, navController, AppRoutes.MAP) { MapScreen() }
+            protectedComposable(sessionManager, navController, AppRoutes.MAP) {
+                MapScreen(onIncidentDetail = ::navigateToIncidentDetail)
+            }
             protectedComposable(sessionManager, navController, AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
         }
     }
