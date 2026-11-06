@@ -249,7 +249,9 @@ fun AppNavigation(
             protectedComposable(sessionManager, navController, AppRoutes.MAP) {
                 MapScreen(onIncidentDetail = ::navigateToIncidentDetail)
             }
-            protectedComposable(sessionManager, navController, AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
+            protectedComposable(sessionManager, navController, AppRoutes.PROFILE) {
+                ProfileScreen(sessionManager = sessionManager, onLogout = onLogout)
+            }
         }
     }
 
