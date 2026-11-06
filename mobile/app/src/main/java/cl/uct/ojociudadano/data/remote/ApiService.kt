@@ -113,6 +113,11 @@ interface ApiService {
         @Tag expectedSession: TokenSnapshot? = null
     ): PaginatedResponseDto<UsuarioDto>
 
+    @GET("api/v1/usuarios/me")
+    suspend fun getMyProfile(
+        @Tag expectedSession: TokenSnapshot? = null
+    ): UsuarioDto
+
     @GET("api/v1/incidentes/{id}/historial")
     suspend fun getIncidentHistory(
         @Path("id") incidentId: String,
