@@ -233,7 +233,9 @@ fun AppNavigation(
                 NotificationsScreen(onBack = navController::navigateUp)
             }
             protectedComposable(sessionManager, navController, AppRoutes.MAP) { MapScreen() }
-            protectedComposable(sessionManager, navController, AppRoutes.PROFILE) { ProfileScreen(onLogout = onLogout) }
+            protectedComposable(sessionManager, navController, AppRoutes.PROFILE) {
+                ProfileScreen(sessionManager = sessionManager, onLogout = onLogout)
+            }
         }
     }
 

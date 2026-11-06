@@ -112,4 +112,19 @@ class ApiServiceContractTest {
 
         assertTrue(method.parameterAnnotations[0].any { it is Tag })
     }
+
+    @Test
+    fun `getMyProfile uses the me endpoint with session tag and no user id`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "getMyProfile" }
+
+        val get = requireNotNull(method.getAnnotation(GET::class.java))
+
+        assertEquals("api/v1/usuarios/me", get.value)
+        // La identidad viaja en el JWT: el endpoint no acepta un id arbitrario.
+        assertTrue(
+            method.parameterAnnotations.flatten().none { it is Path || it is Query }
+        )
+        assertTrue(method.parameterAnnotations[0].any { it is Tag })
+    }
 }
