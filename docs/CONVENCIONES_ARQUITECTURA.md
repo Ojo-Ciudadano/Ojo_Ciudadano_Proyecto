@@ -63,17 +63,19 @@ web/
     └── apps/
         ├── api-gateway/          # Gateway y orquestación de rutas (Puerto 3000)
         │   ├── src/
+        │   │   ├── domain/
+        │   │   │   └── roles/                # role.enum.ts
         │   │   ├── application/
-        │   │   │   ├── dto/              # login.dto.ts, register.dto.ts
-        │   │   │   └── services/         # api-gateway.service.ts, auth.service.ts, proxy.service.ts
+        │   │   │   ├── dto/                  # login.dto.ts, register.dto.ts
+        │   │   │   └── services/             # api-gateway.service.ts, auth.service.ts, proxy.service.ts
         │   │   ├── infrastructure/
-        │   │   │   ├── config/           # cors.config.ts
-        │   │   │   └── security/         # jwt-auth.guard.ts, roles.guard.ts, roles.decorator.ts
+        │   │   │   ├── config/               # cors.config.ts, swagger.config.ts
+        │   │   │   └── security/             # jwt-auth.guard.ts, roles.guard.ts, roles.decorator.ts
         │   │   ├── presentation/
-        │   │   │   ├── controllers/      # api-gateway.controller.ts, auth.controller.ts, proxy.controller.ts
-        │   │   │   └── filters/          # http-exception.filter.ts
-        │   │   ├── auth/                 # auth.module.ts
-        │   │   ├── proxy/                # proxy.module.ts
+        │   │   │   ├── controllers/          # api-gateway.controller.ts, auth.controller.ts, proxy.controller.ts
+        │   │   │   └── filters/              # http-exception.filter.ts
+        │   │   ├── auth/                     # auth.module.ts
+        │   │   ├── proxy/                    # proxy.module.ts
         │   │   ├── api-gateway.module.ts
         │   │   └── main.ts
         │   ├── test/             # Pruebas e2e del gateway
@@ -85,18 +87,19 @@ web/
         │   │   ├── schema.prisma # Modelos: Usuario, Rol, UsuarioRol
         │   │   └── migrations/   # Historial de migraciones SQL
         │   ├── src/
+        │   │   ├── domain/
+        │   │   │   └── roles/                # role.enum.ts
         │   │   ├── application/
-        │   │   │   ├── dto/              # create-usuario.dto.ts, login.dto.ts, listar-usuarios.dto.ts, etc.
-        │   │   │   └── services/         # auth.service.ts, usuarios.service.ts, roles.service.ts
+        │   │   │   ├── dto/                  # create-usuario.dto.ts, login.dto.ts, listar-usuarios.dto.ts, etc.
+        │   │   │   └── services/             # auth.service.ts, usuarios.service.ts, roles.service.ts
         │   │   ├── infrastructure/
-        │   │   │   ├── persistence/prisma/ # prisma.service.ts, prisma.module.ts
-        │   │   │   └── security/         # jwt.strategy.ts, roles.guard.ts, roles.decorator.ts
+        │   │   │   ├── persistence/prisma/   # prisma.service.ts, prisma.module.ts
+        │   │   │   └── security/             # jwt.strategy.ts, roles.guard.ts, roles.decorator.ts
         │   │   ├── presentation/
-        │   │   │   ├── controllers/      # auth.controller.ts, usuarios.controller.ts, roles.controller.ts
-        │   │   │   └── filters/          # http-exception.filter.ts
-        │   │   ├── auth/                 # auth.module.ts
-        │   │   ├── roles/                # roles.module.ts
-        │   │   ├── usuarios/             # usuarios.module.ts
+        │   │   │   ├── controllers/          # auth.controller.ts, usuarios.controller.ts, roles.controller.ts
+        │   │   │   └── filters/              # http-exception.filter.ts
+        │   │   ├── roles/                    # roles.module.ts
+        │   │   ├── usuarios/                 # usuarios.module.ts
         │   │   ├── auth-usuarios.module.ts
         │   │   └── main.ts
         │   ├── test/
@@ -109,22 +112,23 @@ web/
         │   │   └── migrations/
         │   ├── src/
         │   │   ├── domain/
-        │   │   │   ├── estado/           # transiciones-incidente.constants.ts
-        │   │   │   └── prioridad/        # prioridad.constants.ts
+        │   │   │   ├── estado/               # transiciones-incidente.constants.ts
+        │   │   │   ├── prioridad/            # prioridad.constants.ts
+        │   │   │   └── roles/                # role.enum.ts
         │   │   ├── application/
-        │   │   │   ├── dto/              # create-incidente.dto.ts, update-estado.dto.ts, etc.
-        │   │   │   ├── mappers/          # incidente.mapper.ts, evidencia.mapper.ts, etc.
-        │   │   │   └── services/         # incidentes.service.ts, categorias.service.ts, evidencias.service.ts
+        │   │   │   ├── dto/                  # create-incidente.dto.ts, update-estado.dto.ts, etc.
+        │   │   │   ├── mappers/              # incidente.mapper.ts, evidencia.mapper.ts, etc.
+        │   │   │   └── services/             # incidentes.service.ts, categorias.service.ts, evidencias.service.ts
         │   │   ├── infrastructure/
-        │   │   │   ├── clients/          # auth-usuarios.client.ts, incidentes-notificaciones.client.ts
-        │   │   │   ├── persistence/prisma/ # prisma.service.ts, prisma.module.ts
-        │   │   │   ├── security/         # jwt-auth.guard.ts, roles.guard.ts, current-user.decorator.ts
-        │   │   │   └── storage/          # storage.service.ts, storage.module.ts
+        │   │   │   ├── clients/              # auth-usuarios.client.ts, incidentes-notificaciones.client.ts
+        │   │   │   ├── persistence/prisma/   # prisma.service.ts, prisma.module.ts
+        │   │   │   ├── security/             # jwt-auth.guard.ts, roles.guard.ts, current-user.decorator.ts
+        │   │   │   └── storage/              # storage.service.ts, storage.module.ts
         │   │   ├── presentation/
-        │   │   │   ├── controllers/      # incidentes.controller.ts, categorias.controller.ts, evidencias.controller.ts
-        │   │   │   └── filters/          # http-exception.filter.ts
-        │   │   ├── categorias/           # categorias.module.ts
-        │   │   ├── evidencias/           # evidencias.module.ts
+        │   │   │   ├── controllers/          # incidentes.controller.ts, categorias.controller.ts, evidencias.controller.ts
+        │   │   │   └── filters/              # http-exception.filter.ts
+        │   │   ├── categorias/               # categorias.module.ts
+        │   │   ├── evidencias/               # evidencias.module.ts
         │   │   ├── incidentes.module.ts
         │   │   └── main.ts
         │   ├── test/
@@ -136,15 +140,17 @@ web/
             │   ├── schema.prisma # Modelo: Notificacion
             │   └── migrations/
             ├── src/
+            │   ├── domain/
+            │   │   └── notificacion/         # notificacion.constants.ts
             │   ├── application/
-            │   │   ├── dto/              # create-notificacion.dto.ts, notificacion-response.dto.ts
-            │   │   └── services/         # notificaciones.service.ts
+            │   │   ├── dto/                  # create-notificacion.dto.ts
+            │   │   └── services/             # notificaciones.service.ts
             │   ├── infrastructure/
-            │   │   ├── persistence/prisma/ # prisma.service.ts, prisma.module.ts
-            │   │   └── security/         # jwt-auth.guard.ts, current-user.decorator.ts
+            │   │   ├── persistence/prisma/   # prisma.service.ts, prisma.module.ts
+            │   │   └── security/             # jwt-auth.guard.ts
             │   ├── presentation/
-            │   │   ├── controllers/      # notificaciones.controller.ts
-            │   │   └── filters/          # http-exception.filter.ts
+            │   │   ├── controllers/          # notificaciones.controller.ts
+            │   │   └── filters/              # http-exception.filter.ts
             │   ├── notificaciones.module.ts
             │   └── main.ts
             ├── test/
@@ -195,6 +201,35 @@ Cada microservicio debe respetar la siguiente división estricta de responsabili
 
 4. **Capa de Infraestructura (`infrastructure/`)**:
    * Implementa el acceso a bases de datos (`persistence/prisma/`), almacenamiento de objetos (`storage/`), clientes HTTP externos (`clients/`), seguridad JWT (`security/`) y configuración técnica (`config/`).
+
+### 4.1 Trazabilidad del Diagrama de Casos de Uso hacia las Capas de Clean Architecture
+
+Cada caso de uso del **Diagrama Oficial de Casos de Uso** (actores **Ciudadano** y **Administrador**) se mapea explícitamente hacia las 4 capas del microservicio responsable:
+
+#### A. Actor: Ciudadano (`Role.CIUDADANO`)
+
+| Caso de Uso (y relaciones UML) | Microservicio | `presentation/` (Controller) | `application/` (Service / DTO / Mapper) | `domain/` & `infrastructure/` |
+| :--- | :---: | :--- | :--- | :--- |
+| **Iniciar sesión** | `auth-usuarios` | `AuthController.login` (`POST /auth/login`) | `AuthService.login`, `LoginDto` | `Role` (`role.enum.ts`), `JwtStrategy`, `PrismaService` |
+| **Crear reporte**<br>• `<<include>>` Seleccionar categoría<br>• `<<include>>` Ingresar descripción<br>• `<<include>>` Registrar ubicación<br>• `<<extend>>` Obtener ubicación GPS | `incidentes` | `IncidentesController.create` (`POST /incidentes`) | `IncidentesService.create`, `CreateIncidenteDto`, `UbicacionDto`, `toIncidenteResponse` | `CategoriasService`, `PrismaService` (`Incidente`, `Ubicacion`, `HistorialEstado`) |
+| **Adjuntar fotografía/evidencia** (`<<extend>>` de Crear reporte) | `incidentes` | `EvidenciasController.subirEvidencia` (`POST /incidentes/:id/evidencias`) | `EvidenciasService.subirEvidencia`, `EvidenciaResponseDto`, `evidencia.mapper.ts` | `StorageService` (Supabase Storage), `PrismaService` (`Evidencia`) |
+| **Consultar mis reportes** y **Consultar estado del reporte**<br>• `<<extend>>` Ver detalle de mi reporte<br>• `<<extend>>` Ver historial del reporte | `incidentes` | `IncidentesController.findAll` (`GET /incidentes?usuarioReportaId=...`), `findOne` (`GET /incidentes/:id`), `findHistorial` (`GET /incidentes/:id/historial`) | `IncidentesService.findAll`, `findOne`, `findHistorial`, `toIncidenteDetalleResponse`, `toHistorialEstadoResponse` | `PrismaService` (`Incidente`, `Estado`, `HistorialEstado`) |
+| **Consultar notificaciones** | `notificaciones` | `NotificacionesController.obtenerMisNotificaciones` (`GET /notificaciones`) | `NotificacionesService.obtenerMisNotificaciones`, `NotificacionResponseDto` | `NOTIFICACION_LEIDA_DEFAULT`, `JwtAuthGuard`, `PrismaService` |
+| **Gestionar perfil** | `auth-usuarios` | `UsuariosController.obtenerMiPerfil` (`GET /usuarios/me`) | `UsuariosService.obtenerPerfilPorId`, `PerfilUsuarioDto` | `JwtStrategy`, `PrismaService` (`Usuario`, `UsuarioRol`) |
+
+#### B. Actor: Administrador (`Role.ADMIN`)
+
+| Caso de Uso (y relaciones UML) | Microservicio | `presentation/` (Controller) | `application/` (Service / DTO / Mapper) | `domain/` & `infrastructure/` |
+| :--- | :---: | :--- | :--- | :--- |
+| **Iniciar sesión** | `auth-usuarios` | `AuthController.login` (`POST /auth/login`) | `AuthService.login`, `LoginDto` | `Role.ADMIN` (`role.enum.ts`), `JwtStrategy` |
+| **Consultar incidentes**<br>• `<<extend>>` Filtrar incidentes<br>• `<<extend>>` Ver detalle del incidente<br>• `<<extend>>` Consultar historial | `incidentes` | `IncidentesController.findAll` (`GET /incidentes`), `findOne` (`GET /incidentes/:id`), `findHistorial` (`GET /incidentes/:id/historial`) | `IncidentesService.findAll`, `FindIncidentesQueryDto`, `findOne`, `findHistorial` | `PrismaService`, `RolesGuard` (`Role.ADMIN`) |
+| **Validar antecedentes**<br>• `<<include>>` Ver detalle del incidente | `incidentes` | `IncidentesController.findOne` (`GET /incidentes/:id`), `EvidenciasController.listarPorIncidente` (`GET /incidentes/:id/evidencias`) | `IncidentesService.findOne`, `EvidenciasService.listarPorIncidente`, `toIncidenteDetalleResponse` | `StorageService`, `AuthUsuariosClient`, `PrismaService` |
+| **Cambiar estado del incidente** y **Agregar observaciones** | `incidentes` | `IncidentesController.updateEstado` (`PATCH /incidentes/:id/estado`) | `IncidentesService.updateEstado`, `UpdateEstadoDto` (`nuevoEstado`, `observacion`) | `domain/estado/transiciones-incidente.constants.ts` (`esTransicionPermitida`), `IncidentesNotificacionesClient` |
+| **Priorizar incidente**<br>• `<<include>>` Aplicar reglas de priorización | `incidentes` | `IncidentesController.updatePrioridad` (`PATCH /incidentes/:id/prioridad`) | `IncidentesService.updatePrioridad`, `UpdatePrioridadDto` | `domain/prioridad/prioridad.constants.ts` (`esPrioridadValida`, `PRIORIDAD_MINIMA`, `PRIORIDAD_MAXIMA`) |
+| **Asignar responsable** y **Supervisar asignaciones**<br>• `<<include>>` Sugerir responsable según reglas<br>• `<<extend>>` Reasignar incidente | `incidentes` | `IncidentesController.asignarResponsable` (`PATCH /incidentes/:id/asignacion`) | `IncidentesService.asignarResponsable`, `AsignarResponsableDto`, `toAsignacionResponse` | `AuthUsuariosClient` (verifica rol e identidad), `IncidentesNotificacionesClient`, `PrismaService` (`Asignacion`) |
+| **Ver avance de reportes abiertos** y **Ver estadísticas** | `incidentes` | `IncidentesController.findAll` (`GET /incidentes`) | `IncidentesService.findAll`, `FindIncidentesQueryDto` | `domain/estado/transiciones-incidente.constants.ts` |
+| **Gestionar usuarios** | `auth-usuarios` | `UsuariosController.findAll` (`GET /usuarios`), `actualizarRol` (`PATCH /usuarios/:id/rol`), `RolesController` (`GET /roles`) | `UsuariosService.findAll`, `actualizarRolUsuario`, `UpdateUsuarioRolDto`, `RolesService` | `domain/roles/role.enum.ts` (`Role.ADMIN`), `RolesGuard`, `PrismaService` |
+| **Gestionar categorías de emergencias**, **estados del flujo** y **reglas de priorización/asignación** | `incidentes` | `CategoriasController` (`GET /categorias`, `POST /categorias`) | `CategoriasService.findAll`, `create` | Catálogos Prisma (`Categoria`, `Estado`) y reglas en `domain/estado/` y `domain/prioridad/` |
 
 ---
 

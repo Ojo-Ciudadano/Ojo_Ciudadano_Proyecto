@@ -13,7 +13,7 @@ import { PrismaModule } from './infrastructure/persistence/prisma/prisma.module'
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // 👈 Agrega esta línea
+    ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     UsuariosModule,
     RolesModule,

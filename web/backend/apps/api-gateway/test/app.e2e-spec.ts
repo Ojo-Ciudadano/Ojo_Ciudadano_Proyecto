@@ -40,6 +40,25 @@ describe('ApiGatewayController (e2e)', () => {
   let app: INestApplication<App>;
   let token: string;
 
+  const mockGatewayFetch = (downstreamResponse: Partial<Response>) =>
+    jest
+      .spyOn(global, 'fetch')
+      .mockImplementation(async (input: string | URL | Request) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.endsWith('/usuarios/me')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              id: '550e8400-e29b-41d4-a716-446655440001',
+              roles: ['CIUDADANO'],
+            }),
+          } as Response;
+        }
+        return downstreamResponse as Response;
+      });
+
   beforeEach(async () => {
     process.env.JWT_SECRET = JWT_SECRET;
     process.env.CORS_ORIGINS = `${ALLOWED_WEB_ORIGIN},http://localhost:5173`;
@@ -132,11 +151,11 @@ describe('ApiGatewayController (e2e)', () => {
 
   it('acepta la creacion de incidentes con JWT', async () => {
     const incidenteCreado = { id: 'incidente-1', ...INCIDENTE };
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+    const fetchMock = mockGatewayFetch({
       status: 201,
       headers: new Headers({ 'content-type': 'application/json' }),
       json: async () => incidenteCreado,
-    } as Response);
+    });
 
     await request(app.getHttpServer())
       .post('/api/v1/incidentes')
@@ -165,11 +184,11 @@ describe('ApiGatewayController (e2e)', () => {
         fechaCreacion: '2026-10-23T15:00:00.000Z',
         url: '/evidencias/ev-1/archivo',
       };
-      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      const fetchMock = mockGatewayFetch({
         status: 201,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => evidenciaCreada,
-      } as Response);
+      });
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/incidentes/inc-1/evidencias')
@@ -205,11 +224,11 @@ describe('ApiGatewayController (e2e)', () => {
           url: '/evidencias/ev-1/archivo',
         },
       ];
-      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      const fetchMock = mockGatewayFetch({
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => lista,
-      } as Response);
+      });
 
       const response = await request(app.getHttpServer())
         .get('/api/v1/incidentes/inc-1/evidencias')
@@ -226,7 +245,7 @@ describe('ApiGatewayController (e2e)', () => {
 
     it('descarga el archivo binario de una evidencia en GET /api/v1/evidencias/:id/archivo', async () => {
       const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      const fetchMock = mockGatewayFetch({
         status: 200,
         headers: new Headers({
           'content-type': 'image/jpeg',
@@ -237,7 +256,7 @@ describe('ApiGatewayController (e2e)', () => {
             imageBytes.byteOffset,
             imageBytes.byteOffset + imageBytes.byteLength,
           ),
-      } as Response);
+      });
 
       const response = await request(app.getHttpServer())
         .get('/api/v1/evidencias/ev-1/archivo')
