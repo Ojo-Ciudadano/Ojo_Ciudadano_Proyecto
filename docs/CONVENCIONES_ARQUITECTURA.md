@@ -64,6 +64,7 @@ web/
         ├── api-gateway/          # Gateway y orquestación de rutas (Puerto 3000)
         │   ├── src/
         │   │   ├── domain/
+        │   │   │   ├── entities/             # authenticated-user.entity.ts
         │   │   │   └── roles/                # role.enum.ts
         │   │   ├── application/
         │   │   │   ├── dto/                  # login.dto.ts, register.dto.ts
@@ -74,8 +75,6 @@ web/
         │   │   ├── presentation/
         │   │   │   ├── controllers/          # api-gateway.controller.ts, auth.controller.ts, proxy.controller.ts
         │   │   │   └── filters/              # http-exception.filter.ts
-        │   │   ├── auth/                     # auth.module.ts
-        │   │   ├── proxy/                    # proxy.module.ts
         │   │   ├── api-gateway.module.ts
         │   │   └── main.ts
         │   ├── test/             # Pruebas e2e del gateway
@@ -88,6 +87,7 @@ web/
         │   │   └── migrations/   # Historial de migraciones SQL
         │   ├── src/
         │   │   ├── domain/
+        │   │   │   ├── entities/             # usuario.entity.ts
         │   │   │   └── roles/                # role.enum.ts
         │   │   ├── application/
         │   │   │   ├── dto/                  # create-usuario.dto.ts, login.dto.ts, listar-usuarios.dto.ts, etc.
@@ -98,8 +98,6 @@ web/
         │   │   ├── presentation/
         │   │   │   ├── controllers/          # auth.controller.ts, usuarios.controller.ts, roles.controller.ts
         │   │   │   └── filters/              # http-exception.filter.ts
-        │   │   ├── roles/                    # roles.module.ts
-        │   │   ├── usuarios/                 # usuarios.module.ts
         │   │   ├── auth-usuarios.module.ts
         │   │   └── main.ts
         │   ├── test/
@@ -112,6 +110,7 @@ web/
         │   │   └── migrations/
         │   ├── src/
         │   │   ├── domain/
+        │   │   │   ├── entities/             # incidente.entity.ts
         │   │   │   ├── estado/               # transiciones-incidente.constants.ts
         │   │   │   ├── prioridad/            # prioridad.constants.ts
         │   │   │   └── roles/                # role.enum.ts
@@ -127,8 +126,6 @@ web/
         │   │   ├── presentation/
         │   │   │   ├── controllers/          # incidentes.controller.ts, categorias.controller.ts, evidencias.controller.ts
         │   │   │   └── filters/              # http-exception.filter.ts
-        │   │   ├── categorias/               # categorias.module.ts
-        │   │   ├── evidencias/               # evidencias.module.ts
         │   │   ├── incidentes.module.ts
         │   │   └── main.ts
         │   ├── test/
@@ -141,6 +138,7 @@ web/
             │   └── migrations/
             ├── src/
             │   ├── domain/
+            │   │   ├── entities/             # notificacion.entity.ts
             │   │   └── notificacion/         # notificacion.constants.ts
             │   ├── application/
             │   │   ├── dto/                  # create-notificacion.dto.ts
