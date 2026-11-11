@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { AuthUsuariosModule } from './auth-usuarios.module';
-import { HttpExceptionFilter } from './filters/http-exception.filter';
+import { HttpExceptionFilter } from './presentation/filters/http-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('AuthUsuarios');

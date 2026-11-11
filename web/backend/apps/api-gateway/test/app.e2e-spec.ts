@@ -9,9 +9,9 @@ import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { ApiGatewayModule } from './../src/api-gateway.module';
-import { HttpExceptionFilter } from '../src/filters/http-exception.filter';
-import { AuthService } from '../src/auth/auth-service';
-import { buildCorsOptions } from '../src/config/cors.config';
+import { HttpExceptionFilter } from '../src/presentation/filters/http-exception.filter';
+import { AuthService } from '../src/application/services/auth.service';
+import { buildCorsOptions } from '../src/infrastructure/config/cors.config';
 
 const JWT_SECRET = 'test-jwt-secret';
 const ALLOWED_WEB_ORIGIN = 'https://ojociudadano.dev.censei.cl';
