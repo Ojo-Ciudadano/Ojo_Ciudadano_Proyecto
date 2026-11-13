@@ -4,8 +4,8 @@ import { Prisma, PrismaClient } from '../src/generated/prisma/client';
 import {
   ESTADOS_INCIDENTE,
   type EstadoIncidente,
-} from '../src/estado/transiciones-incidente.constants';
-import { esPrioridadValida } from '../src/prioridad/prioridad.constants';
+} from '../src/domain/estado/transiciones-incidente.constants';
+import { esPrioridadValida } from '../src/domain/prioridad/prioridad.constants';
 
 /**
  * Seed idempotente de incidentes demo georreferenciados en La Araucanía

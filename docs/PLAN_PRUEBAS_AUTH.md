@@ -179,7 +179,7 @@ Desde `web/backend`, ejecutar:
 
 ```bash
 npm run test:e2e -- --runInBand
-npm test -- --runInBand --runTestsByPath apps/auth-usuarios/src/auth/auth.service.spec.ts
+npm test -- --runInBand --runTestsByPath apps/auth-usuarios/src/application/services/auth.service.spec.ts
 ```
 
 La suite e2e del gateway verifica registro/login, rechazo por credenciales y acceso a incidentes. La prueba unitaria verifica la logica del servicio de autenticacion.

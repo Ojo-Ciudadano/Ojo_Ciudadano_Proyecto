@@ -45,7 +45,7 @@ Establecer una configuración centralizada por entorno para:
 
 ## 3. Comportamiento de CORS en el API Gateway
 
-La configuración se encuentra centralizada en [`web/backend/apps/api-gateway/src/config/cors.config.ts`](../web/backend/apps/api-gateway/src/config/cors.config.ts) e inyectada en [`main.ts`](../web/backend/apps/api-gateway/src/main.ts):
+La configuración se encuentra centralizada en [`web/backend/apps/api-gateway/src/infrastructure/config/cors.config.ts`](../web/backend/apps/api-gateway/src/infrastructure/config/cors.config.ts) e inyectada en [`main.ts`](../web/backend/apps/api-gateway/src/main.ts):
 
 1. **Orígenes Web Permitidos:**
    * Se lee `CORS_ORIGINS` mediante `ConfigService`.

@@ -3,13 +3,13 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { IncidentesModule } from './../src/incidentes.module';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaService } from '../src/infrastructure/persistence/prisma/prisma.service';
 import {
   StorageObjectNotFoundError,
   StorageService,
-} from '../src/storage/storage.service';
-import { HttpExceptionFilter } from '../src/filters/http-exception.filter';
-import { MAX_EVIDENCIA_BYTES } from '../src/evidencias/evidencias.service';
+} from '../src/infrastructure/storage/storage.service';
+import { HttpExceptionFilter } from '../src/presentation/filters/http-exception.filter';
+import { MAX_EVIDENCIA_BYTES } from '../src/application/services/evidencias.service';
 
 describe('Incidentes y Evidencias (e2e)', () => {
   let app: INestApplication<App>;

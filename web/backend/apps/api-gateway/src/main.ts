@@ -3,9 +3,9 @@ import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ApiGatewayModule } from './api-gateway.module';
-import { HttpExceptionFilter } from './filters/http-exception.filter';
-import { buildCorsOptions, parseCorsOrigins } from './config/cors.config';
-import { setupSwagger, SWAGGER_DOCS_PATH } from './config/swagger.config';
+import { HttpExceptionFilter } from './presentation/filters/http-exception.filter';
+import { buildCorsOptions, parseCorsOrigins } from './infrastructure/config/cors.config';
+import { setupSwagger, SWAGGER_DOCS_PATH } from './infrastructure/config/swagger.config';
 
 export const GATEWAY_BODY_PARSER_LIMIT = '12mb';
 
