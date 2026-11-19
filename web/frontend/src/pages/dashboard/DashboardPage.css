@@ -3,9 +3,8 @@
   max-width: 1400px;
   min-width: 0;
   margin: 0 auto;
-  color: #10234e;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  color: var(--color-text-strong);
+  font-family: var(--font-sans);
 }
 
 .inicio-admin,
@@ -20,11 +19,11 @@
   gap: 24px;
   margin-bottom: 24px;
   padding: 32px;
-  border-top: 5px solid #e51f2a;
-  border-radius: 20px;
-  background: linear-gradient(115deg, #10214c, #1b356b);
-  color: #fff;
-  box-shadow: 0 15px 28px -20px #10234e99;
+  border-top: 5px solid var(--color-danger);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(115deg, var(--color-primary), var(--color-primary-hover));
+  color: var(--color-surface);
+  box-shadow: var(--shadow-md);
 }
 
 .inicio-admin-etiqueta {
