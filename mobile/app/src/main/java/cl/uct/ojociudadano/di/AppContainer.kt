@@ -1,12 +1,15 @@
 package cl.uct.ojociudadano.di
 
 import android.content.Context
+import androidx.lifecycle.ProcessLifecycleOwner
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
 import cl.uct.ojociudadano.data.location.DefaultLocationClient
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
+import cl.uct.ojociudadano.data.notifications.AppForegroundState
+import cl.uct.ojociudadano.data.notifications.NotificationSyncScheduler
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.AuthRepository
@@ -96,6 +99,19 @@ class AppContainer(
 
     val notificationRepository: NotificationRepository by lazy {
         RemoteNotificationRepository(apiService, sessionManager, applicationScope)
+    }
+
+    val appForegroundState: AppForegroundState by lazy {
+        AppForegroundState(ProcessLifecycleOwner.get().lifecycle)
+    }
+
+    val notificationSyncScheduler: NotificationSyncScheduler by lazy {
+        NotificationSyncScheduler(
+            repository = notificationRepository,
+            sessionManager = sessionManager,
+            foreground = appForegroundState.isForeground,
+            scope = applicationScope
+        )
     }
 
     val profileRepository: ProfileRepository by lazy {
