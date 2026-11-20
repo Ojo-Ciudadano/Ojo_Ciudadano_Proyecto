@@ -11,6 +11,7 @@ import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
@@ -104,6 +105,18 @@ interface ApiService {
     suspend fun getNotifications(
         @Tag expectedSession: TokenSnapshot? = null
     ): List<NotificationDto>
+
+    /**
+     * Marca una notificación como leída.
+     *
+     * El backend responde con el registro actualizado; se usa [Response] para
+     * aceptar tanto 200 con cuerpo como 204 sin contenido.
+     */
+    @PATCH("api/v1/notificaciones/{id}/leida")
+    suspend fun markNotificationAsRead(
+        @Path("id") id: String,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): Response<Unit>
 
     @GET("api/v1/usuarios")
     suspend fun getUsuarios(

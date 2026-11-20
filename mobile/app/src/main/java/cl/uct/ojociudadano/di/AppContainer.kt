@@ -26,6 +26,9 @@ import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.domain.repository.LocationClient
 import coil3.ImageLoader
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(
     context: Context,
@@ -48,6 +51,14 @@ class AppContainer(
 
     val sessionManager: SessionManager by lazy {
         DefaultSessionManager(sessionStorage)
+    }
+
+    /**
+     * Alcance del proceso para trabajo que debe sobrevivir a una pantalla
+     * (estado reactivo de notificaciones y su ciclo de sincronización).
+     */
+    val applicationScope: CoroutineScope by lazy {
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     val evidencePhotoStore: EvidencePhotoFileStore by lazy {
@@ -84,7 +95,7 @@ class AppContainer(
     }
 
     val notificationRepository: NotificationRepository by lazy {
-        RemoteNotificationRepository(apiService, sessionManager)
+        RemoteNotificationRepository(apiService, sessionManager, applicationScope)
     }
 
     val profileRepository: ProfileRepository by lazy {

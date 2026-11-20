@@ -3,7 +3,6 @@ package cl.uct.ojociudadano.ui.notifications
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.data.repository.NotificationRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,9 +17,14 @@ class NotificationsViewModel(
     private val _state = MutableStateFlow<NotificationsUiState>(NotificationsUiState.Loading)
     val state = _state.asStateFlow()
 
-    /** Colección tal como la entrega la capa de datos; no se reordena en la UI. */
-    private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
-    val notifications = _notifications.asStateFlow()
+    /**
+     * La colección vive en la capa de datos: la pantalla, el marcado de lectura
+     * y el ciclo periódico publican sobre el mismo flujo.
+     */
+    val notifications = repository.notifications
+
+    /** Conteo derivado que consumirá el indicador de no leídas (#283). */
+    val unreadCount = repository.unreadCount
 
     private var loadJob: Job? = null
 
@@ -35,8 +39,7 @@ class NotificationsViewModel(
         loadJob = viewModelScope.launch {
             _state.value = NotificationsUiState.Loading
             try {
-                val rows = repository.getNotifications()
-                _notifications.value = rows
+                val rows = repository.refresh()
                 _state.value = if (rows.isEmpty()) {
                     NotificationsUiState.Empty
                 } else {
