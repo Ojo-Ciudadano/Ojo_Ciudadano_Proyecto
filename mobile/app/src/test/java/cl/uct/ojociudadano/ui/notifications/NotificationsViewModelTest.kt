@@ -48,6 +48,45 @@ class NotificationsViewModelTest {
         assertEquals(1, repository.calls)
     }
 
+    @Test fun `opening an unread notification marks it as read`() = runTest {
+        val repository = Repository().apply { rows = listOf(notification(id = "n1", isRead = false)) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.openNotification(repository.rows.single())
+        runCurrent()
+
+        assertEquals(listOf("n1"), repository.markedIds)
+        assertTrue(model.notifications.value.single().isRead)
+    }
+
+    @Test fun `opening an already read notification does not call the backend`() = runTest {
+        val repository = Repository().apply { rows = listOf(notification(id = "n1", isRead = true)) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.openNotification(repository.rows.single())
+        runCurrent()
+
+        assertTrue(repository.markedIds.isEmpty())
+    }
+
+    @Test fun `a rejected read operation stays silent for the navigation`() = runTest {
+        val repository = Repository().apply {
+            rows = listOf(notification(id = "n1", isRead = false))
+            markFailure = ApiException.Network(IOException("offline"))
+        }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.openNotification(repository.rows.single())
+        runCurrent()
+
+        // La navegación no se bloquea ni se convierte en un error de pantalla.
+        assertEquals(NotificationsUiState.Success, model.state.value)
+        assertFalse(model.notifications.value.single().isRead)
+    }
+
     @Test fun `empty response is a valid empty state and not an error`() = runTest {
         val repository = Repository().apply { rows = emptyList() }
         val model = NotificationsViewModel(repository)
@@ -182,8 +221,16 @@ class NotificationsViewModelTest {
             return rows
         }
 
+        var markedIds = mutableListOf<String>()
+        var markFailure: Throwable? = null
+
         override suspend fun markAsRead(id: String) {
-            error("Not used by this test")
+            markFailure?.let { throw it }
+            markedIds += id
+            _notifications.value = _notifications.value.map {
+                if (it.id == id) it.copy(isRead = true) else it
+            }
+            _unreadCount.value = _notifications.value.count { !it.isRead }
         }
 
         override suspend fun markAllAsRead(): Int = error("Not used by this test")
