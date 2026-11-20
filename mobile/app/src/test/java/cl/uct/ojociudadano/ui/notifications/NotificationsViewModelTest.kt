@@ -5,6 +5,9 @@ import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.NotificationRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
 import java.io.IOException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -164,11 +167,30 @@ class NotificationsViewModelTest {
         var pending: CompletableDeferred<Unit>? = null
         var calls = 0
 
-        override suspend fun getNotifications(): List<Notification> {
+        private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
+        private val _unreadCount = MutableStateFlow(0)
+
+        override val notifications: StateFlow<List<Notification>> = _notifications.asStateFlow()
+        override val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+        override suspend fun refresh(): List<Notification> {
             calls++
             pending?.await()
             failure?.let { throw it }
+            _notifications.value = rows
+            _unreadCount.value = rows.count { !it.isRead }
             return rows
+        }
+
+        override suspend fun markAsRead(id: String) {
+            error("Not used by this test")
+        }
+
+        override suspend fun markAllAsRead(): Int = error("Not used by this test")
+
+        override fun clear() {
+            _notifications.value = emptyList()
+            _unreadCount.value = 0
         }
     }
 
