@@ -3,6 +3,7 @@ package cl.uct.ojociudadano.ui.notifications
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.data.repository.NotificationRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,26 @@ class NotificationsViewModel(
     }
 
     fun retry() = load()
+
+    /**
+     * Abrir una notificación la marca como leída sin bloquear la navegación.
+     *
+     * Es best-effort: si el backend aún no expone la operación (404/405) o falla
+     * la red, la notificación permanece pendiente y no se muestra un error al
+     * usuario mientras navega al detalle.
+     */
+    fun openNotification(notification: Notification) {
+        if (notification.isRead) return
+        viewModelScope.launch {
+            try {
+                repository.markAsRead(notification.id)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // Silencioso a propósito.
+            }
+        }
+    }
 
     class Factory(
         private val repository: NotificationRepository
