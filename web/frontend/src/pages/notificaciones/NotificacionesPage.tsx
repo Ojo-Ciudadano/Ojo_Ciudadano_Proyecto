@@ -1,3 +1,4 @@
+import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotificaciones } from '../../hooks/useNotificaciones'
 import {
@@ -52,41 +53,35 @@ export function NotificacionesPage() {
 
       <div aria-busy={consultando}>
         {consultando ? (
-          <div
-            className="notificaciones-mensaje"
-            role="status"
-          >
-            Cargando notificaciones…
-          </div>
+          <EstadoVistaMensaje
+            tipo="loading"
+            mensaje="Cargando notificaciones…"
+          />
         ) : !isAuthenticated ? (
-          <div
-            className="notificaciones-mensaje"
-            role="status"
-          >
-            Inicia sesión para consultar tus notificaciones.
-          </div>
+          <EstadoVistaMensaje
+            tipo="empty"
+            mensaje="Inicia sesión para consultar tus notificaciones."
+          />
         ) : error ? (
-          <div
-            className="notificaciones-mensaje notificaciones-error"
-            role="alert"
+          <EstadoVistaMensaje
+            tipo="error"
+            titulo="No se pudieron cargar las notificaciones"
+            mensaje={error}
           >
-            <h2>No se pudieron cargar las notificaciones</h2>
-            <p>{error}</p>
-
-            <button type="button" onClick={reintentar}>
+            <button
+              type="button"
+              className="ui-btn ui-btn--danger"
+              onClick={reintentar}
+            >
               Reintentar
             </button>
-          </div>
+          </EstadoVistaMensaje>
         ) : notificaciones.length === 0 ? (
-          <div
-            className="notificaciones-mensaje notificaciones-vacio"
-            role="status"
-          >
-            <h2>No tienes notificaciones</h2>
-            <p>
-              Cuando haya avisos para tu cuenta, aparecerán aquí.
-            </p>
-          </div>
+          <EstadoVistaMensaje
+            tipo="empty"
+            titulo="No tienes notificaciones"
+            mensaje="Cuando haya avisos para tu cuenta, aparecerán aquí."
+          />
         ) : (
           <ol
             className="notificaciones-lista"
