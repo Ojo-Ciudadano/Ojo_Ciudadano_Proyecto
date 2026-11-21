@@ -15,23 +15,30 @@ Todos los parámetros son opcionales y se combinan mediante `AND`.
 |---|---|---|
 | `estadoId` | UUID | Filtra por el estado actual del incidente (`Incidente.estadoId`). |
 | `categoriaId` | UUID | Filtra por la categoría asociada (`Incidente.categoriaId`). |
-| `region` | Texto no vacío | Filtra por la región/ciudad de la ubicación (`Ubicacion.region`). Nombre acordado con MTN-01 para el filtro de ciudad del Sprint 3. |
+| `ciudad` | Texto no vacío | Filtra por la ciudad elegida en la barra de filtros. Se resuelve contra el catálogo `CIUDADES_ARAUCANIA` de `domain/` y se traduce a una o más `ubicacion.comuna`. Nombre acordado con MTN-01 (#315) para el Sprint 3. |
 | `comuna` | Texto no vacío | Filtra por `ubicacion.comuna`. |
 | `usuarioReportaId` | UUID | Conserva el filtro existente por usuario que reporta. |
 
-### Criterio de región (ciudad)
+### Criterio de ciudad
 
-El parámetro se llama `region` porque así se representa la ciudad en el modelo de ubicación (`Ubicacion.region`, tipo `String`). MTN-01 reenvía este mismo nombre en el Gateway (`GET /api/v1/incidentes`), según la planificación del Sprint 3 (MRA-02 / MTN-01). No se crea un campo nuevo ni se cambia el esquema de Prisma.
+El parámetro se llama `ciudad` y es el que la barra de filtros envía y el Gateway reenvía (`GET /api/v1/incidentes`) según lo acordado con MTN-01 (#315). No se crea un campo nuevo ni se cambia el esquema de Prisma: `ciudad` es una regla de dominio que se resuelve en `domain/ubicacion/ciudades-araucania.constants.ts`.
 
-La comparación de `region` es:
+Cada comuna de La Araucanía es su propia ciudad, salvo dos agrupaciones acordadas:
 
-- Exacta sobre el valor completo de `ubicacion.region`.
-- Sin distinguir mayúsculas/minúsculas.
-- Ignorando espacios al inicio y al final del valor recibido.
+| Ciudad | Comunas que incluye |
+|---|---|
+| `Temuco` | `Temuco`, `Padre Las Casas` |
+| `Villarrica` | `Villarrica`, `Pucón` |
 
-No es una búsqueda parcial ni normaliza tildes. Ejemplo: `region=La Araucanía` coincide con `la araucanía` o `LA ARAUCANÍA`, pero no con `Araucanía`.
+Así, `ciudad=Temuco` devuelve incidentes de `Temuco` **o** `Padre Las Casas`, y `ciudad=Villarrica` devuelve los de `Villarrica` **o** `Pucón`. `ciudad=Pucón` sigue devolviendo solo `Pucón`.
 
-`region` y `comuna` se aplican juntos sobre la misma ubicación: un incidente debe cumplir ambos criterios cuando se envían los dos.
+La resolución de la ciudad es:
+
+- Exacta contra el nombre del catálogo, ignorando mayúsculas, tildes y espacios al inicio/final. Ejemplo: `ciudad=villarrica` y `ciudad=  Villarrica  ` son equivalentes.
+- No es una búsqueda parcial: `ciudad=Temu` no coincide con `Temuco`.
+- Si la ciudad no existe en el catálogo, se devuelve `[]` sin consultar la base de datos.
+
+Cuando se envían `ciudad` y `comuna` juntos, se intersectan sobre la misma ubicación: el incidente debe estar en una comuna de esa ciudad. Por ejemplo, `ciudad=Villarrica&comuna=Pucón` es válido, mientras que `ciudad=Villarrica&comuna=Temuco` devuelve `[]`.
 
 ### Criterio de comuna
 
@@ -50,7 +57,7 @@ Ejemplo: `comuna=Temuco` coincide con `Temuco`, `temuco` o `TEMUCO`, pero no con
 Los filtros se aplican simultáneamente. Por ejemplo:
 
 ```http
-GET /api/v1/incidentes?usuarioReportaId=UUID&estadoId=UUID&categoriaId=UUID&region=La%20Araucan%C3%ADa&comuna=Temuco
+GET /api/v1/incidentes?usuarioReportaId=UUID&estadoId=UUID&categoriaId=UUID&ciudad=Temuco&comuna=Padre%20Las%20Casas
 ```
 
 equivale a exigir que el incidente cumpla todos estos criterios:
@@ -58,8 +65,8 @@ equivale a exigir que el incidente cumpla todos estos criterios:
 - `usuarioReportaId` sea el UUID indicado.
 - `estadoId` corresponda al estado actual.
 - `categoriaId` corresponda a la categoría asociada.
-- `ubicacion.region` coincida con `La Araucanía` según el criterio definido.
-- `ubicacion.comuna` coincida con `Temuco` según el criterio definido.
+- `ubicacion.comuna` esté dentro de las comunas de `Temuco` (`Temuco` o `Padre Las Casas`).
+- `ubicacion.comuna` sea además `Padre Las Casas`, por el filtro de comuna.
 
 ## Comportamiento sin filtros
 
@@ -88,7 +95,7 @@ No se agrega paginación nueva ni se modifica el contrato de respuesta.
 | Código | Caso |
 |---|---|
 | `400` | `estadoId`, `categoriaId` o `usuarioReportaId` no son UUID válidos. |
-| `400` | `region` o `comuna` están vacías o contienen solo espacios. |
+| `400` | `ciudad` o `comuna` están vacías o contienen solo espacios. |
 | `400` | Se envía un parámetro de consulta no permitido. |
 | `401` | Falta el token o es inválido/expirado. |
 | `403` | El token es válido pero no tiene un rol permitido. |
@@ -101,7 +108,8 @@ El API Gateway reenvía los parámetros de consulta al microservicio de incident
 
 - `GET /api/v1/incidentes` sin parámetros mantiene su respuesta anterior.
 - `usuarioReportaId` sigue funcionando y puede combinarse con los nuevos filtros.
-- `region` es opcional: al omitirlo no se agrega ninguna condición sobre la ubicación.
+- `ciudad` es opcional: al omitirla no se agrega ninguna condición sobre la ubicación.
+- El nombre `region` ya no se usa en el contrato de filtros; `Ubicacion.region` sigue existiendo en el modelo pero no es un parámetro de consulta.
 - Los filtros solo restringen resultados; no amplían los permisos del solicitante.
 - La autenticación existente se conserva.
 - La estructura de respuesta y el ordenamiento no cambian.

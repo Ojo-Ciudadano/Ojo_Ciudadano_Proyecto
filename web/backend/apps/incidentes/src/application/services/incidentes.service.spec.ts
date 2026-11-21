@@ -342,15 +342,18 @@ describe('IncidentesService', () => {
       );
     });
 
-    it('filtra por region (ciudad) con coincidencia exacta sin distinguir mayusculas', async () => {
-      await service.findAll({ region: '  la araucanía  ' });
+    it('filtra por ciudad usando las comunas de su agrupación', async () => {
+      await service.findAll({ ciudad: '  temuco  ' });
 
       expect(prisma.incidente.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             ubicacion: {
               is: {
-                region: { equals: 'la araucanía', mode: 'insensitive' },
+                comuna: {
+                  in: ['Temuco', 'Padre Las Casas'],
+                  mode: 'insensitive',
+                },
               },
             },
           },
@@ -358,21 +361,53 @@ describe('IncidentesService', () => {
       );
     });
 
-    it('combina region y comuna en la misma ubicacion', async () => {
-      await service.findAll({ region: 'La Araucanía', comuna: 'Temuco' });
+    it('filtra por Villarrica incluyendo Pucón', async () => {
+      await service.findAll({ ciudad: 'villarrica' });
 
       expect(prisma.incidente.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             ubicacion: {
               is: {
-                comuna: { equals: 'Temuco', mode: 'insensitive' },
-                region: { equals: 'La Araucanía', mode: 'insensitive' },
+                comuna: {
+                  in: ['Villarrica', 'Pucón'],
+                  mode: 'insensitive',
+                },
               },
             },
           },
         }),
       );
+    });
+
+    it('combina ciudad y comuna valida en la misma ubicacion', async () => {
+      await service.findAll({ ciudad: 'Temuco', comuna: ' Padre Las Casas ' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                comuna: { equals: 'Padre Las Casas', mode: 'insensitive' },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('devuelve una coleccion vacia si la comuna no pertenece a la ciudad', async () => {
+      await expect(
+        service.findAll({ ciudad: 'Villarrica', comuna: 'Temuco' }),
+      ).resolves.toEqual([]);
+      expect(prisma.incidente.findMany).not.toHaveBeenCalled();
+    });
+
+    it('devuelve una coleccion vacia si la ciudad no esta en el catalogo', async () => {
+      await expect(
+        service.findAll({ ciudad: 'Ciudad Inexistente' }),
+      ).resolves.toEqual([]);
+      expect(prisma.incidente.findMany).not.toHaveBeenCalled();
     });
 
     it('combina todos los filtros y usuarioReportaId mediante AND', async () => {
@@ -380,7 +415,7 @@ describe('IncidentesService', () => {
         usuarioReportaId: USUARIO_ID,
         estadoId: ESTADO_ID,
         categoriaId: CATEGORIA_ID,
-        region: 'La Araucanía',
+        ciudad: 'Temuco',
         comuna: 'Temuco',
       });
 
@@ -393,7 +428,6 @@ describe('IncidentesService', () => {
             ubicacion: {
               is: {
                 comuna: { equals: 'Temuco', mode: 'insensitive' },
-                region: { equals: 'La Araucanía', mode: 'insensitive' },
               },
             },
           },
@@ -409,27 +443,50 @@ describe('IncidentesService', () => {
           categoriaId?: string;
           ubicacion?: {
             is?: {
-              comuna?: { equals: string };
-              region?: { equals: string };
+              comuna?: { equals?: string; in?: string[] };
             };
           };
         };
       };
       const incidentes = [
         {
-          id: 'inc-araucania-temuco',
+          id: 'inc-temuco',
           usuarioReportaId: USUARIO_ID,
           estadoId: ESTADO_ID,
           categoriaId: CATEGORIA_ID,
-          ubicacion: { comuna: 'Temuco', region: 'La Araucanía' },
+          ubicacion: { comuna: 'Temuco' },
           evidencias: [],
         },
         {
-          id: 'inc-araucania-angol',
+          id: 'inc-padre-las-casas',
           usuarioReportaId: USUARIO_ID,
           estadoId: ESTADO_ID,
           categoriaId: CATEGORIA_ID,
-          ubicacion: { comuna: 'Angol', region: 'La Araucanía' },
+          ubicacion: { comuna: 'Padre Las Casas' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-villarrica',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Villarrica' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-pucon',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Pucón' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-angol',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Angol' },
           evidencias: [],
         },
         {
@@ -437,7 +494,7 @@ describe('IncidentesService', () => {
           usuarioReportaId: USUARIO_ID,
           estadoId: ESTADO_ID,
           categoriaId: CATEGORIA_ID,
-          ubicacion: { comuna: 'Concepción', region: 'Biobío' },
+          ubicacion: { comuna: 'Concepción' },
           evidencias: [],
         },
       ];
@@ -447,27 +504,32 @@ describe('IncidentesService', () => {
       prisma.incidente.findMany.mockImplementation(
         async ({ where }: FiltroFindMany) =>
           incidentes.filter((incidente) => {
-            const ubicacion = where?.ubicacion?.is;
+            const comunaFiltro = where?.ubicacion?.is?.comuna;
+            const coincideComuna = !comunaFiltro
+              ? true
+              : comunaFiltro.in
+                ? comunaFiltro.in.some(
+                    (comuna) =>
+                      comuna.toLowerCase() ===
+                      incidente.ubicacion.comuna.toLowerCase(),
+                  )
+                : (comunaFiltro.equals ?? '').toLowerCase() ===
+                  incidente.ubicacion.comuna.toLowerCase();
             return (
               (!where?.usuarioReportaId ||
                 incidente.usuarioReportaId === where.usuarioReportaId) &&
               (!where?.estadoId || incidente.estadoId === where.estadoId) &&
               (!where?.categoriaId ||
                 incidente.categoriaId === where.categoriaId) &&
-              (!ubicacion?.comuna ||
-                incidente.ubicacion.comuna.toLowerCase() ===
-                  ubicacion.comuna.equals.toLowerCase()) &&
-              (!ubicacion?.region ||
-                incidente.ubicacion.region.toLowerCase() ===
-                  ubicacion.region.equals.toLowerCase())
+              coincideComuna
             );
           }),
       );
 
-      const resultado = await service.findAll({ region: 'la araucanía' });
+      const resultado = await service.findAll({ ciudad: 'temuco' });
       expect(resultado.map((incidente) => incidente.id)).toEqual([
-        'inc-araucania-temuco',
-        'inc-araucania-angol',
+        'inc-temuco',
+        'inc-padre-las-casas',
       ]);
     });
 
@@ -477,10 +539,10 @@ describe('IncidentesService', () => {
       await expect(
         service.findAll({
           estadoId: ESTADO_ID,
-          region: 'La Araucanía',
           comuna: 'Sin resultados',
         }),
       ).resolves.toEqual([]);
     });
+
   });
 });

@@ -17,19 +17,19 @@ describe('FindIncidentesQueryDto', () => {
       usuarioReportaId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
       estadoId: 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14',
       categoriaId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-      region: '  La Araucanía  ',
-      comuna: '  Temuco  ',
+      ciudad: '  Temuco  ',
+      comuna: '  Padre Las Casas  ',
     });
     expect(errors).toHaveLength(0);
   });
 
-  it('recorta los espacios de region y comuna', async () => {
+  it('recorta los espacios de ciudad y comuna', async () => {
     const dto = plainToInstance(FindIncidentesQueryDto, {
-      region: '  La Araucanía  ',
-      comuna: '  Temuco  ',
+      ciudad: '  Villarrica  ',
+      comuna: '  Pucón  ',
     });
-    expect(dto.region).toBe('La Araucanía');
-    expect(dto.comuna).toBe('Temuco');
+    expect(dto.ciudad).toBe('Villarrica');
+    expect(dto.comuna).toBe('Pucón');
   });
 
   it.each(['usuarioReportaId', 'estadoId', 'categoriaId'])(
@@ -41,7 +41,7 @@ describe('FindIncidentesQueryDto', () => {
     },
   );
 
-  it.each(['region', 'comuna'])(
+  it.each(['ciudad', 'comuna'])(
     'rechaza %s vacio o con solo espacios',
     async (campo) => {
       for (const valor of ['', '   ']) {
@@ -52,7 +52,7 @@ describe('FindIncidentesQueryDto', () => {
     },
   );
 
-  it.each(['region', 'comuna'])('rechaza %s que no es texto', async (campo) => {
+  it.each(['ciudad', 'comuna'])('rechaza %s que no es texto', async (campo) => {
     const errors = await validar({ [campo]: 123 });
     expect(errors).toHaveLength(1);
     expect(errors[0].property).toBe(campo);

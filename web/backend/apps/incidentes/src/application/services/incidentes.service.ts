@@ -6,6 +6,10 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import {
+  comunaPerteneceACiudad,
+  comunasDeCiudad,
+} from '../../domain/ubicacion/ciudades-araucania.constants';
 import { toIncidenteDetalleResponse } from '../mappers/incidente-detalle.mapper';
 import { isUUID } from 'class-validator';
 import { PrismaService } from '../../infrastructure/persistence/prisma/prisma.service';
@@ -50,27 +54,29 @@ export class IncidentesService {
   async findAll(filtros: FindIncidentesQueryDto = {}) {
     const where: Prisma.IncidenteWhereInput = {};
     const comuna = filtros.comuna?.trim();
-    const region = filtros.region?.trim();
+    const ciudad = filtros.ciudad?.trim();
 
-    if (filtros.usuarioReportaId) {
-      where.usuarioReportaId = filtros.usuarioReportaId;
-    }
-    if (filtros.estadoId) {
-      where.estadoId = filtros.estadoId;
-    }
-    if (filtros.categoriaId) {
-      where.categoriaId = filtros.categoriaId;
-    }
+    if (filtros.usuarioReportaId) where.usuarioReportaId = filtros.usuarioReportaId;
+    if (filtros.estadoId) where.estadoId = filtros.estadoId;
+    if (filtros.categoriaId) where.categoriaId = filtros.categoriaId;
 
-    // region (ciudad) y comuna viven en la misma relacion: se combinan en un
-    // unico `is` para que un incidente deba cumplir ambos criterios a la vez.
     const ubicacionWhere: Prisma.UbicacionWhereInput = {};
-    if (comuna) {
+
+    if (ciudad) {
+      const comunas = comunasDeCiudad(ciudad);
+
+      if (comunas.length === 0) return [];
+
+      if (comuna) {
+        if (!comunaPerteneceACiudad(comuna, ciudad)) return [];
+        ubicacionWhere.comuna = { equals: comuna, mode: 'insensitive' };
+      } else {
+        ubicacionWhere.comuna = { in: [...comunas], mode: 'insensitive' };
+      }
+    } else if (comuna) {
       ubicacionWhere.comuna = { equals: comuna, mode: 'insensitive' };
     }
-    if (region) {
-      ubicacionWhere.region = { equals: region, mode: 'insensitive' };
-    }
+
     if (Object.keys(ubicacionWhere).length > 0) {
       where.ubicacion = { is: ubicacionWhere };
     }
