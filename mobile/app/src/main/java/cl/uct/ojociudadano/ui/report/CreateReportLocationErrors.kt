@@ -18,6 +18,9 @@ object CreateReportLocationErrors {
     const val UNKNOWN =
         "No fue posible obtener tu ubicación. Inténtalo nuevamente."
 
+    const val INVALID_COORDINATES =
+        "Las coordenadas seleccionadas no son válidas. Elige otro punto en el mapa."
+
     fun messageFor(result: LocationResult): String? = when (result) {
         is LocationResult.Success -> null
         is LocationResult.Error -> result.message.ifBlank { UNKNOWN }

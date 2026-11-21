@@ -2,7 +2,10 @@ package cl.uct.ojociudadano.ui.report
 
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+import cl.uct.ojociudadano.domain.model.GeoCoordinate
+import cl.uct.ojociudadano.domain.model.LocationResult
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -246,6 +249,63 @@ class CreateReportFormStateTest {
         assertNull(updatedState.activePhotoOperation)
         assertEquals("Se necesita permiso de cámara", updatedState.photoError)
         assertEquals(listOf(samplePhoto), updatedState.evidencePhotos)
+    }
+
+    @Test
+    fun `manual location stores coordinates and clears location errors`() {
+        val state = CreateReportFormState(
+            location = LocationResult.Error("GPS no disponible"),
+            isLoadingLocation = true,
+            locationError = "GPS no disponible"
+        )
+
+        val updatedState = state.updateManualLocation(
+            GeoCoordinate(latitude = -38.7396, longitude = -72.5984)
+        )
+
+        assertEquals(
+            LocationResult.Success(latitude = -38.7396, longitude = -72.5984),
+            updatedState.location
+        )
+        assertEquals(LocationSelectionSource.MANUAL, updatedState.locationSource)
+        assertFalse(updatedState.isLoadingLocation)
+        assertNull(updatedState.locationError)
+        assertTrue(updatedState.hasValidLocation)
+    }
+
+    @Test
+    fun `invalid manual location keeps the previous location and reports the problem`() {
+        val previous = LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
+        val state = CreateReportFormState(
+            location = previous,
+            locationSource = LocationSelectionSource.DEVICE
+        )
+
+        val updatedState = state.updateManualLocation(
+            GeoCoordinate(latitude = 91.0, longitude = -72.5904)
+        )
+
+        assertEquals(previous, updatedState.location)
+        assertEquals(LocationSelectionSource.DEVICE, updatedState.locationSource)
+        assertEquals(
+            CreateReportLocationErrors.INVALID_COORDINATES,
+            updatedState.locationError
+        )
+    }
+
+    @Test
+    fun `device location is identified as such and clears a previous manual source`() {
+        val state = CreateReportFormState(
+            locationSource = LocationSelectionSource.MANUAL,
+            location = LocationResult.Success(-38.7359, -72.5904)
+        )
+
+        val updatedState = state.updateLocation(
+            LocationResult.Success(latitude = -33.4489, longitude = -70.6693)
+        )
+
+        assertEquals(LocationSelectionSource.DEVICE, updatedState.locationSource)
+        assertNull(updatedState.locationError)
     }
 }
 
