@@ -127,11 +127,47 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
     );
   });
 
+  it('filtra por ciudad usando las comunas de su agrupación', async () => {
+    await getIncidentes({ ciudad: '  temuco  ' }).expect(200);
+    expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          ubicacion: {
+            is: {
+              comuna: {
+                in: ['Temuco', 'Padre Las Casas'],
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+      }),
+    );
+  });
+
+  it('devuelve [] sin consultar cuando la ciudad no esta en el catalogo', async () => {
+    const respuesta = await getIncidentes({ ciudad: 'Ciudad Inexistente' }).expect(
+      200,
+    );
+    expect(respuesta.body).toEqual([]);
+    expect(prisma.incidente.findMany).not.toHaveBeenCalled();
+  });
+
+  it('devuelve [] sin consultar cuando ciudad y comuna son incompatibles', async () => {
+    const respuesta = await getIncidentes({
+      ciudad: 'Villarrica',
+      comuna: 'Temuco',
+    }).expect(200);
+    expect(respuesta.body).toEqual([]);
+    expect(prisma.incidente.findMany).not.toHaveBeenCalled();
+  });
+
   it('combina filtros y usuarioReportaId mediante AND', async () => {
     await getIncidentes({
       usuarioReportaId: USUARIO_ID,
       estadoId: ESTADO_ID,
       categoriaId: CATEGORIA_ID,
+      ciudad: 'Temuco',
       comuna: 'Temuco',
     }).expect(200);
 
@@ -164,6 +200,7 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
     { estadoId: 'no-es-uuid' },
     { categoriaId: 'no-es-uuid' },
     { usuarioReportaId: 'no-es-uuid' },
+    { ciudad: '   ' },
     { comuna: '   ' },
   ])(
     'responde 400 si un filtro tiene formato invalido: %o',

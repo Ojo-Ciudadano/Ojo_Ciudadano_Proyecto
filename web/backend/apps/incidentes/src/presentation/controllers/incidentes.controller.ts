@@ -48,7 +48,7 @@ export class IncidentesController {
   @ApiOperation({
     summary: 'Listar incidentes con filtros opcionales',
     description:
-      'Retorna los incidentes ordenados por fechaCreacion descendente. Permite filtrar combinadamente (AND) por usuarioReportaId, estadoId, categoriaId y comuna (#119). Incluye la colección de evidencias disponibles (#106). Acceso permitido para roles ADMIN y CIUDADANO.',
+      'Retorna los incidentes ordenados por fechaCreacion descendente. Permite filtrar combinadamente (AND) por usuarioReportaId, estadoId, categoriaId, ciudad (resuelta contra el catálogo de comunas de La Araucanía) y comuna (#119, #314, #315). Incluye la colección de evidencias disponibles (#106). Acceso permitido para roles ADMIN y CIUDADANO.',
   })
   @ApiResponse({
     status: 200,
@@ -57,7 +57,7 @@ export class IncidentesController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Parámetros de filtro inválidos (UUID mal formado o comuna vacía).',
+    description: 'Parámetros de filtro inválidos (UUID mal formado, ciudad/comuna vacía).',
   })
   @ApiResponse({
     status: 401,

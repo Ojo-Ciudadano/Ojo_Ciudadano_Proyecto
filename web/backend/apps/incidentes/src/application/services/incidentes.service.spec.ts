@@ -342,11 +342,80 @@ describe('IncidentesService', () => {
       );
     });
 
+    it('filtra por ciudad usando las comunas de su agrupación', async () => {
+      await service.findAll({ ciudad: '  temuco  ' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                comuna: {
+                  in: ['Temuco', 'Padre Las Casas'],
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('filtra por Villarrica incluyendo Pucón', async () => {
+      await service.findAll({ ciudad: 'villarrica' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                comuna: {
+                  in: ['Villarrica', 'Pucón'],
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('combina ciudad y comuna valida en la misma ubicacion', async () => {
+      await service.findAll({ ciudad: 'Temuco', comuna: ' Padre Las Casas ' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                comuna: { equals: 'Padre Las Casas', mode: 'insensitive' },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('devuelve una coleccion vacia si la comuna no pertenece a la ciudad', async () => {
+      await expect(
+        service.findAll({ ciudad: 'Villarrica', comuna: 'Temuco' }),
+      ).resolves.toEqual([]);
+      expect(prisma.incidente.findMany).not.toHaveBeenCalled();
+    });
+
+    it('devuelve una coleccion vacia si la ciudad no esta en el catalogo', async () => {
+      await expect(
+        service.findAll({ ciudad: 'Ciudad Inexistente' }),
+      ).resolves.toEqual([]);
+      expect(prisma.incidente.findMany).not.toHaveBeenCalled();
+    });
+
     it('combina todos los filtros y usuarioReportaId mediante AND', async () => {
       await service.findAll({
         usuarioReportaId: USUARIO_ID,
         estadoId: ESTADO_ID,
         categoriaId: CATEGORIA_ID,
+        ciudad: 'Temuco',
         comuna: 'Temuco',
       });
 
@@ -366,12 +435,114 @@ describe('IncidentesService', () => {
       );
     });
 
+    it('devuelve unicamente los incidentes de la ciudad solicitada', async () => {
+      type FiltroFindMany = {
+        where?: {
+          usuarioReportaId?: string;
+          estadoId?: string;
+          categoriaId?: string;
+          ubicacion?: {
+            is?: {
+              comuna?: { equals?: string; in?: string[] };
+            };
+          };
+        };
+      };
+      const incidentes = [
+        {
+          id: 'inc-temuco',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Temuco' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-padre-las-casas',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Padre Las Casas' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-villarrica',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Villarrica' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-pucon',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Pucón' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-angol',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Angol' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-biobio',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Concepción' },
+          evidencias: [],
+        },
+      ];
+
+      // Simula el filtro de Prisma sobre datos en memoria para comprobar el
+      // resultado real, ademas del `where` construido en las pruebas anteriores.
+      prisma.incidente.findMany.mockImplementation(
+        async ({ where }: FiltroFindMany) =>
+          incidentes.filter((incidente) => {
+            const comunaFiltro = where?.ubicacion?.is?.comuna;
+            const coincideComuna = !comunaFiltro
+              ? true
+              : comunaFiltro.in
+                ? comunaFiltro.in.some(
+                    (comuna) =>
+                      comuna.toLowerCase() ===
+                      incidente.ubicacion.comuna.toLowerCase(),
+                  )
+                : (comunaFiltro.equals ?? '').toLowerCase() ===
+                  incidente.ubicacion.comuna.toLowerCase();
+            return (
+              (!where?.usuarioReportaId ||
+                incidente.usuarioReportaId === where.usuarioReportaId) &&
+              (!where?.estadoId || incidente.estadoId === where.estadoId) &&
+              (!where?.categoriaId ||
+                incidente.categoriaId === where.categoriaId) &&
+              coincideComuna
+            );
+          }),
+      );
+
+      const resultado = await service.findAll({ ciudad: 'temuco' });
+      expect(resultado.map((incidente) => incidente.id)).toEqual([
+        'inc-temuco',
+        'inc-padre-las-casas',
+      ]);
+    });
+
     it('devuelve una coleccion vacia cuando no hay coincidencias', async () => {
       prisma.incidente.findMany.mockResolvedValue([]);
 
       await expect(
-        service.findAll({ estadoId: ESTADO_ID, comuna: 'Sin resultados' }),
+        service.findAll({
+          estadoId: ESTADO_ID,
+          comuna: 'Sin resultados',
+        }),
       ).resolves.toEqual([]);
     });
+
   });
 });

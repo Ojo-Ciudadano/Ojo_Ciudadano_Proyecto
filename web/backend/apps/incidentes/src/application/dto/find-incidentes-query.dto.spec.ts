@@ -17,16 +17,19 @@ describe('FindIncidentesQueryDto', () => {
       usuarioReportaId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
       estadoId: 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14',
       categoriaId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-      comuna: '  Temuco  ',
+      ciudad: '  Temuco  ',
+      comuna: '  Padre Las Casas  ',
     });
     expect(errors).toHaveLength(0);
   });
 
-  it('recorta los espacios de comuna', async () => {
+  it('recorta los espacios de ciudad y comuna', async () => {
     const dto = plainToInstance(FindIncidentesQueryDto, {
-      comuna: '  Temuco  ',
+      ciudad: '  Villarrica  ',
+      comuna: '  Pucón  ',
     });
-    expect(dto.comuna).toBe('Temuco');
+    expect(dto.ciudad).toBe('Villarrica');
+    expect(dto.comuna).toBe('Pucón');
   });
 
   it.each(['usuarioReportaId', 'estadoId', 'categoriaId'])(
@@ -38,15 +41,20 @@ describe('FindIncidentesQueryDto', () => {
     },
   );
 
-  it.each(['', '   '])('rechaza comuna vacia (%p)', async (comuna) => {
-    const errors = await validar({ comuna });
-    expect(errors).toHaveLength(1);
-    expect(errors[0].property).toBe('comuna');
-  });
+  it.each(['ciudad', 'comuna'])(
+    'rechaza %s vacio o con solo espacios',
+    async (campo) => {
+      for (const valor of ['', '   ']) {
+        const errors = await validar({ [campo]: valor });
+        expect(errors).toHaveLength(1);
+        expect(errors[0].property).toBe(campo);
+      }
+    },
+  );
 
-  it('rechaza comuna que no es texto', async () => {
-    const errors = await validar({ comuna: 123 });
+  it.each(['ciudad', 'comuna'])('rechaza %s que no es texto', async (campo) => {
+    const errors = await validar({ [campo]: 123 });
     expect(errors).toHaveLength(1);
-    expect(errors[0].property).toBe('comuna');
+    expect(errors[0].property).toBe(campo);
   });
 });
