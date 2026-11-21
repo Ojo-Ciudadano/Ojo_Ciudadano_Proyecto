@@ -50,6 +50,7 @@ export class IncidentesService {
   async findAll(filtros: FindIncidentesQueryDto = {}) {
     const where: Prisma.IncidenteWhereInput = {};
     const comuna = filtros.comuna?.trim();
+    const region = filtros.region?.trim();
 
     if (filtros.usuarioReportaId) {
       where.usuarioReportaId = filtros.usuarioReportaId;
@@ -60,12 +61,18 @@ export class IncidentesService {
     if (filtros.categoriaId) {
       where.categoriaId = filtros.categoriaId;
     }
+
+    // region (ciudad) y comuna viven en la misma relacion: se combinan en un
+    // unico `is` para que un incidente deba cumplir ambos criterios a la vez.
+    const ubicacionWhere: Prisma.UbicacionWhereInput = {};
     if (comuna) {
-      where.ubicacion = {
-        is: {
-          comuna: { equals: comuna, mode: 'insensitive' },
-        },
-      };
+      ubicacionWhere.comuna = { equals: comuna, mode: 'insensitive' };
+    }
+    if (region) {
+      ubicacionWhere.region = { equals: region, mode: 'insensitive' };
+    }
+    if (Object.keys(ubicacionWhere).length > 0) {
+      where.ubicacion = { is: ubicacionWhere };
     }
 
     const incidentes = await this.prisma.incidente.findMany({

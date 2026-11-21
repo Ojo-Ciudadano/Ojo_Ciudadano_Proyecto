@@ -127,11 +127,27 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
     );
   });
 
+  it('filtra por region (ciudad) sin distinguir mayusculas', async () => {
+    await getIncidentes({ region: '  la araucanía  ' }).expect(200);
+    expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          ubicacion: {
+            is: {
+              region: { equals: 'la araucanía', mode: 'insensitive' },
+            },
+          },
+        },
+      }),
+    );
+  });
+
   it('combina filtros y usuarioReportaId mediante AND', async () => {
     await getIncidentes({
       usuarioReportaId: USUARIO_ID,
       estadoId: ESTADO_ID,
       categoriaId: CATEGORIA_ID,
+      region: 'La Araucanía',
       comuna: 'Temuco',
     }).expect(200);
 
@@ -144,6 +160,7 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
           ubicacion: {
             is: {
               comuna: { equals: 'Temuco', mode: 'insensitive' },
+              region: { equals: 'La Araucanía', mode: 'insensitive' },
             },
           },
         },
@@ -164,6 +181,7 @@ describe('IncidentesController - filtros de consulta (integracion)', () => {
     { estadoId: 'no-es-uuid' },
     { categoriaId: 'no-es-uuid' },
     { usuarioReportaId: 'no-es-uuid' },
+    { region: '   ' },
     { comuna: '   ' },
   ])(
     'responde 400 si un filtro tiene formato invalido: %o',

@@ -342,11 +342,45 @@ describe('IncidentesService', () => {
       );
     });
 
+    it('filtra por region (ciudad) con coincidencia exacta sin distinguir mayusculas', async () => {
+      await service.findAll({ region: '  la araucanía  ' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                region: { equals: 'la araucanía', mode: 'insensitive' },
+              },
+            },
+          },
+        }),
+      );
+    });
+
+    it('combina region y comuna en la misma ubicacion', async () => {
+      await service.findAll({ region: 'La Araucanía', comuna: 'Temuco' });
+
+      expect(prisma.incidente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            ubicacion: {
+              is: {
+                comuna: { equals: 'Temuco', mode: 'insensitive' },
+                region: { equals: 'La Araucanía', mode: 'insensitive' },
+              },
+            },
+          },
+        }),
+      );
+    });
+
     it('combina todos los filtros y usuarioReportaId mediante AND', async () => {
       await service.findAll({
         usuarioReportaId: USUARIO_ID,
         estadoId: ESTADO_ID,
         categoriaId: CATEGORIA_ID,
+        region: 'La Araucanía',
         comuna: 'Temuco',
       });
 
@@ -359,6 +393,7 @@ describe('IncidentesService', () => {
             ubicacion: {
               is: {
                 comuna: { equals: 'Temuco', mode: 'insensitive' },
+                region: { equals: 'La Araucanía', mode: 'insensitive' },
               },
             },
           },
@@ -366,11 +401,85 @@ describe('IncidentesService', () => {
       );
     });
 
+    it('devuelve unicamente los incidentes de la ciudad solicitada', async () => {
+      type FiltroFindMany = {
+        where?: {
+          usuarioReportaId?: string;
+          estadoId?: string;
+          categoriaId?: string;
+          ubicacion?: {
+            is?: {
+              comuna?: { equals: string };
+              region?: { equals: string };
+            };
+          };
+        };
+      };
+      const incidentes = [
+        {
+          id: 'inc-araucania-temuco',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Temuco', region: 'La Araucanía' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-araucania-angol',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Angol', region: 'La Araucanía' },
+          evidencias: [],
+        },
+        {
+          id: 'inc-biobio',
+          usuarioReportaId: USUARIO_ID,
+          estadoId: ESTADO_ID,
+          categoriaId: CATEGORIA_ID,
+          ubicacion: { comuna: 'Concepción', region: 'Biobío' },
+          evidencias: [],
+        },
+      ];
+
+      // Simula el filtro de Prisma sobre datos en memoria para comprobar el
+      // resultado real, ademas del `where` construido en las pruebas anteriores.
+      prisma.incidente.findMany.mockImplementation(
+        async ({ where }: FiltroFindMany) =>
+          incidentes.filter((incidente) => {
+            const ubicacion = where?.ubicacion?.is;
+            return (
+              (!where?.usuarioReportaId ||
+                incidente.usuarioReportaId === where.usuarioReportaId) &&
+              (!where?.estadoId || incidente.estadoId === where.estadoId) &&
+              (!where?.categoriaId ||
+                incidente.categoriaId === where.categoriaId) &&
+              (!ubicacion?.comuna ||
+                incidente.ubicacion.comuna.toLowerCase() ===
+                  ubicacion.comuna.equals.toLowerCase()) &&
+              (!ubicacion?.region ||
+                incidente.ubicacion.region.toLowerCase() ===
+                  ubicacion.region.equals.toLowerCase())
+            );
+          }),
+      );
+
+      const resultado = await service.findAll({ region: 'la araucanía' });
+      expect(resultado.map((incidente) => incidente.id)).toEqual([
+        'inc-araucania-temuco',
+        'inc-araucania-angol',
+      ]);
+    });
+
     it('devuelve una coleccion vacia cuando no hay coincidencias', async () => {
       prisma.incidente.findMany.mockResolvedValue([]);
 
       await expect(
-        service.findAll({ estadoId: ESTADO_ID, comuna: 'Sin resultados' }),
+        service.findAll({
+          estadoId: ESTADO_ID,
+          region: 'La Araucanía',
+          comuna: 'Sin resultados',
+        }),
       ).resolves.toEqual([]);
     });
   });

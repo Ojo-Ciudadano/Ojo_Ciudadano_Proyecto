@@ -32,6 +32,17 @@ export class FindIncidentesQueryDto {
 
   @ApiPropertyOptional({
     description:
+      'Filtrar por nombre exacto de la región/ciudad de la ubicación (insensible a mayúsculas/minúsculas y espacios extremos). Ej.: La Araucanía',
+    example: 'La Araucanía',
+  })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'La region debe ser un texto' })
+  @IsNotEmpty({ message: 'La region no puede estar vacia' })
+  region?: string;
+
+  @ApiPropertyOptional({
+    description:
       'Filtrar por nombre exacto de comuna (insensible a mayúsculas/minúsculas y espacios extremos)',
     example: 'Temuco',
   })
