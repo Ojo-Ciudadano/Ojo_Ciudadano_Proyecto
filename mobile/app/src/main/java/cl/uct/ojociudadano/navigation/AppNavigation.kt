@@ -194,10 +194,13 @@ fun AppNavigation(
                 AdminIncidentDetailScreen(
                     id = entry.arguments?.getString("id"),
                     onBack = {
-                        if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN_INCIDENTS) &&
-                            !navController.popBackStack(AppRoutes.ADMIN_INCIDENTS, inclusive = false)
+                        // Regresa a la pantalla que abrió el detalle (por ejemplo,
+                        // notificaciones) y solo cae al listado si el detalle es la
+                        // entrada raíz del grafo.
+                        if (!navController.navigateUp() &&
+                            RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN_INCIDENTS)
                         ) {
-                            navigate(AppRoutes.ADMIN_INCIDENTS)
+                            navController.navigate(AppRoutes.ADMIN_INCIDENTS) { launchSingleTop = true }
                         }
                     }
                 )
@@ -250,7 +253,13 @@ fun AppNavigation(
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.NOTIFICATIONS) {
-                NotificationsScreen(onBack = navController::navigateUp)
+                NotificationsScreen(
+                    onBack = navController::navigateUp,
+                    onOpenIncident = { incidentId ->
+                        // El rol decide entre el detalle ciudadano y el administrativo.
+                        notificationIncidentRoute(sessionManager.state.value, incidentId)?.let(::navigate)
+                    }
+                )
             }
             protectedComposable(sessionManager, navController, AppRoutes.MAP) {
                 MapScreen(onIncidentDetail = ::navigateToIncidentDetail)

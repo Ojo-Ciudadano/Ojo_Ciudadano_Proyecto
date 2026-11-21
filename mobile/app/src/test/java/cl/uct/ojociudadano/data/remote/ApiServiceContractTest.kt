@@ -127,4 +127,16 @@ class ApiServiceContractTest {
         )
         assertTrue(method.parameterAnnotations[0].any { it is Tag })
     }
+
+    @Test
+    fun `markNotificationAsRead uses the individual read route with path and session tag`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "markNotificationAsRead" }
+
+        val patch = requireNotNull(method.getAnnotation(PATCH::class.java))
+
+        assertEquals("api/v1/notificaciones/{id}/leida", patch.value)
+        assertTrue(method.parameterAnnotations[0].any { it is Path })
+        assertTrue(method.parameterAnnotations[1].any { it is Tag })
+    }
 }

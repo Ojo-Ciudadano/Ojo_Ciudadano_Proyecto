@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.notifications
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +46,8 @@ import cl.uct.ojociudadano.ui.reports.incidentDate
 @Composable
 fun NotificationsScreen(
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onOpenIncident: (String) -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: NotificationsViewModel = viewModel(factory = remember(application) {
@@ -66,6 +70,13 @@ fun NotificationsScreen(
         notifications = notifications,
         onBack = onBack,
         onRetry = model::retry,
+        onNotificationClick = { notification ->
+            if (notification.incidentId.isNotBlank()) {
+                // El marcado es best-effort; la navegación no espera al backend.
+                model.openNotification(notification)
+                onOpenIncident(notification.incidentId)
+            }
+        },
         modifier = modifier
     )
 }
@@ -76,6 +87,7 @@ fun NotificationsContent(
     notifications: List<Notification>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onNotificationClick: (Notification) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier.fillMaxSize()) {
@@ -114,7 +126,14 @@ fun NotificationsContent(
                     }
                 }
                 NotificationsUiState.Success -> items(notifications, key = { it.id }) { notification ->
-                    NotificationCard(notification)
+                    NotificationCard(
+                        notification = notification,
+                        onClick = if (notification.incidentId.isNotBlank()) {
+                            { onNotificationClick(notification) }
+                        } else {
+                            null
+                        }
+                    )
                 }
             }
         }
@@ -134,9 +153,21 @@ private fun NotificationsLoading() {
 }
 
 @Composable
-private fun NotificationCard(notification: Notification) {
+private fun NotificationCard(
+    notification: Notification,
+    onClick: (() -> Unit)?
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("notification_${notification.id}")
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -169,8 +200,8 @@ private fun NotificationCard(notification: Notification) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            // La referencia se conserva solo si el backend la entregó; navegar al
-            // incidente queda fuera del alcance de esta issue.
+            // La referencia se conserva solo si el backend la entregó; la tarjeta
+            // solo es clicable en ese caso.
             if (notification.incidentId.isNotBlank()) {
                 Text(
                     "Incidente: ${notification.incidentId}",

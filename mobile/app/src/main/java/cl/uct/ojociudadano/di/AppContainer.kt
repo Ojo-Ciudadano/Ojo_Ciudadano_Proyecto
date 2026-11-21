@@ -1,12 +1,15 @@
 package cl.uct.ojociudadano.di
 
 import android.content.Context
+import androidx.lifecycle.ProcessLifecycleOwner
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
 import cl.uct.ojociudadano.data.location.DefaultLocationClient
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
+import cl.uct.ojociudadano.data.notifications.AppForegroundState
+import cl.uct.ojociudadano.data.notifications.NotificationSyncScheduler
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.AuthRepository
@@ -26,6 +29,9 @@ import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.domain.repository.LocationClient
 import coil3.ImageLoader
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(
     context: Context,
@@ -48,6 +54,14 @@ class AppContainer(
 
     val sessionManager: SessionManager by lazy {
         DefaultSessionManager(sessionStorage)
+    }
+
+    /**
+     * Alcance del proceso para trabajo que debe sobrevivir a una pantalla
+     * (estado reactivo de notificaciones y su ciclo de sincronización).
+     */
+    val applicationScope: CoroutineScope by lazy {
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     val evidencePhotoStore: EvidencePhotoFileStore by lazy {
@@ -84,7 +98,20 @@ class AppContainer(
     }
 
     val notificationRepository: NotificationRepository by lazy {
-        RemoteNotificationRepository(apiService, sessionManager)
+        RemoteNotificationRepository(apiService, sessionManager, applicationScope)
+    }
+
+    val appForegroundState: AppForegroundState by lazy {
+        AppForegroundState(ProcessLifecycleOwner.get().lifecycle)
+    }
+
+    val notificationSyncScheduler: NotificationSyncScheduler by lazy {
+        NotificationSyncScheduler(
+            repository = notificationRepository,
+            sessionManager = sessionManager,
+            foreground = appForegroundState.isForeground,
+            scope = applicationScope
+        )
     }
 
     val profileRepository: ProfileRepository by lazy {

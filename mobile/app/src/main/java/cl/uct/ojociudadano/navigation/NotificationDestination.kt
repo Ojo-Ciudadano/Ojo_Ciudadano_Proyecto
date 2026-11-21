@@ -1,0 +1,22 @@
+package cl.uct.ojociudadano.navigation
+
+import cl.uct.ojociudadano.data.session.SessionState
+
+/**
+ * Resuelve a qué detalle navegar desde una notificación.
+ *
+ * Devuelve `null` cuando la notificación no trae un incidente utilizable, para
+ * que la tarjeta no ofrezca una acción que terminaría en una ruta inválida.
+ * El destino respeta el rol de la sesión y reutiliza las pantallas existentes.
+ */
+fun notificationIncidentRoute(state: SessionState, incidentId: String?): String? {
+    val normalized = incidentId
+        ?.trim()
+        ?.takeIf { id -> id.isNotEmpty() && id.none { it == '/' || it == '?' || it == '#' } }
+        ?: return null
+
+    return when (resolveInitialDestination(state)) {
+        InitialDestination.ADMINISTRATOR -> "admin/incidents/$normalized"
+        else -> "incident/$normalized"
+    }
+}
