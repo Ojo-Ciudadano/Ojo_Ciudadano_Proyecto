@@ -4,6 +4,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.model.ReverseGeocodedAddress
 
 /**
  * Cantidad máxima de fotografías que el formulario acepta como evidencia.
@@ -51,6 +52,8 @@ data class CreateReportFormState(
     val locationSource: LocationSelectionSource = LocationSelectionSource.NONE,
     val isLoadingLocation: Boolean = false,
     val locationError: String? = null,
+    val isAutocompletingAddress: Boolean = false,
+    val addressAutofillError: String? = null,
     val titleError: String? = null,
     val descriptionError: String? = null,
     val categoryError: String? = null,
@@ -83,10 +86,81 @@ data class CreateReportFormState(
         copy(selectedCategory = category, categoryError = null)
 
     /**
+     * Conserva los datos de ubicación escritos por el usuario.
+     *
+     * Cualquier edición manual descarta el mensaje de autocompletado para que
+     * la ayuda no permanezca visible sobre datos que el usuario ya corrigió.
+     */
+    fun updateLocationDetails(
+        referenceAddress: String,
+        commune: String,
+        region: String,
+        sector: String
+    ): CreateReportFormState = copy(
+        referenceAddress = referenceAddress,
+        commune = commune,
+        region = region,
+        sector = sector,
+        locationDetailsError = null,
+        addressAutofillError = null
+    )
+
+    /**
+     * Marca el inicio de una consulta de geocodificación inversa.
+     */
+    fun startAddressAutofill(): CreateReportFormState =
+        copy(isAutocompletingAddress = true, addressAutofillError = null)
+
+    /**
+     * Completa solo los campos que siguen vacíos.
+     *
+     * Un valor escrito manualmente siempre tiene prioridad sobre la sugerencia
+     * del geocodificador, incluso si la respuesta llega después de la edición.
+     * [sector] no se completa porque el proveedor no entrega un equivalente
+     * confiable y el usuario debe precisarlo.
+     */
+    fun applyReverseGeocodedAddress(address: ReverseGeocodedAddress): CreateReportFormState {
+        if (!address.hasAnyValue) {
+            return finishAddressAutofill()
+        }
+
+        return copy(
+            referenceAddress = referenceAddress.ifBlank {
+                address.referenceAddress.orEmpty().trim()
+            },
+            commune = commune.ifBlank { address.commune.orEmpty().trim() },
+            region = region.ifBlank { address.region.orEmpty().trim() },
+            isAutocompletingAddress = false,
+            addressAutofillError = null
+        )
+    }
+
+    /**
+     * Finaliza la consulta sin datos sin modificar los campos del formulario.
+     */
+    fun finishAddressAutofill(): CreateReportFormState =
+        copy(isAutocompletingAddress = false)
+
+    /**
+     * Informa un fallo de autocompletado sin convertirlo en un error de
+     * validación: el usuario puede escribir los datos manualmente y enviar.
+     */
+    fun failAddressAutofill(message: String): CreateReportFormState =
+        copy(
+            isAutocompletingAddress = false,
+            addressAutofillError = message
+        )
+
+    /**
      * Marca el inicio de una consulta de ubicación y limpia el error previo.
      */
     fun startLocationRequest(): CreateReportFormState =
-        copy(isLoadingLocation = true, locationError = null)
+        copy(
+            isLoadingLocation = true,
+            locationError = null,
+            isAutocompletingAddress = false,
+            addressAutofillError = null
+        )
 
     /**
      * Conserva el resultado del GPS en el formulario hasta que el incidente se
@@ -102,7 +176,8 @@ data class CreateReportFormState(
                 LocationSelectionSource.NONE
             },
             isLoadingLocation = false,
-            locationError = CreateReportLocationErrors.messageFor(location)
+            locationError = CreateReportLocationErrors.messageFor(location),
+            isAutocompletingAddress = false
         )
 
     /**
