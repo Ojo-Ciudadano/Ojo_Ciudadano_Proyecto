@@ -99,4 +99,33 @@ describe('ProxyController', () => {
 
     expect(service.forward).toHaveBeenCalledWith(req, res);
   });
+
+  // Issue #327: marcar notificaciones como leídas
+  it('handleMarcarTodasLeidasProxy debe delegar en proxyService.forward', async () => {
+    const req = {
+      method: 'PATCH',
+      path: '/api/v1/notificaciones/leidas',
+      headers: { authorization: 'Bearer token-de-prueba' },
+    } as Request;
+    const res = {} as Response;
+
+    await controller.handleMarcarTodasLeidasProxy(req, res);
+
+    expect(service.forward).toHaveBeenCalledWith(req, res);
+    expect(service.forward).toHaveBeenCalledTimes(1);
+  });
+
+  it('handleMarcarLeidaProxy debe delegar en proxyService.forward', async () => {
+    const req = {
+      method: 'PATCH',
+      path: '/api/v1/notificaciones/30000000-0000-4000-8000-000000000001/leida',
+      headers: { authorization: 'Bearer token-de-prueba' },
+    } as Request;
+    const res = {} as Response;
+
+    await controller.handleMarcarLeidaProxy(req, res);
+
+    expect(service.forward).toHaveBeenCalledWith(req, res);
+    expect(service.forward).toHaveBeenCalledTimes(1);
+  });
 });

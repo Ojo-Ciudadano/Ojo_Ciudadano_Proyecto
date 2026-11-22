@@ -4,6 +4,8 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -12,6 +14,7 @@ import {
   ApiBearerAuth,
   ApiExcludeEndpoint,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -23,6 +26,7 @@ import {
   CreateNotificacionDto,
   NotificacionResponseDto,
 } from '../../application/dto/create-notificacion.dto';
+import { MarcarTodasLeidasResponseDto } from '../../application/dto/marcar-todas-leidas-response.dto';
 import {
   JwtAuthGuard,
   UsuarioAutenticado,
@@ -92,5 +96,37 @@ export class NotificacionesController {
   })
   create(@Body() dto: CreateNotificacionDto) {
     return this.notificacionesService.create(dto);
+  }
+
+  @Patch('notificaciones/leidas')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Marcar todas las notificaciones pendientes como leídas',
+  })
+  @ApiResponse({ status: 200, type: MarcarTodasLeidasResponseDto })
+  @ApiResponse({ status: 400, description: 'UUID inválido' })
+  @ApiResponse({ status: 401, description: 'Token ausente o inválido' })
+  marcarTodas(@Req() req: Request & { user?: UsuarioAutenticado }) {
+    return this.notificacionesService.marcarTodasLeidas(req.user!.sub);
+  }
+
+  @Patch('notificaciones/:id/leida')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Marcar como leída una notificación propia' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, type: NotificacionResponseDto })
+  @ApiResponse({ status: 400, description: 'UUID inválido' })
+  @ApiResponse({ status: 401, description: 'Token ausente o inválido' })
+  @ApiResponse({
+    status: 403,
+    description: 'La notificación no pertenece al usuario',
+  })
+  marcarLeida(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: UsuarioAutenticado },
+  ) {
+    return this.notificacionesService.marcarLeida(id, req.user!.sub);
   }
 }
