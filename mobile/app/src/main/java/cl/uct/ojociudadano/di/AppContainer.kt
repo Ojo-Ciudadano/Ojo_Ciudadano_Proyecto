@@ -4,6 +4,7 @@ import android.content.Context
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
+import cl.uct.ojociudadano.data.location.AndroidGeocoderReverseGeocodingClient
 import cl.uct.ojociudadano.data.location.DefaultLocationClient
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
@@ -24,6 +25,7 @@ import cl.uct.ojociudadano.data.session.EncryptedSharedPreferencesSessionStorage
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.domain.repository.LocationClient
+import cl.uct.ojociudadano.domain.repository.ReverseGeocodingClient
 import coil3.ImageLoader
 import com.google.android.gms.location.LocationServices
 
@@ -65,6 +67,14 @@ class AppContainer(
                 context.applicationContext
             )
         )
+    }
+
+    /**
+     * Servicio desacoplado que completa comuna, región y dirección referencial
+     * a partir de las coordenadas obtenidas por GPS o fijadas manualmente.
+     */
+    val reverseGeocodingClient: ReverseGeocodingClient by lazy {
+        AndroidGeocoderReverseGeocodingClient(context.applicationContext)
     }
 
     val apiService: ApiService by lazy {
