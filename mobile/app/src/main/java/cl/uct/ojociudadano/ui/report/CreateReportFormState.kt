@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.ui.report
 
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
 
 /**
@@ -23,6 +24,18 @@ enum class PhotoOperation {
     GALLERY
 }
 
+/**
+ * Origen de la coordenada conservada por el formulario.
+ *
+ * Permite distinguir la lectura del dispositivo de una selección manual y
+ * evita que una respuesta tardía del GPS reemplace la elección del usuario.
+ */
+enum class LocationSelectionSource {
+    NONE,
+    DEVICE,
+    MANUAL
+}
+
 data class CreateReportFormState(
     val referenceAddress: String = "",
     val commune: String = "",
@@ -35,6 +48,7 @@ data class CreateReportFormState(
     val evidencePhotos: List<IncidentPhotoEvidence> = emptyList(),
     val activePhotoOperation: PhotoOperation? = null,
     val location: LocationResult = LocationResult.NotAvailable,
+    val locationSource: LocationSelectionSource = LocationSelectionSource.NONE,
     val isLoadingLocation: Boolean = false,
     val locationError: String? = null,
     val titleError: String? = null,
@@ -82,9 +96,40 @@ data class CreateReportFormState(
     fun updateLocation(location: LocationResult): CreateReportFormState =
         copy(
             location = location,
+            locationSource = if (location is LocationResult.Success) {
+                LocationSelectionSource.DEVICE
+            } else {
+                LocationSelectionSource.NONE
+            },
             isLoadingLocation = false,
             locationError = CreateReportLocationErrors.messageFor(location)
         )
+
+    /**
+     * Conserva una coordenada confirmada manualmente en el mapa.
+     *
+     * La selección manual reemplaza a la última lectura del GPS y limpia el
+     * error de ubicación. Si la coordenada no cumple los rangos geográficos, la
+     * ubicación anterior se mantiene y se expone un mensaje accionable.
+     */
+    fun updateManualLocation(coordinate: GeoCoordinate): CreateReportFormState {
+        if (!coordinate.isValid) {
+            return copy(
+                isLoadingLocation = false,
+                locationError = CreateReportLocationErrors.INVALID_COORDINATES
+            )
+        }
+
+        return copy(
+            location = LocationResult.Success(
+                latitude = coordinate.latitude,
+                longitude = coordinate.longitude
+            ),
+            locationSource = LocationSelectionSource.MANUAL,
+            isLoadingLocation = false,
+            locationError = null
+        )
+    }
 
     /**
      * Marca el inicio de una operación de fotografía y limpia el error previo.
