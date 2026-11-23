@@ -5,6 +5,8 @@ import cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.data.session.SessionRoles
+import cl.uct.ojociudadano.data.mapper.toProfile
+import cl.uct.ojociudadano.data.model.UserProfile
 import cl.uct.ojociudadano.data.mapper.toCandidatePage
 import cl.uct.ojociudadano.data.mapper.toDomain
 import cl.uct.ojociudadano.data.mapper.toRequestDto
@@ -35,7 +37,7 @@ import java.io.File
 class RemoteIncidentRepository(
     private val apiService: ApiService,
     private val sessionManager: SessionManager
-) : IncidentRepository {
+) : IncidentRepository, UserRepository {
 
     override suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident {
         require(IncidentStatusTransitions.isCanonical(status))
@@ -177,6 +179,19 @@ class RemoteIncidentRepository(
             apiService.updatePriority(incidentId, request, identity.token)
         }
         return response.toDomain()
+    }
+
+    override suspend fun getUsers(page: Int, limit: Int, role: UserRole?): Paginated<UserProfile> {
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
+            apiService.getUsuarios(page, limit, role?.backendValue, identity.token)
+        }
+        return Paginated(
+            items = response.data.map { it.toProfile() },
+            page = response.meta.page,
+            limit = response.meta.limit,
+            total = response.meta.total,
+            totalPages = response.meta.totalPages
+        )
     }
 
     override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {

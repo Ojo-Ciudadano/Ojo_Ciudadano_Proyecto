@@ -10,6 +10,7 @@ object RoleAccessPolicy {
         AppRoutes.LOGIN to setOf(InitialDestination.AUTHENTICATION),
         AppRoutes.REGISTER to setOf(InitialDestination.AUTHENTICATION),
         AppRoutes.ADMIN to setOf(InitialDestination.ADMINISTRATOR),
+        AppRoutes.ADMIN_USERS to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ADMIN_INCIDENTS to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ADMIN_INCIDENT_DETAIL to setOf(InitialDestination.ADMINISTRATOR),
         AppRoutes.ADMIN_COMING_SOON to setOf(InitialDestination.ADMINISTRATOR),
