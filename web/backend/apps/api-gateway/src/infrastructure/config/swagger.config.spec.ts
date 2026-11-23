@@ -86,7 +86,35 @@ describe('Swagger OpenAPI Contracts (#156)', () => {
       (p: { name: string }) => p.name,
     );
     expect(filtrosIncidentes).toEqual(
-      expect.arrayContaining(['estadoId', 'categoriaId', 'comuna', 'usuarioReportaId']),
+      expect.arrayContaining([
+        'estadoId',
+        'categoriaId',
+        'ciudad',
+        'comuna',
+        'usuarioReportaId',
+      ]),
+    );
+
+    const registroOp = body.paths['/api/v1/auth/register'].post;
+    expect(registroOp.requestBody.content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/RegisterUsuarioRequestDto',
+    });
+    expect(registroOp.responses).toHaveProperty('201');
+    expect(registroOp.responses).toHaveProperty('400');
+    expect(registroOp.responses).toHaveProperty('409');
+    expect(registroOp.responses['201'].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/RegisterUsuarioResponseDto',
+    });
+    expect(body.components.schemas.RegisterUsuarioRequestDto.required).toEqual([
+      'nombre',
+      'email',
+      'password',
+    ]);
+    expect(body.components.schemas.RegisterUsuarioRequestDto.properties).toHaveProperty(
+      'telefono',
+    );
+    expect(body.components.schemas.RegisterUsuarioResponseDto.required).not.toContain(
+      'roles',
     );
 
     const filtrosUsuarios = body.paths['/api/v1/usuarios'].get.parameters.map(

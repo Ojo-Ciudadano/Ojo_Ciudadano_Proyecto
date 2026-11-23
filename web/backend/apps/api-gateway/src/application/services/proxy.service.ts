@@ -3,6 +3,19 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 
 export const MAX_PROXY_PAYLOAD_BYTES = 12 * 1024 * 1024; // 12 MB
+export const PROXY_TIMEOUT_MS = 30_000;
+
+const HOP_BY_HOP_HEADERS = new Set([
+  'host',
+  'content-length',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'expect',
+  'te',
+  'trailer',
+  'upgrade',
+]);
 
 class PayloadLimitExceededError extends Error {
   constructor() {
@@ -63,14 +76,25 @@ export class ProxyService {
       return;
     }
 
-    const queryString = Object.keys(req.query ?? {}).length > 0
-      ? '?' + new URLSearchParams(req.query as Record<string, string>).toString()
-      : '';
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(req.query ?? {})) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item !== undefined && item !== null) {
+            searchParams.append(key, String(item));
+          }
+        }
+      } else if (value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    }
+    const serializedQuery = searchParams.toString();
+    const queryString = serializedQuery ? `?${serializedQuery}` : '';
     const targetUrl = `${targetBaseUrl.replace(/\/+$/, '')}/${normalizedPath}${queryString}`;
 
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(req.headers ?? {})) {
-      if (key.toLowerCase() === 'host' || key.toLowerCase() === 'content-length') {
+      if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
         continue;
       }
       if (typeof value === 'string') {
@@ -123,6 +147,7 @@ export class ProxyService {
         method,
         headers,
         body: bodyContent,
+        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
       });
 
       const responseContentType = response.headers.get('content-type') ?? '';
