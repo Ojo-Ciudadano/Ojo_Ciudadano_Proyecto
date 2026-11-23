@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -20,7 +19,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -51,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.R
 import cl.uct.ojociudadano.ui.components.CitizenAuthProgress
 import cl.uct.ojociudadano.ui.components.CitizenMessage
-import cl.uct.ojociudadano.ui.theme.CitizenRed
 
 object LoginTestTags {
     const val EMAIL_FIELD = "login_email_field"
@@ -190,7 +186,7 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.EMAIL_FIELD),
             label = { Text("Correo electrónico") },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             enabled = !isLoading,
             isError = state.emailError != null,
             leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
@@ -214,7 +210,7 @@ private fun LoginScreenContent(
                 .testTag(LoginTestTags.PASSWORD_FIELD),
             label = { Text("Contraseña") },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             enabled = !isLoading,
             isError = state.passwordError != null,
             leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
@@ -251,8 +247,7 @@ private fun LoginScreenContent(
         Button(
             onClick = ::attemptLogin,
             enabled = !isLoading,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = CitizenRed, contentColor = Color.White),
+            shape = MaterialTheme.shapes.small,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)

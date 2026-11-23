@@ -19,6 +19,8 @@ import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.reports.*
+import cl.uct.ojociudadano.ui.theme.Spacing
+import cl.uct.ojociudadano.ui.theme.incidentStatusTone
 
 @Composable
 fun HomeScreen(
@@ -38,9 +40,9 @@ fun HomeScreen(
 ) {
     Column(modifier.fillMaxSize().testTag("citizen_home")) {
         CitizenHeader("Ojo Ciudadano", "Ciudadano") {
-            IconButton(onClick = onNotificationsClick) { Icon(Icons.Default.Notifications, "Notificaciones", tint = androidx.compose.ui.graphics.Color.White) }
+            IconButton(onClick = onNotificationsClick) { Icon(Icons.Default.Notifications, "Notificaciones", tint = MaterialTheme.colorScheme.onPrimary) }
         }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.page), verticalArrangement = Arrangement.spacedBy(Spacing.page)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(if (name.isBlank()) "Hola" else "Hola, ${name.trim().substringBefore(' ')}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("Juntos cuidamos nuestra ciudad.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -52,7 +54,7 @@ fun HomeScreen(
             }
             Text("Mis incidentes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             val ready = state == IncidentsUiState.Success || state == IncidentsUiState.Empty
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 StatusCard(if (ready) "$incidentsUnderReview" else "—", "En revisión", Modifier.weight(1f))
                 StatusCard(if (ready) "$incidentsInViewOf" else "—", "En atención", Modifier.weight(1f))
                 StatusCard(if (ready) "$solvedIncidents" else "—", "Resueltos", Modifier.weight(1f))
@@ -66,7 +68,7 @@ fun HomeScreen(
                 IncidentCard(incident) { onIncidentClick(incident.id) }
             }
             OutlinedCard(onClick = onMapClick, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.padding(Spacing.page), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.medium)) {
                     Icon(Icons.Default.Map, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(32.dp))
                     Column {
                         Text("Mapa de incidentes", style = MaterialTheme.typography.titleMedium)
@@ -80,10 +82,11 @@ fun HomeScreen(
 
 @Composable
 private fun StatusCard(value: String, label: String, modifier: Modifier) {
-    Card(modifier, elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+    val tone = incidentStatusTone(if (label == "Resueltos") "Resuelto" else label)
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = tone.container, contentColor = tone.content), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+            verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
+            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = tone.content)
             Text(label, style = MaterialTheme.typography.labelMedium)
         }
     }
