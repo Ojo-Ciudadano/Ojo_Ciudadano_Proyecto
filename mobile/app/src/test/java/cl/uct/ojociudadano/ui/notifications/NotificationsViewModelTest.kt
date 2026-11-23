@@ -48,6 +48,34 @@ class NotificationsViewModelTest {
         assertEquals(1, repository.calls)
     }
 
+    @Test fun `empty state becomes success when the repository publishes a new notification`() = runTest {
+        val repository = Repository()
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+        assertEquals(NotificationsUiState.Empty, model.state.value)
+
+        // El scheduler (#282) publica sin pasar por load(); la pantalla debe seguirlo.
+        val incoming = notification(id = "n1", isRead = false)
+        repository.publish(listOf(incoming))
+        runCurrent()
+
+        assertEquals(NotificationsUiState.Success, model.state.value)
+        assertEquals(listOf(incoming), model.notifications.value)
+        assertEquals(1, model.unreadCount.value)
+    }
+
+    @Test fun `a publication cannot replace a terminal error`() = runTest {
+        val repository = Repository().apply { failure = ApiException.Network(IOException("offline")) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+        assertTrue(model.state.value is NotificationsUiState.Error)
+
+        repository.publish(listOf(notification(id = "n1")))
+        runCurrent()
+
+        assertTrue(model.state.value is NotificationsUiState.Error)
+    }
+
     @Test fun `opening an unread notification marks it as read`() = runTest {
         val repository = Repository().apply { rows = listOf(notification(id = "n1", isRead = false)) }
         val model = NotificationsViewModel(repository)
@@ -234,6 +262,12 @@ class NotificationsViewModelTest {
         }
 
         override suspend fun markAllAsRead(): Int = error("Not used by this test")
+
+        /** Simula una publicación del ciclo periódico de #282. */
+        fun publish(rows: List<Notification>) {
+            _notifications.value = rows
+            _unreadCount.value = rows.count { !it.isRead }
+        }
 
         override fun clear() {
             _notifications.value = emptyList()

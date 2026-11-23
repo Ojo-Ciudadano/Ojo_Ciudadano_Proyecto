@@ -31,6 +31,21 @@ class NotificationsViewModel(
 
     init {
         load()
+        // El ciclo periódico publica en el repositorio sin pasar por load(); el
+        // estado visual debe seguir a la colección para no quedarse en Empty
+        // cuando llega una notificación nueva.
+        viewModelScope.launch {
+            repository.notifications.collect { rows ->
+                val current = _state.value
+                if (current !is NotificationsUiState.Loading && current !is NotificationsUiState.Error) {
+                    _state.value = if (rows.isEmpty()) {
+                        NotificationsUiState.Empty
+                    } else {
+                        NotificationsUiState.Success
+                    }
+                }
+            }
+        }
     }
 
     fun load() {
