@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { EstadoIncidenteBadge } from '../../components/ui/EstadoIncidenteBadge'
+import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
+import { obtenerVarianteEstado } from '../../components/ui/incidenteIndicadores.utils'
+import { PrioridadIncidenteBadge } from '../../components/ui/PrioridadIncidenteBadge'
 import { useAuth } from '../../contexts/AuthContext'
 import { useIncidentes } from '../../hooks/useIncidentes'
 import { IncidentMap } from '../../components/map/IncidentMap'
@@ -18,18 +22,6 @@ function normalizar(valor?: string | null): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim()
-}
-
-function claseEstado(nombre?: string | null): string {
-  const estado = normalizar(nombre).replace(/[_-]/g, ' ')
-
-  if (estado === 'nuevo' || estado === 'en revision') return 'nuevo'
-  if (estado === 'validado' || estado === 'asignado') return 'asignado'
-  if (estado === 'en atencion') return 'atencion'
-  if (estado === 'resuelto' || estado === 'cerrado') return 'cerrado'
-  if (estado === 'rechazado') return 'rechazado'
-
-  return 'otro'
 }
 
 function fecha(valor?: string | null): string {
@@ -169,46 +161,47 @@ function ContenidoInicioAdministrador() {
       <div className="inicio-admin-distribucion">
         <div className="inicio-admin-resultados" aria-busy={cargando}>
           {cargando ? (
-            <div className="inicio-admin-mensaje" role="status">
-              Cargando incidentes…
-            </div>
+            <EstadoVistaMensaje
+              tipo="loading"
+              mensaje="Cargando incidentes…"
+            />
           ) : error ? (
-            <div
-              className="inicio-admin-mensaje inicio-admin-error"
-              role="alert"
+            <EstadoVistaMensaje
+              tipo="error"
+              titulo="No se pudieron cargar los incidentes"
+              mensaje={error.mensaje}
             >
-              <h2>No se pudieron cargar los incidentes</h2>
-              <p>{error.mensaje}</p>
               {error.permiteReintentar && (
-                <button type="button" onClick={reintentar}>
+                <button
+                  type="button"
+                  className="ui-btn ui-btn--danger"
+                  onClick={reintentar}
+                >
                   Reintentar
                 </button>
               )}
-            </div>
+            </EstadoVistaMensaje>
           ) : resultados.length === 0 ? (
-            <div className="inicio-admin-mensaje" role="status">
-              <h2>No hay incidentes para mostrar</h2>
-              <p>
-                {busqueda || filtros.estadoId
+            <EstadoVistaMensaje
+              tipo="empty"
+              titulo="No hay incidentes para mostrar"
+              mensaje={
+                busqueda || filtros.estadoId
                   ? 'Prueba con otra búsqueda o restablece los filtros.'
-                  : 'Los reportes disponibles aparecerán aquí.'}
-              </p>
-            </div>
+                  : 'Los reportes disponibles aparecerán aquí.'
+              }
+            />
           ) : (
             <ul className="inicio-admin-lista">
               {visibles.map((incidente) => (
                 <li
                   key={incidente.id}
-                  className={`inicio-admin-tarjeta inicio-admin-tarjeta--${claseEstado(incidente.estado?.nombre)}`}
+                  className={`inicio-admin-tarjeta inicio-admin-tarjeta--${obtenerVarianteEstado(incidente.estado?.nombre)}`}
                 >
                   <article>
                     <div className="inicio-admin-tarjeta-cabecera">
                       <h2>{texto(incidente.titulo)}</h2>
-                      <span
-                        className={`inicio-admin-estado inicio-admin-estado--${claseEstado(incidente.estado?.nombre)}`}
-                      >
-                        {texto(incidente.estado?.nombre)}
-                      </span>
+                      <EstadoIncidenteBadge nombre={incidente.estado?.nombre} />
                     </div>
 
                     <p className="inicio-admin-meta">
@@ -231,9 +224,9 @@ function ContenidoInicioAdministrador() {
                       <div>
                         <dt>Prioridad</dt>
                         <dd>
-                          {incidente.nivelPrioridad == null
-                            ? 'Sin prioridad'
-                            : `Nivel ${incidente.nivelPrioridad}`}
+                          <PrioridadIncidenteBadge
+                            nivel={incidente.nivelPrioridad}
+                          />
                         </dd>
                       </div>
                     </dl>

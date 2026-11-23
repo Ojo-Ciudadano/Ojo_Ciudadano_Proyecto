@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -67,6 +68,8 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.ui.map.picker.ManualLocationPickerDefaults
+import cl.uct.ojociudadano.ui.map.picker.ManualLocationPickerDialog
 import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
@@ -100,6 +103,7 @@ fun CreateReportScreen(
     onRefreshLocation: () -> Unit = {},
     onRequestLocationPermission: () -> Unit = {},
     onOpenLocationSettings: () -> Unit = {},
+    onChooseLocationOnMap: () -> Unit = {},
     onLocationDetailsChange: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     onRetryCategories: () -> Unit = {},
     onViewReport: (String) -> Unit = {}
@@ -198,7 +202,9 @@ fun CreateReportScreen(
             state = state,
             onRefreshLocation = onRefreshLocation,
             onRequestLocationPermission = onRequestLocationPermission,
-            onOpenLocationSettings = onOpenLocationSettings
+            onOpenLocationSettings = onOpenLocationSettings,
+            onChooseLocationOnMap = onChooseLocationOnMap,
+            canEditForm = canEditForm
         )
 
         Text("Referencia de ubicación", style = MaterialTheme.typography.titleMedium)
@@ -337,7 +343,9 @@ private fun ReportLocationSection(
     state: CreateReportFormState,
     onRefreshLocation: () -> Unit,
     onRequestLocationPermission: () -> Unit,
-    onOpenLocationSettings: () -> Unit
+    onOpenLocationSettings: () -> Unit,
+    onChooseLocationOnMap: () -> Unit,
+    canEditForm: Boolean
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -374,7 +382,13 @@ private fun ReportLocationSection(
                         state.location is LocationResult.Success -> {
                             val location = state.location
                             Text(
-                                text = "Ubicación GPS obtenida",
+                                text = if (state.locationSource ==
+                                    LocationSelectionSource.MANUAL
+                                ) {
+                                    "Ubicación seleccionada en el mapa"
+                                } else {
+                                    "Ubicación GPS obtenida"
+                                },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
@@ -407,6 +421,24 @@ private fun ReportLocationSection(
                     }
                 }
             }
+        }
+
+        if (state.locationError != null && state.hasValidLocation) {
+            Text(
+                text = state.locationError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        OutlinedButton(
+            onClick = onChooseLocationOnMap,
+            enabled = canEditForm,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Filled.Map, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Elegir ubicación en el mapa")
         }
     }
 }
@@ -697,10 +729,21 @@ fun CreateReportScreen(
         onRefreshLocation = viewModel::refreshLocation,
         onRequestLocationPermission = locationPermissionLauncher::request,
         onOpenLocationSettings = locationPermissionLauncher::openLocationSettings,
+        onChooseLocationOnMap = viewModel::openManualLocationPicker,
         onLocationDetailsChange = viewModel::onLocationDetailsChange,
         onRetryCategories = viewModel::loadCategories,
         onViewReport = onViewReport
     )
+
+    if (viewModel.isManualLocationPickerVisible) {
+        ManualLocationPickerDialog(
+            initialCoordinate = ManualLocationPickerDefaults.initialCoordinate(
+                viewModel.formState.location
+            ),
+            onConfirm = viewModel::confirmManualLocation,
+            onCancel = viewModel::dismissManualLocationPicker
+        )
+    }
 }
 
 @Preview(showBackground = true)

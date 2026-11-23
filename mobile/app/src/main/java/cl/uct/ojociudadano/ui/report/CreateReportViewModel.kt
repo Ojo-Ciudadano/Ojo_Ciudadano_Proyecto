@@ -17,6 +17,7 @@ import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
+import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
 import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.ui.reports.incidentMessage
@@ -50,6 +51,16 @@ class CreateReportViewModel(
         private set
 
     /**
+     * Controla la visibilidad del selector manual de ubicación.
+     *
+     * El selector solo puede abrirse mientras el formulario siga editable; al
+     * confirmar, la coordenada se transfiere al estado del formulario y la
+     * ventana se cierra.
+     */
+    var isManualLocationPickerVisible by mutableStateOf(false)
+        private set
+
+    /**
      * Serializa el inicio y la finalización de las operaciones fotográficas.
      *
      * Solo la operación dueña de [activePhotoToken] puede modificar la evidencia.
@@ -64,6 +75,14 @@ class CreateReportViewModel(
      * continuar en cuanto el GPS entregue una ubicación válida.
      */
     private var submitAfterLocation = false
+
+    /**
+     * Identifica la última selección manual confirmada.
+     *
+     * Una consulta GPS iniciada antes de esa selección no debe sobrescribirla
+     * al finalizar, aunque su respuesta llegue después.
+     */
+    private var manualLocationVersion = 0
 
     init {
         loadCategories()
@@ -102,6 +121,44 @@ class CreateReportViewModel(
         if (submissionState is CreateReportSubmissionState.Error) {
             submissionState = CreateReportSubmissionState.Idle
         }
+    }
+
+    /**
+     * Abre el selector de ubicación manual si el formulario sigue editable.
+     */
+    fun openManualLocationPicker() {
+        if (!submissionState.canEditForm) return
+        isManualLocationPickerVisible = true
+    }
+
+    /**
+     * Cierra el selector sin modificar la ubicación previa del formulario.
+     */
+    fun dismissManualLocationPicker() {
+        isManualLocationPickerVisible = false
+    }
+
+    /**
+     * Transfiere al formulario la coordenada confirmada en el mapa.
+     *
+     * Una coordenada inválida se informa sin reemplazar la ubicación vigente y
+     * sin cerrar el selector, para que el usuario pueda elegir otro punto.
+     */
+    fun confirmManualLocation(coordinate: GeoCoordinate) {
+        if (!submissionState.canEditForm) {
+            isManualLocationPickerVisible = false
+            return
+        }
+
+        if (!coordinate.isValid) {
+            formState = formState.updateManualLocation(coordinate)
+            return
+        }
+
+        manualLocationVersion++
+        formState = formState.updateManualLocation(coordinate)
+        isManualLocationPickerVisible = false
+        onFormEdited()
     }
 
     /**
@@ -322,6 +379,7 @@ class CreateReportViewModel(
         if (formState.isLoadingLocation) return
 
         formState = formState.startLocationRequest()
+        val requestVersion = manualLocationVersion
 
         viewModelScope.launch {
             val result = try {
@@ -333,6 +391,10 @@ class CreateReportViewModel(
                     exception.message ?: CreateReportLocationErrors.UNKNOWN
                 )
             }
+
+            // Una selección manual confirmada mientras el GPS respondía tiene
+            // prioridad: la lectura tardía no debe reemplazarla.
+            if (requestVersion != manualLocationVersion) return@launch
 
             formState = formState.updateLocation(result)
 
@@ -351,6 +413,7 @@ class CreateReportViewModel(
      * envío que ya no puede completarse.
      */
     fun onLocationPermissionDenied() {
+        if (formState.locationSource == LocationSelectionSource.MANUAL) return
         submitAfterLocation = false
         formState = formState.updateLocation(LocationResult.MissingPermissions)
     }

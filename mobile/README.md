@@ -127,3 +127,29 @@ encuentran en [docs/issue-101-citizen-flow.md](docs/issue-101-citizen-flow.md).
 El formulario conserva GPS y evidencias existentes, solicita las referencias
 reales del lugar y permite consultar el reporte creado. La lista permite
 actualizar y alternar consultas generales y propias mediante el repositorio.
+
+## Selección manual de ubicación (#299)
+
+El formulario de creación de incidentes incorpora un selector modal sobre
+OSMDroid, la misma biblioteca cartográfica del mapa de incidentes:
+
+- La cámara parte de la coordenada válida que ya tiene el formulario (GPS o una
+  selección manual anterior). Si no hay una disponible, usa el centro de
+  referencia de La Araucanía (`-38.7359, -72.5904`).
+- Un toque sobre el mapa mueve la cámara y coloca la mira en ese punto. También
+  se puede arrastrar el mapa para desplazar la mira central.
+- Al confirmar se valida que la latitud esté en `[-90, 90]` y la longitud en
+  `[-180, 180]`; solo entonces las coordenadas se transfieren al formulario y se
+  usan al crear el reporte.
+- Cancelar o volver atrás cierra el selector sin modificar la ubicación previa.
+- Una respuesta tardía del GPS no reemplaza una coordenada confirmada
+  manualmente. La tarjeta de ubicación distingue «Ubicación GPS obtenida» de
+  «Ubicación seleccionada en el mapa».
+
+Validación local:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.report.CreateReportLocationPickerTest
+```

@@ -1,7 +1,30 @@
 import { describe, it, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
+import React, { useEffect, useRef } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
-import { apiClient,  onPermissionDenied,  onSessionInvalidated,  resetApiAuthStateForTests,  startNewSession,  type PermissionDeniedEvent,  type SessionInvalidatedEvent,} from '../services/api'
+import {
+  DEFAULT_PERMISSION_DENIED_MESSAGE,
+  LOGIN_REDIRECT_PATH,
+  apiClient,
+  clearSessionStorage,
+  onPermissionDenied,
+  onSessionInvalidated,
+  resetApiAuthStateForTests,
+  startNewSession,
+  subscribeSessionChanges,
+  type PermissionDeniedEvent,
+  type SessionInvalidatedEvent,
+} from '../services/api'
+import { AuthProvider, useAuth } from '../contexts/AuthContext'
+import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import type { ApiError, User } from '../types'
 
 class MemoryStorage implements Storage {
@@ -260,6 +283,381 @@ describe('Manejo de errores 401 y 403 en el cliente HTTP web (#150)', () => {
     // 4. La nueva sesión permanece intacta y no se emitió cierre de sesión
     assert.equal(localStorage.getItem('access_token'), 'token-sesion-nueva')
     assert.deepEqual(JSON.parse(localStorage.getItem('user')!), sampleUserB)
+    assert.equal(invalidatedEvents.length, 0)
+  })
+})
+
+describe('Consolidación de sesión vencida, permisos y redirección única (#332)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    resetApiAuthStateForTests()
+  })
+
+  it('incluye redirectTo /login, ejecuta limpieza una sola vez y aísla errores entre listeners', async () => {
+    startNewSession('token-valido-332', sampleUserA)
+
+    let sessionChangeCount = 0
+    subscribeSessionChanges(() => {
+      sessionChangeCount += 1
+    })
+
+    const receivedBySecondListener: SessionInvalidatedEvent[] = []
+    onSessionInvalidated(() => {
+      throw new Error('fallo simulado en primer listener')
+    })
+    onSessionInvalidated((event) => {
+      receivedBySecondListener.push(event)
+    })
+
+    apiClient.defaults.adapter = async (config) => {
+      throw createHttpError(401, config, {
+        message: 'Token expirado',
+      })
+    }
+
+    await assert.rejects(() => apiClient.get('/incidentes'))
+
+    assert.equal(sessionChangeCount, 1)
+    assert.equal(receivedBySecondListener.length, 1)
+    assert.equal(receivedBySecondListener[0].redirectTo, LOGIN_REDIRECT_PATH)
+    assert.equal(localStorage.getItem('access_token'), null)
+    assert.equal(localStorage.getItem('user'), null)
+  })
+
+  it('permite invalidar una segunda sesión aunque vuelva a emitir el mismo token después de reiniciar sesión', async () => {
+    startNewSession('token-reutilizado', sampleUserA)
+
+    const invalidatedEvents: SessionInvalidatedEvent[] = []
+    onSessionInvalidated((event) => invalidatedEvents.push(event))
+
+    apiClient.defaults.adapter = async (config) => {
+      throw createHttpError(401, config, {
+        message: 'Token expirado',
+      })
+    }
+
+    await assert.rejects(() => apiClient.get('/incidentes'))
+    assert.equal(invalidatedEvents.length, 1)
+
+    startNewSession('token-reutilizado', sampleUserB)
+    await assert.rejects(() => apiClient.get('/usuarios'))
+    assert.equal(invalidatedEvents.length, 2)
+    assert.notEqual(
+      invalidatedEvents[0].sessionEpoch,
+      invalidatedEvents[1].sessionEpoch,
+    )
+  })
+
+  it('normaliza mensajes de error de /auth/login y no altera ni invalida sesiones ante 401 de credenciales', async () => {
+    const invalidatedEvents: SessionInvalidatedEvent[] = []
+    onSessionInvalidated((event) => invalidatedEvents.push(event))
+
+    apiClient.defaults.adapter = async (config) => {
+      throw createHttpError(401, config, {
+        message: ['Credenciales incorrectas', 'Verifica tu contraseña'],
+      })
+    }
+
+    await assert.rejects(
+      () =>
+        apiClient.post('/auth/login?from=web', {
+          email: 'ciudadano@ojociudadano.cl',
+          password: 'mala',
+        }),
+      (err: unknown) => {
+        const apiError = err as ApiError
+        assert.equal(apiError.statusCode, 401)
+        assert.equal(
+          apiError.message,
+          'Credenciales incorrectas, Verifica tu contraseña',
+        )
+        return true
+      },
+    )
+
+    assert.equal(invalidatedEvents.length, 0)
+  })
+
+  it('maneja 401 en respuestas tipo Blob y cabeceras authorization en minúsculas sin filtrar el Blob', async () => {
+    startNewSession('token-blob', sampleUserA)
+
+    const invalidatedEvents: SessionInvalidatedEvent[] = []
+    onSessionInvalidated((event) => invalidatedEvents.push(event))
+
+    apiClient.defaults.adapter = async (config) => {
+      const response: AxiosResponse = {
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: {},
+        config,
+        data: new Blob(['unauthorized'], { type: 'text/plain' }),
+      }
+
+      throw Object.assign(new Error('Request failed with status code 401'), {
+        isAxiosError: true,
+        config,
+        response,
+      })
+    }
+
+    await assert.rejects(
+      () =>
+        apiClient.get('/incidentes/inc-1/evidencias/ev-1', {
+          responseType: 'blob',
+          headers: { authorization: 'Bearer token-blob' },
+        }),
+      (err: unknown) => {
+        const apiError = err as ApiError
+        assert.equal(apiError.statusCode, 401)
+        assert.match(String(apiError.message), /inicia sesión nuevamente/i)
+        return true
+      },
+    )
+
+    assert.equal(invalidatedEvents.length, 1)
+    assert.equal(localStorage.getItem('access_token'), null)
+  })
+
+  it('ignora un 403 tardío de una sesión anterior y mantiene operativa la sesión vigente tras un 403 actual', async () => {
+    startNewSession('token-anterior-403', sampleUserA)
+
+    const permissionEvents: PermissionDeniedEvent[] = []
+    onPermissionDenied((event) => permissionEvents.push(event))
+
+    let rejectOld403!: (reason?: unknown) => void
+    let oldConfig!: InternalAxiosRequestConfig
+    let notifyOldSent!: () => void
+    const oldSent = new Promise<void>((resolve) => {
+      notifyOldSent = resolve
+    })
+
+    apiClient.defaults.adapter = (config) => {
+      if (config.url === '/admin/recurso-antiguo') {
+        oldConfig = config
+        notifyOldSent()
+        return new Promise((_, reject) => {
+          rejectOld403 = reject
+        })
+      }
+
+      if (config.url === '/admin/recurso-restringido') {
+        return Promise.reject(
+          createHttpError(403, config, { message: 'Forbidden resource' }),
+        )
+      }
+
+      return Promise.resolve({
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+        data: { ok: true },
+      })
+    }
+
+    const stale403Promise = apiClient.get('/admin/recurso-antiguo')
+    await oldSent
+
+    startNewSession('token-vigente-403', sampleUserB)
+
+    rejectOld403(
+      createHttpError(403, oldConfig, {
+        message: 'Sin permisos en sesión anterior',
+      }),
+    )
+    await assert.rejects(() => stale403Promise)
+    assert.equal(permissionEvents.length, 0)
+
+    await assert.rejects(
+      () => apiClient.get('/admin/recurso-restringido'),
+      (err: unknown) => {
+        const apiError = err as ApiError
+        assert.equal(apiError.statusCode, 403)
+        assert.equal(apiError.message, DEFAULT_PERMISSION_DENIED_MESSAGE)
+        return true
+      },
+    )
+
+    assert.equal(permissionEvents.length, 1)
+    assert.equal(localStorage.getItem('access_token'), 'token-vigente-403')
+
+    const authorizedResponse = await apiClient.get('/incidentes')
+    assert.equal(authorizedResponse.status, 200)
+  })
+
+  it('limpia estado de AuthProvider y redirige una sola vez a /login ante múltiples 401 simultáneos', async () => {
+    startNewSession('token-router-401', sampleUserA)
+
+    const visitedPaths: string[] = []
+    const loginStates: unknown[] = []
+    let latestAuthState: {
+      isAuthenticated: boolean
+      sessionExpiredMessage: string | null
+      userEmail: string | null
+    } = {
+      isAuthenticated: false,
+      sessionExpiredMessage: null,
+      userEmail: null,
+    }
+
+    apiClient.defaults.adapter = async (config) => {
+      if (config.url === '/usuarios/me') {
+        return {
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config,
+          data: sampleUserA,
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      throw createHttpError(401, config, {
+        message: 'Token expirado',
+      })
+    }
+
+    function RouteTracker() {
+      const location = useLocation()
+      const navigate = useNavigate()
+      const auth = useAuth()
+      const locationRef = useRef(location)
+      const lastRedirectEpochRef = useRef<number | null>(null)
+
+      useEffect(() => {
+        locationRef.current = location
+        visitedPaths.push(location.pathname)
+        if (location.pathname === LOGIN_REDIRECT_PATH) {
+          loginStates.push(location.state)
+        }
+      }, [location])
+
+      useEffect(() => {
+        latestAuthState = {
+          isAuthenticated: auth.isAuthenticated,
+          sessionExpiredMessage: auth.sessionExpiredMessage,
+          userEmail: auth.user?.email ?? null,
+        }
+      }, [auth.isAuthenticated, auth.sessionExpiredMessage, auth.user])
+
+      useEffect(() => {
+        return onSessionInvalidated((event) => {
+          if (lastRedirectEpochRef.current === event.sessionEpoch) {
+            return
+          }
+          lastRedirectEpochRef.current = event.sessionEpoch
+          if (locationRef.current.pathname !== event.redirectTo) {
+            navigate(event.redirectTo, {
+              replace: true,
+              state: { from: locationRef.current },
+            })
+          }
+        })
+      }, [navigate])
+
+      return null
+    }
+
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: ['/incidentes'] },
+          React.createElement(
+            AuthProvider,
+            null,
+            React.createElement(RouteTracker),
+            React.createElement(
+              Routes,
+              null,
+              React.createElement(Route, {
+                path: '/login',
+                element: React.createElement('div', null, 'LOGIN'),
+              }),
+              React.createElement(Route, {
+                path: '/incidentes',
+                element: React.createElement(
+                  ProtectedRoute,
+                  null,
+                  React.createElement('div', null, 'INCIDENTES'),
+                ),
+              }),
+            ),
+          ),
+        ),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    assert.equal(latestAuthState.isAuthenticated, true)
+    assert.equal(latestAuthState.userEmail, sampleUserA.email)
+
+    const invalidatedEvents: SessionInvalidatedEvent[] = []
+    onSessionInvalidated((event) => invalidatedEvents.push(event))
+
+    await act(async () => {
+      await Promise.allSettled([
+        apiClient.get('/incidentes'),
+        apiClient.get('/notificaciones'),
+        apiClient.get('/categorias'),
+      ])
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    assert.equal(invalidatedEvents.length, 1)
+    assert.equal(latestAuthState.isAuthenticated, false)
+    assert.equal(latestAuthState.userEmail, null)
+    assert.match(
+      String(latestAuthState.sessionExpiredMessage),
+      /inicia sesión nuevamente/i,
+    )
+    assert.equal(
+      visitedPaths.filter((p) => p === LOGIN_REDIRECT_PATH).length,
+      1,
+    )
+    assert.equal(
+      (loginStates[0] as { from?: { pathname?: string } })?.from?.pathname,
+      '/incidentes',
+    )
+
+    act(() => {
+      renderer.unmount()
+    })
+  })
+
+  it('no invalida ni cierra una sesión nueva si una solicitud manual de cierre o cambio ocurre antes del 401 tardío', async () => {
+    startNewSession('token-cierre-manual', sampleUserA)
+
+    const invalidatedEvents: SessionInvalidatedEvent[] = []
+    onSessionInvalidated((event) => invalidatedEvents.push(event))
+
+    let rejectInFlight!: (reason?: unknown) => void
+    let capturedConfig!: InternalAxiosRequestConfig
+    let notifySent!: () => void
+    const sent = new Promise<void>((resolve) => {
+      notifySent = resolve
+    })
+
+    apiClient.defaults.adapter = (config) => {
+      capturedConfig = config
+      notifySent()
+      return new Promise((_, reject) => {
+        rejectInFlight = reject
+      })
+    }
+
+    const pendingRequest = apiClient.get('/notificaciones')
+    await sent
+
+    // Cierre manual antes de que llegue el 401 tardío
+    clearSessionStorage()
+
+    rejectInFlight(
+      createHttpError(401, capturedConfig, { message: 'Token expirado' }),
+    )
+    await assert.rejects(() => pendingRequest)
+
     assert.equal(invalidatedEvents.length, 0)
   })
 })

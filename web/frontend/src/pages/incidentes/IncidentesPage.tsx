@@ -1,57 +1,14 @@
 import { Link } from 'react-router-dom'
+import { EstadoIncidenteBadge } from '../../components/ui/EstadoIncidenteBadge'
+import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
+import { obtenerVarianteEstado } from '../../components/ui/incidenteIndicadores.utils'
+import { PrioridadIncidenteBadge } from '../../components/ui/PrioridadIncidenteBadge'
 import { useIncidentes } from '../../hooks/useIncidentes'
 import type { Incidente } from '../../types/incidente'
 import './IncidentesPage.css'
 
 function texto(valor?: string | null): string {
   return valor?.trim() || 'Sin información'
-}
-
-function normalizar(valor?: string | null): string {
-  return (valor ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-}
-
-function tipoEstado(nombre?: string | null): string {
-  switch (normalizar(nombre)) {
-    case 'nuevo':
-    case 'en revision':
-      return 'nuevo'
-    case 'validado':
-    case 'asignado':
-      return 'asignado'
-    case 'en atencion':
-      return 'atencion'
-    case 'resuelto':
-    case 'cerrado':
-      return 'cerrado'
-    case 'rechazado':
-      return 'rechazado'
-    default:
-      return 'otro'
-  }
-}
-
-function tipoPrioridad(nivel?: number | null): string {
-  switch (nivel) {
-    case 5:
-      return 'critica'
-    case 4:
-      return 'alta'
-    case 3:
-      return 'media'
-    case 2:
-      return 'moderada'
-    case 1:
-      return 'baja'
-    default:
-      return 'desconocida'
-  }
 }
 
 function mostrarFecha(valor?: string | null): string {
@@ -103,26 +60,11 @@ function TablaIncidentes({ incidentes }: { incidentes: Incidente[] }) {
               <td>{texto(incidente.ubicacion?.comuna)}</td>
 
               <td>
-                <span
-                  className={`incidente-prioridad incidente-prioridad--${tipoPrioridad(incidente.nivelPrioridad)}`}
-                >
-                  <span
-                    className="incidente-prioridad-punto"
-                    aria-hidden="true"
-                  />
-
-                  {incidente.nivelPrioridad == null
-                    ? 'Sin prioridad'
-                    : `Nivel ${incidente.nivelPrioridad}`}
-                </span>
+                <PrioridadIncidenteBadge nivel={incidente.nivelPrioridad} />
               </td>
 
               <td>
-                <span
-                  className={`incidente-estado incidente-estado--${tipoEstado(incidente.estado?.nombre)}`}
-                >
-                  {texto(incidente.estado?.nombre)}
-                </span>
+                <EstadoIncidenteBadge nombre={incidente.estado?.nombre} />
               </td>
 
               <td className="incidente-fecha">
@@ -180,7 +122,7 @@ export function IncidentesPage() {
 
   if (!cargando && !error) {
     for (const incidente of incidentes) {
-      switch (tipoEstado(incidente.estado?.nombre)) {
+      switch (obtenerVarianteEstado(incidente.estado?.nombre)) {
         case 'nuevo':
           resumen.nuevos += 1
           break
@@ -327,25 +269,31 @@ export function IncidentesPage() {
 
       <div aria-busy={cargando}>
         {cargando ? (
-          <div className="incidentes-mensaje" role="status">
-            Cargando incidentes…
-          </div>
+          <EstadoVistaMensaje
+            tipo="loading"
+            mensaje="Cargando incidentes…"
+          />
         ) : error ? (
-          <div className="incidentes-mensaje incidentes-error" role="alert">
-            <p>{error.mensaje}</p>
-
+          <EstadoVistaMensaje tipo="error" mensaje={error.mensaje}>
             {error.permiteReintentar && (
-              <button type="button" onClick={reintentar}>
+              <button
+                type="button"
+                className="ui-btn ui-btn--danger"
+                onClick={reintentar}
+              >
                 Reintentar
               </button>
             )}
-          </div>
+          </EstadoVistaMensaje>
         ) : totalResultados === 0 ? (
-          <div className="incidentes-mensaje" role="status">
-            {hayFiltros
-              ? 'No se encontraron incidentes con los filtros seleccionados.'
-              : 'No hay incidentes registrados.'}
-          </div>
+          <EstadoVistaMensaje
+            tipo="empty"
+            mensaje={
+              hayFiltros
+                ? 'No se encontraron incidentes con los filtros seleccionados.'
+                : 'No hay incidentes registrados.'
+            }
+          />
         ) : (
           <TablaIncidentes incidentes={incidentesPagina} />
         )}
