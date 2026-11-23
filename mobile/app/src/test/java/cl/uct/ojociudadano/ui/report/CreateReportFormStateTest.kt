@@ -4,6 +4,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.model.ReverseGeocodedAddress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -306,6 +307,79 @@ class CreateReportFormStateTest {
 
         assertEquals(LocationSelectionSource.DEVICE, updatedState.locationSource)
         assertNull(updatedState.locationError)
+    }
+
+    @Test
+    fun `reverse geocoded address fills only the empty location fields`() {
+        val state = CreateReportFormState(
+            referenceAddress = "",
+            commune = "Comuna escrita por el usuario",
+            region = "",
+            sector = "Centro",
+            title = "Poste dañado"
+        )
+
+        val updatedState = state.applyReverseGeocodedAddress(
+            ReverseGeocodedAddress(
+                referenceAddress = "Av. Alemania 123",
+                commune = "Temuco",
+                region = "La Araucanía"
+            )
+        )
+
+        assertEquals("Av. Alemania 123", updatedState.referenceAddress)
+        assertEquals("Comuna escrita por el usuario", updatedState.commune)
+        assertEquals("La Araucanía", updatedState.region)
+        assertEquals("Centro", updatedState.sector)
+        assertEquals("Poste dañado", updatedState.title)
+        assertFalse(updatedState.isAutocompletingAddress)
+        assertNull(updatedState.addressAutofillError)
+    }
+
+    @Test
+    fun `reverse geocoded address never overwrites manual location details`() {
+        val state = CreateReportFormState(
+            referenceAddress = "Mi referencia",
+            commune = "Mi comuna",
+            region = "Mi región",
+            sector = "Mi sector"
+        )
+
+        val updatedState = state.applyReverseGeocodedAddress(
+            ReverseGeocodedAddress(
+                referenceAddress = "Otra referencia",
+                commune = "Otra comuna",
+                region = "Otra región"
+            )
+        )
+
+        assertEquals("Mi referencia", updatedState.referenceAddress)
+        assertEquals("Mi comuna", updatedState.commune)
+        assertEquals("Mi región", updatedState.region)
+        assertEquals("Mi sector", updatedState.sector)
+    }
+
+    @Test
+    fun `empty reverse geocoding result finishes autofill without changing fields`() {
+        val state = CreateReportFormState(referenceAddress = "Mi referencia")
+            .startAddressAutofill()
+
+        val updatedState = state.applyReverseGeocodedAddress(ReverseGeocodedAddress())
+
+        assertEquals(state.copy(isAutocompletingAddress = false), updatedState)
+    }
+
+    @Test
+    fun `address autofill failure is informative and does not become a validation error`() {
+        val state = CreateReportFormState(referenceAddress = "Mi referencia")
+            .startAddressAutofill()
+
+        val updatedState = state.failAddressAutofill("Sin resultados")
+
+        assertEquals("Mi referencia", updatedState.referenceAddress)
+        assertEquals("Sin resultados", updatedState.addressAutofillError)
+        assertNull(updatedState.locationDetailsError)
+        assertFalse(updatedState.isAutocompletingAddress)
     }
 }
 
