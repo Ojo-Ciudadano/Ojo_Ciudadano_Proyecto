@@ -1,11 +1,11 @@
 
 .inicio-ciudadano {
-  --inicio-azul: #0b1f4d;
-  --inicio-rojo: #dc2626;
-  --inicio-naranja: #f97316;
-  --inicio-texto: #17243d;
-  --inicio-secundario: #526079;
-  --inicio-borde: #dce3ed;
+  --inicio-azul: var(--color-primary);
+  --inicio-rojo: var(--color-danger);
+  --inicio-naranja: var(--color-warning);
+  --inicio-texto: var(--color-text);
+  --inicio-secundario: var(--color-text-muted);
+  --inicio-borde: var(--color-border);
 
   width: 100%;
   max-width: 1180px;
@@ -13,9 +13,9 @@
   margin: 0 auto;
   padding: 28px;
   color: var(--inicio-texto);
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
   -webkit-font-smoothing: antialiased;
 }
 

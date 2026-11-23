@@ -1,6 +1,7 @@
 package cl.uct.ojociudadano.ui.map
 
 import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.domain.model.isValidGeographicCoordinate
 
 /**
  * Información resumida del incidente asociado a un marcador.
@@ -49,10 +50,8 @@ private fun Incident.toMapSummary(): IncidentMapSummary = IncidentMapSummary(
 )
 
 /** Verifica que las coordenadas sean finitas y estén dentro del rango geográfico válido. */
-fun isValidMapCoordinate(latitude: Double, longitude: Double): Boolean {
-    if (!latitude.isFinite() || !longitude.isFinite()) return false
-    return latitude in -90.0..90.0 && longitude in -180.0..180.0
-}
+fun isValidMapCoordinate(latitude: Double, longitude: Double): Boolean =
+    isValidGeographicCoordinate(latitude, longitude)
 
 /**
  * Convierte un incidente en un marcador.

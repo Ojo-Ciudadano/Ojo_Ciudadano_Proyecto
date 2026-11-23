@@ -1,4 +1,7 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
+import { EstadoIncidenteBadge } from '../../components/ui/EstadoIncidenteBadge'
+import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
+import { PrioridadIncidenteBadge } from '../../components/ui/PrioridadIncidenteBadge'
 import { useAuth } from '../../contexts/AuthContext'
 import { useIncidenteDetalle } from '../../hooks/useIncidenteDetalle'
 import type { IncidenteDetalle } from '../../types/incidenteDetalle'
@@ -69,15 +72,15 @@ function DatosIncidente({ incidente }: { incidente: IncidenteDetalle }) {
 
             <div>
               <dt>Estado</dt>
-              <dd>{texto(incidente.estado?.nombre)}</dd>
+              <dd>
+                <EstadoIncidenteBadge nombre={incidente.estado?.nombre} />
+              </dd>
             </div>
 
             <div>
               <dt>Prioridad</dt>
               <dd>
-                {incidente.nivelPrioridad == null
-                  ? 'Sin prioridad'
-                  : `Nivel ${incidente.nivelPrioridad}`}
+                <PrioridadIncidenteBadge nivel={incidente.nivelPrioridad} />
               </dd>
             </div>
 
@@ -234,35 +237,39 @@ export function IncidenteDetallePage() {
 
       <div aria-busy={cargando}>
         {cargando ? (
-          <div className="detalle-mensaje" role="status">
-            Cargando incidente…
-          </div>
+          <EstadoVistaMensaje
+            tipo="loading"
+            mensaje="Cargando incidente…"
+          />
         ) : noEncontrado ? (
-          <div className="detalle-mensaje" role="status">
-            <h1>Incidente no encontrado</h1>
-            <p>
-              El incidente solicitado no existe o ya no está disponible.
-            </p>
-          </div>
+          <EstadoVistaMensaje
+            tipo="empty"
+            headingLevel="h1"
+            titulo="Incidente no encontrado"
+            mensaje="El incidente solicitado no existe o ya no está disponible."
+          />
         ) : error ? (
-          <div
-            className="detalle-mensaje detalle-error"
-            role="alert"
-            data-acceso-denegado={error.accesoDenegado ? 'true' : undefined}
-          >
-            <h1>
-              {error.accesoDenegado
+          <EstadoVistaMensaje
+            tipo="error"
+            headingLevel="h1"
+            titulo={
+              error.accesoDenegado
                 ? 'Acceso denegado'
-                : 'No se pudo consultar el incidente'}
-            </h1>
-            <p>{error.mensaje}</p>
-
+                : 'No se pudo consultar el incidente'
+            }
+            mensaje={error.mensaje}
+            dataAccesoDenegado={error.accesoDenegado ? 'true' : undefined}
+          >
             {error.permiteReintentar && (
-              <button type="button" onClick={reintentar}>
+              <button
+                type="button"
+                className="ui-btn ui-btn--primary"
+                onClick={reintentar}
+              >
                 Reintentar
               </button>
             )}
-          </div>
+          </EstadoVistaMensaje>
         ) : incidente ? (
           <>
             <DatosIncidente incidente={incidente} />

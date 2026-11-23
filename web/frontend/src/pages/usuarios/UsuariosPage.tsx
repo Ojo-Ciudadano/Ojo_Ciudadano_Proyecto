@@ -1,5 +1,6 @@
 
 import { useState } from 'react'
+import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUsuarios } from '../../hooks/useUsuarios'
 import type { RolUsuario, UsuarioListado } from '../../types/usuario'
@@ -171,27 +172,31 @@ export function UsuariosPage() {
         )}
 
         {cargando && (
-          <div className="usuarios-estado" role="status">
-            <p>Cargando usuarios...</p>
+          <div className="usuarios-estado-contenedor">
+            <EstadoVistaMensaje tipo="loading" mensaje="Cargando usuarios..." />
           </div>
         )}
 
         {!cargando && error && (
-          <div className="usuarios-error" role="alert">
-            <p>{error}</p>
-            <button
-              type="button"
-              className="usuarios-btn usuarios-btn-primary"
-              onClick={reintentar}
-            >
-              Reintentar
-            </button>
+          <div className="usuarios-estado-contenedor">
+            <EstadoVistaMensaje tipo="error" mensaje={error}>
+              <button
+                type="button"
+                className="ui-btn ui-btn--primary"
+                onClick={reintentar}
+              >
+                Reintentar
+              </button>
+            </EstadoVistaMensaje>
           </div>
         )}
 
         {!cargando && !error && usuarios.length === 0 && (
-          <div className="usuarios-estado">
-            <p>No se encontraron usuarios registrados.</p>
+          <div className="usuarios-estado-contenedor">
+            <EstadoVistaMensaje
+              tipo="empty"
+              mensaje="No se encontraron usuarios registrados."
+            />
           </div>
         )}
 
@@ -262,7 +267,7 @@ export function UsuariosPage() {
                           <td>
                             <div className="usuarios-cambiar-rol">
                               <select
-                                className="usuarios-select"
+                                className="ui-control usuarios-select"
                                 aria-label={`Nuevo rol de ${usuario.nombre}`}
                                 value={rolSeleccionado}
                                 disabled={bloqueado}
@@ -363,14 +368,14 @@ export function UsuariosPage() {
       </section>
 
       {confirmacion && (
-        <div className="usuarios-modal-fondo">
+        <div className="ui-modal-backdrop usuarios-modal-fondo">
           <div
-            className="usuarios-modal"
+            className="ui-modal usuarios-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="usuarios-confirmacion-titulo"
           >
-            <h2 id="usuarios-confirmacion-titulo">
+            <h2 id="usuarios-confirmacion-titulo" className="ui-modal-title">
               Confirmar cambio de rol
             </h2>
 
@@ -384,10 +389,10 @@ export function UsuariosPage() {
               El cambio se guardará en el sistema después de confirmar.
             </p>
 
-            <div className="usuarios-modal-acciones">
+            <div className="ui-modal-actions usuarios-modal-acciones">
               <button
                 type="button"
-                className="usuarios-btn"
+                className="ui-btn ui-btn--secondary"
                 disabled={Boolean(actualizandoRolId)}
                 onClick={cancelarCambio}
               >
@@ -396,7 +401,7 @@ export function UsuariosPage() {
 
               <button
                 type="button"
-                className="usuarios-btn usuarios-btn-primary"
+                className="ui-btn ui-btn--primary"
                 disabled={Boolean(actualizandoRolId)}
                 onClick={() => void confirmarCambio()}
               >

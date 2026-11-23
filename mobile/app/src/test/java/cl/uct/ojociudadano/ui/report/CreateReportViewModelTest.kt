@@ -21,6 +21,7 @@ import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
+import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
 import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
@@ -310,6 +311,110 @@ class CreateReportViewModelTest {
         assertEquals(
             CreateReportLocationErrors.MISSING_PERMISSIONS,
             viewModel.formState.locationError
+        )
+    }
+
+    @Test
+    fun `cancelling the manual location picker keeps the previous location`() = runTest {
+        val previous = LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = FakeLocationClient(previous)
+        )
+
+        viewModel.openManualLocationPicker()
+        assertTrue(viewModel.isManualLocationPickerVisible)
+
+        viewModel.dismissManualLocationPicker()
+
+        assertFalse(viewModel.isManualLocationPickerVisible)
+        assertEquals(previous, viewModel.formState.location)
+        assertEquals(LocationSelectionSource.DEVICE, viewModel.formState.locationSource)
+        assertNull(viewModel.formState.locationError)
+    }
+
+    @Test
+    fun `confirmed manual coordinate is used to create the report`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = FakeLocationClient(
+                LocationResult.Success(latitude = -33.4489, longitude = -70.6693)
+            )
+        )
+
+        viewModel.openManualLocationPicker()
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -38.7396, longitude = -72.5984)
+        )
+
+        assertFalse(viewModel.isManualLocationPickerVisible)
+        assertEquals(
+            LocationResult.Success(latitude = -38.7396, longitude = -72.5984),
+            viewModel.formState.location
+        )
+        assertEquals(
+            LocationSelectionSource.MANUAL,
+            viewModel.formState.locationSource
+        )
+
+        viewModel.fillValidForm()
+        viewModel.createReport()
+
+        val input = incidentRepository.createInputs.single()
+        assertEquals(-38.7396, input.location.latitude, 0.0)
+        assertEquals(-72.5984, input.location.longitude, 0.0)
+    }
+
+    @Test
+    fun `invalid manual coordinate keeps the previous location and the picker open`() = runTest {
+        val previous = LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = FakeLocationClient(previous)
+        )
+
+        viewModel.openManualLocationPicker()
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -38.7359, longitude = 181.0)
+        )
+
+        assertTrue(viewModel.isManualLocationPickerVisible)
+        assertEquals(previous, viewModel.formState.location)
+        assertEquals(LocationSelectionSource.DEVICE, viewModel.formState.locationSource)
+        assertEquals(
+            CreateReportLocationErrors.INVALID_COORDINATES,
+            viewModel.formState.locationError
+        )
+    }
+
+    @Test
+    fun `a late gps response does not overwrite the manual selection`() = runTest {
+        val pendingLocation = CompletableDeferred<LocationResult>()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = object : LocationClient {
+                override suspend fun getCurrentLocation(): LocationResult =
+                    pendingLocation.await()
+            }
+        )
+
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -38.7396, longitude = -72.5984)
+        )
+        pendingLocation.complete(
+            LocationResult.Success(latitude = -33.4489, longitude = -70.6693)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            LocationResult.Success(latitude = -38.7396, longitude = -72.5984),
+            viewModel.formState.location
+        )
+        assertEquals(
+            LocationSelectionSource.MANUAL,
+            viewModel.formState.locationSource
         )
     }
 

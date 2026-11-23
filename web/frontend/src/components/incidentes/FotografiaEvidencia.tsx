@@ -48,7 +48,7 @@ function VistaAmpliada({
   return (
     <dialog
       ref={dialogRef}
-      className="evidencia-modal"
+      className="evidencia-modal ui-modal"
       aria-labelledby={tituloId}
       onCancel={(event) => {
         event.preventDefault()

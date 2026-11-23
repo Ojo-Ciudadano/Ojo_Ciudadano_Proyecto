@@ -1,5 +1,6 @@
 
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { AppLayout } from './components/layout/AppLayout'
 import { LoginPage } from './pages/auth/LoginPage'
@@ -18,8 +19,46 @@ import {
   ROLES,
   getInitialRouteForRoles,
 } from './config/navigation'
+import { LOGIN_REDIRECT_PATH, onSessionInvalidated } from './services/api'
 import { NuevoIncidentePage } from './pages/reportes/NuevoIncidentePage'
 import { NotificacionesPage } from './pages/notificaciones/NotificacionesPage'
+
+/**
+ * Activa una única redirección hacia /login cuando el interceptor HTTP
+ * invalida la sesión vigente por un 401 (#332).
+ */
+function SessionExpirationRedirect() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const locationRef = useRef(location)
+  const lastRedirectEpochRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    locationRef.current = location
+  }, [location])
+
+  useEffect(() => {
+    return onSessionInvalidated((event) => {
+      if (lastRedirectEpochRef.current === event.sessionEpoch) {
+        return
+      }
+
+      lastRedirectEpochRef.current = event.sessionEpoch
+      const targetPath = event.redirectTo || LOGIN_REDIRECT_PATH
+
+      if (locationRef.current.pathname === targetPath) {
+        return
+      }
+
+      navigate(targetPath, {
+        replace: true,
+        state: { from: locationRef.current },
+      })
+    })
+  }, [navigate])
+
+  return null
+}
 
 /**
  * Destino inicial según el rol:
@@ -39,7 +78,9 @@ function RoleHomeRedirect() {
 
 function AppRoutes() {
   return (
-    <Routes>
+    <>
+      <SessionExpirationRedirect />
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/registro" element={<RegisterPage />} />
       <Route path="/register" element={<Navigate to="/registro" replace />} />
@@ -147,7 +188,8 @@ function AppRoutes() {
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </>
   )
 }
 

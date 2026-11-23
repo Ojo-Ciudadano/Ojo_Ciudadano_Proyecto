@@ -1,11 +1,11 @@
 
 .nuevo-reporte-pagina {
-  --reporte-azul: #0b1f4d;
-  --reporte-rojo: #dc2626;
-  --reporte-naranja: #f97316;
-  --reporte-texto: #17243d;
-  --reporte-secundario: #526079;
-  --reporte-borde: #dce3ed;
+  --reporte-azul: var(--color-primary);
+  --reporte-rojo: var(--color-danger);
+  --reporte-naranja: var(--color-warning);
+  --reporte-texto: var(--color-text);
+  --reporte-secundario: var(--color-text-muted);
+  --reporte-borde: var(--color-border);
 
   width: 100%;
   max-width: 1050px;
@@ -13,9 +13,9 @@
   margin: 0 auto;
   padding: 28px;
   color: var(--reporte-texto);
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
   -webkit-font-smoothing: antialiased;
 }
 

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { CarruselEvidencias } from '../../components/incidentes/CarruselEvidencias'
 import { IncidentMap } from '../../components/map/IncidentMap'
 import { mapearIncidentesAMarcadores } from '../../components/map/incidentMarkers'
+import { EstadoIncidenteBadge } from '../../components/ui/EstadoIncidenteBadge'
+import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
 import { useInicioCiudadano } from '../../hooks/useInicioCiudadano'
 import './HomePage.css'
 
@@ -167,34 +169,38 @@ export function HomePage() {
         <div className="inicio-ciudadano-resultados">
           <div aria-busy={cargando}>
             {cargando ? (
-              <div className="inicio-ciudadano-mensaje" role="status">
-                Cargando incidentes…
-              </div>
+              <EstadoVistaMensaje
+                tipo="loading"
+                mensaje="Cargando incidentes…"
+              />
             ) : !sesionDisponible ? (
-              <div className="inicio-ciudadano-mensaje" role="status">
-                Inicia sesión como Ciudadano para consultar los reportes.
-              </div>
+              <EstadoVistaMensaje
+                tipo="empty"
+                mensaje="Inicia sesión como Ciudadano para consultar los reportes."
+              />
             ) : error ? (
-              <div
-                className="inicio-ciudadano-mensaje inicio-ciudadano-error"
-                role="alert"
-              >
-                <p>{error.mensaje}</p>
-
+              <EstadoVistaMensaje tipo="error" mensaje={error.mensaje}>
                 {error.permiteReintentar && (
-                  <button type="button" onClick={reintentar}>
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn--danger"
+                    onClick={reintentar}
+                  >
                     Reintentar
                   </button>
                 )}
-              </div>
+              </EstadoVistaMensaje>
             ) : totalResultados === 0 ? (
-              <div className="inicio-ciudadano-mensaje" role="status">
-                {estadoId || busqueda.trim()
-                  ? 'No se encontraron reportes con los filtros seleccionados.'
-                  : vista === 'mis-reportes'
-                    ? 'Todavía no tienes reportes registrados.'
-                    : 'No hay incidentes disponibles.'}
-              </div>
+              <EstadoVistaMensaje
+                tipo="empty"
+                mensaje={
+                  estadoId || busqueda.trim()
+                    ? 'No se encontraron reportes con los filtros seleccionados.'
+                    : vista === 'mis-reportes'
+                      ? 'Todavía no tienes reportes registrados.'
+                      : 'No hay incidentes disponibles.'
+                }
+              />
             ) : (
               <ul className="inicio-ciudadano-lista">
                 {incidentesPagina.map((incidente) => (
@@ -217,9 +223,9 @@ export function HomePage() {
                           </Link>
                         </h2>
 
-                        <span className="inicio-ciudadano-estado">
-                          {texto(incidente.estado?.nombre)}
-                        </span>
+                        <EstadoIncidenteBadge
+                          nombre={incidente.estado?.nombre}
+                        />
                       </div>
 
                       <p className="inicio-ciudadano-folio">

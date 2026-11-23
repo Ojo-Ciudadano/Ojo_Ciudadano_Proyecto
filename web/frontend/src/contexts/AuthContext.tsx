@@ -13,6 +13,7 @@ import { authService } from '../services/auth.service'
 
 import {
   clearSessionStorage,
+  getSessionEpoch,
   onSessionInvalidated,
   startNewSession,
 } from '../services/api'
@@ -71,10 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null
     }
 
+    const requestEpoch = getSessionEpoch()
     setIsLoading(true)
 
     try {
       const profile = await authService.getProfile()
+
+      if (getSessionEpoch() !== requestEpoch) {
+        return null
+      }
 
       if (!hasKnownRole(profile.roles)) {
         clearSessionStorage()
@@ -83,15 +89,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       localStorage.setItem('user', JSON.stringify(profile))
+      setSessionExpiredMessage(null)
       setUser(profile)
 
       return profile
     } catch {
-      clearSessionStorage()
-      setUser(null)
+      if (getSessionEpoch() === requestEpoch) {
+        if (localStorage.getItem('access_token')) {
+          clearSessionStorage()
+        }
+        setUser(null)
+      }
       return null
     } finally {
-      setIsLoading(false)
+      if (getSessionEpoch() === requestEpoch) {
+        setIsLoading(false)
+      }
     }
   }, [])
 
@@ -109,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Iniciar sesión y consultar roles vigentes
   const login = useCallback(
     async (email: string, password: string): Promise<User> => {
+      let sessionStarted = false
       setIsLoading(true)
 
       try {
@@ -118,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
 
         startNewSession(response.access_token)
+        sessionStarted = true
 
         const profile = await authService.getProfile()
 
@@ -136,8 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return profile
       } catch (err) {
-        clearSessionStorage()
-        setUser(null)
+        if (sessionStarted && localStorage.getItem('access_token')) {
+          clearSessionStorage()
+        }
+        if (sessionStarted) {
+          setUser(null)
+        }
         throw err
       } finally {
         setIsLoading(false)
@@ -149,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Cerrar sesión
   const logout = useCallback(async () => {
     await authService.logout()
+    setSessionExpiredMessage(null)
     setUser(null)
   }, [])
 
