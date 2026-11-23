@@ -44,7 +44,10 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('Incidentes', 'Reporte, filtros, detalle ampliado, estados, historial, prioridad y asignación (#117, #119, #120, #123, #124, #125)')
     .addTag('Evidencias', 'Subida multipart/form-data, consulta de metadata y descarga binaria de fotografías (#86, #106)')
     .addTag('Categorías', 'Catálogo de categorías de incidentes y prioridad base')
-    .addTag('Notificaciones', 'Consulta de notificaciones del usuario autenticado (#114)')
+    .addTag(
+      'Notificaciones',
+      'Consulta y marcado como leídas de las notificaciones del usuario autenticado (#114, #327)',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -669,6 +672,19 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
           type: 'string',
           format: 'date-time',
           example: '2026-10-29T10:05:00.000Z',
+        },
+      },
+    },
+    MarcarTodasLeidasResponseDto: {
+      type: 'object',
+      required: ['marcadas'],
+      properties: {
+        marcadas: {
+          type: 'integer',
+          minimum: 0,
+          example: 2,
+          description:
+            'Cantidad de notificaciones pendientes que pasaron a leídas.',
         },
       },
     },
@@ -2077,6 +2093,97 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
               'Unauthorized',
               'Se requiere un token Bearer valido',
               '/api/v1/notificaciones',
+            ),
+          },
+        },
+      },
+    },
+    '/api/v1/notificaciones/leidas': {
+      patch: {
+        tags: ['Notificaciones'],
+        security: [{ bearer: [] }],
+        summary: 'Marcar todas las notificaciones pendientes como leídas (#327)',
+        description:
+          'Marca como leídas todas las notificaciones pendientes del usuario autenticado (claim sub del JWT). No modifica notificaciones de otras cuentas. Es idempotente: una segunda llamada devuelve 0. Acceso permitido para ADMIN y CIUDADANO.',
+        responses: {
+          '200': {
+            description: 'Cantidad de notificaciones marcadas como leídas.',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/MarcarTodasLeidasResponseDto',
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Token Bearer JWT ausente, inválido o expirado.',
+            ...errorResponse(
+              401,
+              'Unauthorized',
+              'Se requiere un token Bearer valido',
+              '/api/v1/notificaciones/leidas',
+            ),
+          },
+        },
+      },
+    },
+    '/api/v1/notificaciones/{id}/leida': {
+      patch: {
+        tags: ['Notificaciones'],
+        security: [{ bearer: [] }],
+        summary: 'Marcar como leída una notificación propia (#327)',
+        description:
+          'Marca como leída una notificación del usuario autenticado (claim sub del JWT). Si la notificación ya estaba leída, conserva ese estado. Una notificación ajena se rechaza sin modificarla. Acceso permitido para ADMIN y CIUDADANO.',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'UUID de la notificación',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: '11eebc99-9c0b-4ef8-bb6d-6bb9bd380a77',
+            },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Notificación actualizada.',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/NotificacionResponseDto',
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'El id no es un UUID válido.',
+            ...errorResponse(
+              400,
+              'Bad Request',
+              'El id debe ser un UUID válido',
+              '/api/v1/notificaciones/id-invalido/leida',
+            ),
+          },
+          '401': {
+            description: 'Token Bearer JWT ausente, inválido o expirado.',
+            ...errorResponse(
+              401,
+              'Unauthorized',
+              'Se requiere un token Bearer valido',
+              '/api/v1/notificaciones/11eebc99-9c0b-4ef8-bb6d-6bb9bd380a77/leida',
+            ),
+          },
+          '403': {
+            description: 'La notificación no pertenece al usuario autenticado.',
+            ...errorResponse(
+              403,
+              'Forbidden',
+              'No tiene permiso sobre esa notificación',
+              '/api/v1/notificaciones/11eebc99-9c0b-4ef8-bb6d-6bb9bd380a77/leida',
             ),
           },
         },
