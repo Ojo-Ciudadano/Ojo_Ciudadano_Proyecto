@@ -419,6 +419,99 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `an explicit gps request replaces the manual selection`() = runTest {
+        val locationClient = FakeLocationClient(
+            LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = locationClient
+        )
+
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -38.7396, longitude = -72.5984)
+        )
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = -33.4489,
+            longitude = -70.6693
+        )
+
+        viewModel.refreshLocation()
+
+        assertEquals(
+            LocationResult.Success(latitude = -33.4489, longitude = -70.6693),
+            viewModel.formState.location
+        )
+        assertEquals(
+            LocationSelectionSource.DEVICE,
+            viewModel.formState.locationSource
+        )
+        assertNull(viewModel.formState.locationError)
+    }
+
+    @Test
+    fun `manual selection creates a valid report when gps permission is denied`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = FakeLocationClient(LocationResult.MissingPermissions)
+        )
+
+        viewModel.fillValidForm()
+
+        assertFalse(viewModel.formState.hasValidLocation)
+        assertEquals(
+            CreateReportLocationErrors.MISSING_PERMISSIONS,
+            viewModel.formState.locationError
+        )
+
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -38.7396, longitude = -72.5984)
+        )
+        viewModel.createReport()
+
+        val input = incidentRepository.createInputs.single()
+        assertEquals(-38.7396, input.location.latitude, 0.0)
+        assertEquals(-72.5984, input.location.longitude, 0.0)
+        assertEquals(
+            LocationSelectionSource.MANUAL,
+            viewModel.formState.locationSource
+        )
+    }
+
+    @Test
+    fun `a failed gps refresh keeps the manual selection available`() = runTest {
+        val manualLocation = LocationResult.Success(
+            latitude = -38.7396,
+            longitude = -72.5984
+        )
+        val locationClient = FakeLocationClient(manualLocation)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = locationClient
+        )
+
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -38.7396, longitude = -72.5984)
+        )
+        locationClient.resultToReturn = LocationResult.NotAvailable
+
+        viewModel.refreshLocation()
+
+        assertEquals(manualLocation, viewModel.formState.location)
+        assertEquals(
+            LocationSelectionSource.MANUAL,
+            viewModel.formState.locationSource
+        )
+        assertTrue(viewModel.formState.hasValidLocation)
+        assertEquals(
+            CreateReportLocationErrors.NOT_AVAILABLE,
+            viewModel.formState.locationError
+        )
+    }
+
+    @Test
     fun `handles an unexpected location failure without creating the incident`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val locationClient = FakeLocationClient(

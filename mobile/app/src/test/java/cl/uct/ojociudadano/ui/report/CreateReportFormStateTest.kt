@@ -307,6 +307,27 @@ class CreateReportFormStateTest {
         assertEquals(LocationSelectionSource.DEVICE, updatedState.locationSource)
         assertNull(updatedState.locationError)
     }
+
+    @Test
+    fun `a failed gps request keeps the manual coordinate and reports the problem`() {
+        val manualLocation = LocationResult.Success(-38.7359, -72.5904)
+        val state = CreateReportFormState(
+            location = manualLocation,
+            locationSource = LocationSelectionSource.MANUAL,
+            isLoadingLocation = true
+        )
+
+        val updatedState = state.updateLocation(LocationResult.NotAvailable)
+
+        assertEquals(manualLocation, updatedState.location)
+        assertEquals(LocationSelectionSource.MANUAL, updatedState.locationSource)
+        assertFalse(updatedState.isLoadingLocation)
+        assertTrue(updatedState.hasValidLocation)
+        assertEquals(
+            CreateReportLocationErrors.NOT_AVAILABLE,
+            updatedState.locationError
+        )
+    }
 }
 
 private val sampleCategory = Category(
