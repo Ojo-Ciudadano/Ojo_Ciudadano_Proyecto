@@ -24,6 +24,29 @@
   outline-offset: -3px;
 }
 
+/* Marcadores DOM compatibles con MarkerCluster (equivalentes al circleMarker original). */
+.incident-map__marker {
+  background: transparent;
+  border: 0;
+}
+
+.incident-map__marker-circulo {
+  display: block;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+/* El contador del clúster mantiene la tipografía del proyecto. */
+.incident-map .marker-cluster div {
+  color: #0b1f4d;
+  font-family: inherit;
+  font-weight: 700;
+}
+
 .incident-map__error {
   position: absolute;
   inset: 0;
