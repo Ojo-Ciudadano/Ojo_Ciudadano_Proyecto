@@ -29,6 +29,17 @@ const crearDto = (
   ...extra,
 });
 
+const crearDtoConUbicacion = (
+  cambios: Record<string, unknown>,
+): CreateIncidenteDto => {
+  const dto = crearDto();
+  dto.ubicacion = {
+    ...ubicacionValida,
+    ...cambios,
+  } as unknown as CreateIncidenteDto['ubicacion'];
+  return dto;
+};
+
 const evidencia = {
   id: 'evi-1',
   incidenteId: INCIDENTE_ID,
@@ -155,6 +166,64 @@ describe('IncidentesService', () => {
 
         expect(prisma.$transaction).not.toHaveBeenCalled();
         expect(tx.incidente.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('guarda las coordenadas y los datos de una ubicacion manual valida', async () => {
+      const dto = crearDto();
+
+      await service.create(dto);
+
+      expect(tx.ubicacion.create).toHaveBeenCalledWith({ data: dto.ubicacion });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('conserva los reportes validos por GPS con el contrato actual', async () => {
+      const dto = crearDtoConUbicacion({
+        latitud: -38.7368,
+        longitud: -72.6065,
+      });
+
+      await expect(service.create(dto)).resolves.toMatchObject({
+        id: INCIDENTE_ID,
+      });
+      expect(tx.ubicacion.create).toHaveBeenCalledWith({ data: dto.ubicacion });
+    });
+
+    it.each([
+      ['latitud no numerica', { latitud: 'abc' }, 'latitud'],
+      ['latitud no finita', { latitud: Number.NaN }, 'latitud'],
+      ['longitud no finita', { longitud: Number.POSITIVE_INFINITY }, 'longitud'],
+      ['latitud fuera de La Araucania', { latitud: -40 }, 'limit'],
+      ['longitud fuera de La Araucania', { longitud: -74 }, 'limit'],
+    ])(
+      'rechaza coordenadas invalidas: %s',
+      async (_caso, cambios, mensajeEsperado) => {
+        await expect(
+          service.create(crearDtoConUbicacion(cambios)),
+        ).rejects.toThrow(mensajeEsperado);
+
+        expect(prisma.categoria.findUnique).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(tx.ubicacion.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ['region distinta', { region: 'Biobio' }, 'region'],
+      ['comuna fuera del catalogo', { comuna: 'Concepcion' }, 'comuna'],
+      ['direccion vacia', { direccionReferencia: '   ' }, 'direccion'],
+      ['sector vacio', { sector: '' }, 'sector'],
+    ])(
+      'rechaza una ubicacion incoherente: %s',
+      async (_caso, cambios, mensajeEsperado) => {
+        await expect(
+          service.create(crearDtoConUbicacion(cambios)),
+        ).rejects.toThrow(mensajeEsperado);
+
+        expect(prisma.categoria.findUnique).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(tx.ubicacion.create).not.toHaveBeenCalled();
       },
     );
   });
