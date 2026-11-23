@@ -89,6 +89,14 @@ class CreateReportViewModel(
      */
     private var manualLocationVersion = 0
 
+    /**
+     * Identifica la última consulta de geocodificación inversa iniciada.
+     *
+     * Una respuesta antigua no debe completar el formulario con la dirección de
+     * una ubicación que ya fue reemplazada por el GPS o por el mapa.
+     */
+    private var addressAutofillRequestVersion = 0
+
     init {
         loadCategories()
         refreshLocation()
@@ -163,6 +171,12 @@ class CreateReportViewModel(
         formState = formState.updateManualLocation(coordinate)
         isManualLocationPickerVisible = false
         onFormEdited()
+
+        (formState.location as? LocationResult.Success)?.let { location ->
+            viewModelScope.launch {
+                autocompleteAddressDetails(location)
+            }
+        }
     }
 
     /**
@@ -424,6 +438,7 @@ class CreateReportViewModel(
      * editables y la validación del envío no cambia.
      */
     private suspend fun autocompleteAddressDetails(location: LocationResult.Success) {
+        val requestVersion = ++addressAutofillRequestVersion
         formState = formState.startAddressAutofill()
 
         val result = try {
@@ -446,6 +461,10 @@ class CreateReportViewModel(
             }
             ReverseGeocodingResult.Error(exception.message.orEmpty())
         }
+
+        // Otra ubicación ya inició su propia consulta: este resultado quedó
+        // obsoleto y no debe modificar los datos visibles.
+        if (requestVersion != addressAutofillRequestVersion) return
 
         formState = when (result) {
             is ReverseGeocodingResult.Success ->

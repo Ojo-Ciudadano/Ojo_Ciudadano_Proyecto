@@ -54,6 +54,7 @@ data class CreateReportFormState(
     val locationError: String? = null,
     val isAutocompletingAddress: Boolean = false,
     val addressAutofillError: String? = null,
+    val lastAutocompletedAddress: ReverseGeocodedAddress? = null,
     val titleError: String? = null,
     val descriptionError: String? = null,
     val categoryError: String? = null,
@@ -112,24 +113,41 @@ data class CreateReportFormState(
         copy(isAutocompletingAddress = true, addressAutofillError = null)
 
     /**
-     * Completa solo los campos que siguen vacíos.
+     * Completa los campos vacíos o que todavía conservan la sugerencia anterior.
      *
      * Un valor escrito manualmente siempre tiene prioridad sobre la sugerencia
      * del geocodificador, incluso si la respuesta llega después de la edición.
-     * [sector] no se completa porque el proveedor no entrega un equivalente
-     * confiable y el usuario debe precisarlo.
+     * Si el usuario cambia de ubicación, los valores que solo habían sido
+     * autocompletados se actualizan, mientras que las ediciones manuales se
+     * mantienen. [sector] no se completa porque el proveedor no entrega un
+     * equivalente confiable y el usuario debe precisarlo.
      */
     fun applyReverseGeocodedAddress(address: ReverseGeocodedAddress): CreateReportFormState {
         if (!address.hasAnyValue) {
             return finishAddressAutofill()
         }
 
+        val previousAddress = lastAutocompletedAddress
+        val nextAddress = ReverseGeocodedAddress(
+            referenceAddress = address.referenceAddress.normalized(),
+            commune = address.commune.normalized(),
+            region = address.region.normalized()
+        )
+
         return copy(
-            referenceAddress = referenceAddress.ifBlank {
-                address.referenceAddress.orEmpty().trim()
-            },
-            commune = commune.ifBlank { address.commune.orEmpty().trim() },
-            region = region.ifBlank { address.region.orEmpty().trim() },
+            referenceAddress = referenceAddress.updatedWith(
+                previousAutocompletedValue = previousAddress?.referenceAddress,
+                newValue = nextAddress.referenceAddress
+            ),
+            commune = commune.updatedWith(
+                previousAutocompletedValue = previousAddress?.commune,
+                newValue = nextAddress.commune
+            ),
+            region = region.updatedWith(
+                previousAutocompletedValue = previousAddress?.region,
+                newValue = nextAddress.region
+            ),
+            lastAutocompletedAddress = nextAddress,
             isAutocompletingAddress = false,
             addressAutofillError = null
         )
@@ -282,3 +300,20 @@ data class CreateReportFormState(
     fun failPhotoOperation(message: String): CreateReportFormState =
         copy(activePhotoOperation = null, photoError = message)
 }
+
+/**
+ * Conserva una edición manual y actualiza solo los valores que seguían siendo
+ * una sugerencia automática o que todavía estaban vacíos.
+ */
+private fun String.updatedWith(
+    previousAutocompletedValue: String?,
+    newValue: String?
+): String {
+    val canReplace = isBlank() ||
+        (previousAutocompletedValue != null && this == previousAutocompletedValue)
+
+    return if (canReplace) newValue.orEmpty() else this
+}
+
+private fun String?.normalized(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+
