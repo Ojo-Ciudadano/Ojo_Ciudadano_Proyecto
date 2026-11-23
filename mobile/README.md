@@ -143,8 +143,23 @@ OSMDroid, la misma biblioteca cartográfica del mapa de incidentes:
   usan al crear el reporte.
 - Cancelar o volver atrás cierra el selector sin modificar la ubicación previa.
 - Una respuesta tardía del GPS no reemplaza una coordenada confirmada
-  manualmente. La tarjeta de ubicación distingue «Ubicación GPS obtenida» de
-  «Ubicación seleccionada en el mapa».
+  manualmente. La tarjeta de ubicación distingue «Obtenida por GPS» de
+  «Seleccionada en el mapa».
+
+## Alternancia entre GPS y mapa (#300)
+
+La sección de ubicación del formulario ofrece un control segmentado con dos
+acciones explícitas:
+
+- «Usar mi GPS actual» solicita la ubicación del dispositivo. Si el permiso de
+  ubicación no está concedido, primero muestra la solicitud del sistema.
+- «Elegir en el mapa» abre el selector manual de #299.
+
+La opción seleccionada y la tarjeta de ubicación indican el origen de las
+coordenadas vigentes. Una coordenada manual se conserva aunque falle una
+consulta posterior del GPS o llegue una lectura tardía; solo una lectura GPS
+exitosa solicitada explícitamente la reemplaza. Con el permiso de ubicación
+denegado, el usuario puede completar el reporte eligiendo el punto en el mapa.
 
 Validación local:
 
