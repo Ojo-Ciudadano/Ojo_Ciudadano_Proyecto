@@ -32,10 +32,10 @@ class RemoteNotificationRepository(
     override val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
 
     /**
-     * Serializa las consultas: el ciclo periódico y la pantalla pueden pedir un
-     * refresco al mismo tiempo y solo debe existir una petición en vuelo.
+     * Serializa refresco y marcado: un refresco con datos antiguos no puede
+     * publicarse después de un marcado confirmado y revertirlo.
      */
-    private val refreshMutex = Mutex()
+    private val stateMutex = Mutex()
 
     private var currentUserId: String? = null
     private var observedSession = false
@@ -53,18 +53,38 @@ class RemoteNotificationRepository(
         }
     }
 
-    override suspend fun refresh(): List<Notification> {
-        val rows = refreshMutex.withLock {
-            val response = withCurrentIdentity { identity ->
-                apiService.getNotifications(expectedSession = identity.token)
-            }
-            response.map { it.toDomain() }
+    override suspend fun refresh(): List<Notification> = stateMutex.withLock {
+        val response = withCurrentIdentity { identity ->
+            apiService.getNotifications(expectedSession = identity.token)
         }
+        val rows = response.map { it.toDomain() }
         publish(rows)
-        return rows
+        rows
     }
 
     override suspend fun markAsRead(id: String) {
+        stateMutex.withLock { markAsReadLocked(id) }
+    }
+
+    override suspend fun markAllAsRead(): Int = stateMutex.withLock {
+        var marked = 0
+        // El contrato masivo aún no está definido en el backend; se reutiliza la
+        // operación individual sin volver a tomar el lock (evita el deadlock).
+        _notifications.value.filter { !it.isRead }.forEach { row ->
+            try {
+                markAsReadLocked(row.id)
+                marked++
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // Silencioso: la notificación permanece pendiente.
+            }
+        }
+        marked
+    }
+
+    /** Requiere que el llamador ya tenga [stateMutex] tomado. */
+    private suspend fun markAsReadLocked(id: String) {
         withCurrentIdentity { identity ->
             val response = apiService.markNotificationAsRead(id, expectedSession = identity.token)
             // executeApiCall traduce el HttpException a ApiException.Http; se
@@ -75,23 +95,6 @@ class RemoteNotificationRepository(
         publish(_notifications.value.map { row ->
             if (row.id == id) row.copy(isRead = true) else row
         })
-    }
-
-    override suspend fun markAllAsRead(): Int {
-        var marked = 0
-        // El contrato masivo aún no está definido en el backend; se reutiliza la
-        // operación individual y un fallo puntual no cancela el resto.
-        _notifications.value.filter { !it.isRead }.forEach { row ->
-            try {
-                markAsRead(row.id)
-                marked++
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: Exception) {
-                // Silencioso: la notificación permanece pendiente.
-            }
-        }
-        return marked
     }
 
     override fun clear() {

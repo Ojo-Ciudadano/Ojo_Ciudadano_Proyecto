@@ -18,6 +18,8 @@ import cl.uct.ojociudadano.data.remote.dto.NotificationDto
 import cl.uct.ojociudadano.data.session.TokenSnapshot
 import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.data.session.testSessionManager
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.runCurrent
 import okhttp3.MediaType.Companion.toMediaType
@@ -328,6 +330,49 @@ class RemoteRepositoryTest {
         assertEquals(1, repository.unreadCount.value)
     }
 
+    @Test
+    fun `a stale refresh cannot revert a confirmed read`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto()))
+            .apply { refreshGate = gate }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+
+        // El refresco retiene el lock; el marcado debe esperar y publicar después.
+        val refreshJob = launch { repository.refresh() }
+        runCurrent()
+        val markJob = launch { repository.markAsRead("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") }
+        runCurrent()
+
+        gate.complete(Unit)
+        refreshJob.join()
+        markJob.join()
+
+        assertTrue(repository.notifications.value.single().isRead)
+        assertEquals(0, repository.unreadCount.value)
+    }
+
+    @Test
+    fun `markAllAsRead does not deadlock with an in-flight refresh`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val second = sampleNotificationDto().copy(id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto(), second))
+            .apply { refreshGate = gate }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+
+        val refreshJob = launch { repository.refresh() }
+        runCurrent()
+        var marked = 0
+        val markAllJob = launch { marked = repository.markAllAsRead() }
+
+        gate.complete(Unit)
+        refreshJob.join()
+        markAllJob.join()
+
+        assertEquals(2, marked)
+        assertTrue(repository.notifications.value.all { it.isRead })
+        assertEquals(0, repository.unreadCount.value)
+    }
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
     fun `closing the session clears the published notifications`() = runTest {
@@ -447,8 +492,12 @@ class RemoteRepositoryTest {
         var lastNotificationsSession: TokenSnapshot? = null
             private set
 
+        /** Permite retener un refresco para probar la serialización con el marcado. */
+        var refreshGate: CompletableDeferred<Unit>? = null
+
         override suspend fun getNotifications(expectedSession: TokenSnapshot?): List<NotificationDto> {
             lastNotificationsSession = expectedSession
+            refreshGate?.await()
             return notifications
         }
 
