@@ -19,10 +19,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Notification
+import cl.uct.ojociudadano.navigation.NotificationClickOutcome
+import cl.uct.ojociudadano.navigation.notificationClickOutcome
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.reports.incidentDate
@@ -65,18 +70,23 @@ fun NotificationsScreen(
     }
     val state by model.state.collectAsState()
     val notifications by model.notifications.collectAsState()
+    var invalidIncidentMessage by remember { mutableStateOf<String?>(null) }
     NotificationsContent(
         state = state,
         notifications = notifications,
         onBack = onBack,
         onRetry = model::retry,
         onNotificationClick = { notification ->
-            if (notification.incidentId.isNotBlank()) {
-                // El marcado es best-effort; la navegación no espera al backend.
-                model.openNotification(notification)
-                onOpenIncident(notification.incidentId)
-            }
+            // El marcado es best-effort; la navegación no espera al backend.
+            model.openNotification(notification)
+            onOpenIncident(notification.incidentId)
         },
+        onInvalidIncident = {
+            invalidIncidentMessage = "El incidente asociado a esta notificación no es válido. " +
+                "Intenta nuevamente más tarde."
+        },
+        invalidIncidentMessage = invalidIncidentMessage,
+        onDismissInvalidIncident = { invalidIncidentMessage = null },
         modifier = modifier
     )
 }
@@ -88,6 +98,9 @@ fun NotificationsContent(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onNotificationClick: (Notification) -> Unit = {},
+    onInvalidIncident: (Notification) -> Unit = {},
+    invalidIncidentMessage: String? = null,
+    onDismissInvalidIncident: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier.fillMaxSize()) {
@@ -112,6 +125,14 @@ fun NotificationsContent(
                     )
                 }
             }
+            if (invalidIncidentMessage != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CitizenMessage(invalidIncidentMessage, isError = true)
+                        TextButton(onClick = onDismissInvalidIncident) { Text("Entendido") }
+                    }
+                }
+            }
             when (state) {
                 NotificationsUiState.Loading -> item { NotificationsLoading() }
                 NotificationsUiState.Empty -> item {
@@ -126,12 +147,18 @@ fun NotificationsContent(
                     }
                 }
                 NotificationsUiState.Success -> items(notifications, key = { it.id }) { notification ->
+                    val outcome = notificationClickOutcome(notification.incidentId)
                     NotificationCard(
                         notification = notification,
-                        onClick = if (notification.incidentId.isNotBlank()) {
-                            { onNotificationClick(notification) }
-                        } else {
-                            null
+                        onClick = when (outcome) {
+                            is NotificationClickOutcome.Open -> {
+                                { onNotificationClick(notification) }
+                            }
+                            NotificationClickOutcome.InvalidIncident -> {
+                                // No se marca como leída ni se navega a una ruta inválida.
+                                { onInvalidIncident(notification) }
+                            }
+                            NotificationClickOutcome.NoIncident -> null
                         }
                     )
                 }

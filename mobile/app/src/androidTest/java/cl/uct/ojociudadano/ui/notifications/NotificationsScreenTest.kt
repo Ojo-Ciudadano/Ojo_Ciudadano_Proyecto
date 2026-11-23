@@ -17,6 +17,7 @@ import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.ui.reports.incidentDate
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -152,6 +153,38 @@ class NotificationsScreenTest {
         compose.onNodeWithTag("notification_without-incident").performClick()
 
         assertEquals(listOf("with-incident"), opened)
+    }
+
+    @Test fun invalidIncidentIsNotMarkedNorNavigatedAndShowsAControlledMessage() {
+        val opened = mutableListOf<String>()
+        val invalid = mutableListOf<String>()
+        var dismissed = false
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(
+                        notification(id = "broken-incident", incidentId = "incidente/otro")
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onNotificationClick = { opened += it.id },
+                    onInvalidIncident = { invalid += it.id },
+                    invalidIncidentMessage = "El incidente asociado a esta notificación no es válido.",
+                    onDismissInvalidIncident = { dismissed = true }
+                )
+            }
+        }
+
+        compose.onNodeWithText("El incidente asociado a esta notificación no es válido.")
+            .assertIsDisplayed()
+        compose.onNodeWithTag("notification_broken-incident").performClick()
+
+        assertEquals(listOf("broken-incident"), invalid)
+        assertTrue(opened.isEmpty())
+
+        compose.onNodeWithText("Entendido").performClick()
+        assertTrue(dismissed)
     }
 
     @Test fun backActionAndNarrowLayoutKeepContentReachable() {
