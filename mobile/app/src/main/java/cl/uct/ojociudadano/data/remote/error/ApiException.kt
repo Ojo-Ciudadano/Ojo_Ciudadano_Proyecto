@@ -14,7 +14,7 @@ sealed class ApiException(
         cause = cause
     )
 
-    class Http(
+    open class Http(
         val statusCode: Int,
         val serverMessages: List<String>,
         val error: String?,
@@ -26,6 +26,15 @@ sealed class ApiException(
             ?: error
             ?: "Error HTTP $statusCode"
     )
+
+    /** Conserva los metadatos HTTP para los consumidores existentes. */
+    class InsufficientPermissions(
+        serverMessages: List<String> = emptyList(),
+        error: String? = null,
+        path: String? = null
+    ) : Http(403, serverMessages, error, path) {
+        override val message: String = "No tienes permisos suficientes para realizar esta operación"
+    }
 
     class Unexpected(
         cause: Throwable

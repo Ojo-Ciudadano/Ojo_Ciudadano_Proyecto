@@ -153,6 +153,28 @@ class ApiCallTest {
         assertSame(cause, exception)
     }
 
+    @Test
+    fun `403 preserves metadata as insufficient permissions`() = runTest {
+        val exception = expectException<ApiException.InsufficientPermissions> {
+            executeApiCall<String> {
+                throw httpException(403, """{"message":"Forbidden","error":"Forbidden","path":"/api/v1/categorias"}""")
+            }
+        }
+        assertEquals(403, exception.statusCode)
+        assertEquals(listOf("Forbidden"), exception.serverMessages)
+        assertEquals("Forbidden", exception.error)
+        assertEquals("/api/v1/categorias", exception.path)
+    }
+
+    @Test
+    fun `nested api calls preserve permissions error instead of wrapping as unexpected`() = runTest {
+        val cause = ApiException.InsufficientPermissions()
+        val exception = expectException<ApiException.InsufficientPermissions> {
+            executeApiCall<String> { executeApiCall { throw cause } }
+        }
+        assertSame(cause, exception)
+    }
+
     private fun httpException(
         statusCode: Int,
         body: String

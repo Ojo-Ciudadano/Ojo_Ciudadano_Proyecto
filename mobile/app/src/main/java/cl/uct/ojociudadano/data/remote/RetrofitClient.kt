@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.data.remote
 
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.remote.auth.BearerTokenInterceptor
+import cl.uct.ojociudadano.data.session.SessionExpirationEvents
 import cl.uct.ojociudadano.data.session.TokenProvider
 import cl.uct.ojociudadano.data.session.TokenSnapshot
 import okhttp3.OkHttpClient
@@ -33,7 +34,7 @@ object RetrofitClient {
     fun create(
         baseUrl: String = DEFAULT_BASE_URL,
         tokenProvider: TokenProvider? = null,
-        onUnauthorized: ((rejectedToken: TokenSnapshot) -> Unit)? = null
+        onUnauthorized: ((rejectedToken: TokenSnapshot) -> Unit)? = SessionExpirationEvents::notifyExpired
     ): Retrofit {
         val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
 
@@ -63,7 +64,7 @@ object RetrofitClient {
     fun createApiService(
         baseUrl: String = DEFAULT_BASE_URL,
         tokenProvider: TokenProvider? = null,
-        onUnauthorized: ((rejectedToken: TokenSnapshot) -> Unit)? = null
+        onUnauthorized: ((rejectedToken: TokenSnapshot) -> Unit)? = SessionExpirationEvents::notifyExpired
     ): ApiService {
         return create(baseUrl, tokenProvider, onUnauthorized)
             .create(ApiService::class.java)

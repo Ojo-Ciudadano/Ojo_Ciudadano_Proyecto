@@ -70,8 +70,7 @@ class AppContainer(
     val apiService: ApiService by lazy {
         RetrofitClient.createApiService(
             baseUrl = baseUrl,
-            tokenProvider = sessionManager,
-            onUnauthorized = sessionManager::invalidateIfCurrent
+            tokenProvider = sessionManager
         )
     }
 
