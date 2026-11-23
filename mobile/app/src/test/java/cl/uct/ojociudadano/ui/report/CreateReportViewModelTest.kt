@@ -549,6 +549,80 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `confirmed manual coordinate autocompletes location details`() = runTest {
+        val reverseGeocodingClient = FakeReverseGeocodingClient(
+            resultToReturn = ReverseGeocodingResult.Success(
+                ReverseGeocodedAddress(
+                    referenceAddress = "Camino rural km 4",
+                    commune = "Villarrica",
+                    region = "La Araucanía"
+                )
+            )
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = FakeLocationClient(LocationResult.NotAvailable),
+            reverseGeocodingClient = reverseGeocodingClient
+        )
+        viewModel.onLocationDetailsChange("", "", "", "Sector rural")
+
+        viewModel.openManualLocationPicker()
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -39.2800, longitude = -72.2300)
+        )
+
+        assertEquals("Camino rural km 4", viewModel.formState.referenceAddress)
+        assertEquals("Villarrica", viewModel.formState.commune)
+        assertEquals("La Araucanía", viewModel.formState.region)
+        assertEquals("Sector rural", viewModel.formState.sector)
+        assertEquals(
+            listOf(-39.2800 to -72.2300),
+            reverseGeocodingClient.requests
+        )
+    }
+
+    @Test
+    fun `new location updates autocompleted details but keeps manual edits`() = runTest {
+        val reverseGeocodingClient = FakeReverseGeocodingClient(
+            resultToReturn = ReverseGeocodingResult.Success(
+                ReverseGeocodedAddress(
+                    referenceAddress = "Av. Alemania 123",
+                    commune = "Temuco",
+                    region = "La Araucanía"
+                )
+            )
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            reverseGeocodingClient = reverseGeocodingClient
+        )
+        assertEquals("Av. Alemania 123", viewModel.formState.referenceAddress)
+        viewModel.onLocationDetailsChange(
+            referenceAddress = viewModel.formState.referenceAddress,
+            commune = "Comuna escrita por el usuario",
+            region = viewModel.formState.region,
+            sector = "Centro"
+        )
+        reverseGeocodingClient.resultToReturn = ReverseGeocodingResult.Success(
+            ReverseGeocodedAddress(
+                referenceAddress = "Camino rural km 4",
+                commune = "Villarrica",
+                region = "La Araucanía"
+            )
+        )
+
+        viewModel.openManualLocationPicker()
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -39.2800, longitude = -72.2300)
+        )
+
+        assertEquals("Camino rural km 4", viewModel.formState.referenceAddress)
+        assertEquals("Comuna escrita por el usuario", viewModel.formState.commune)
+        assertEquals("La Araucanía", viewModel.formState.region)
+        assertEquals("Centro", viewModel.formState.sector)
+    }
+
+    @Test
     fun `invalid manual coordinate keeps the previous location and the picker open`() = runTest {
         val previous = LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
         val viewModel = createViewModel(

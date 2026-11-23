@@ -360,6 +360,36 @@ class CreateReportFormStateTest {
     }
 
     @Test
+    fun `new reverse geocoded address updates previous autofill but keeps manual edits`() {
+        val firstAddress = ReverseGeocodedAddress(
+            referenceAddress = "Av. Alemania 123",
+            commune = "Temuco",
+            region = "La Araucanía"
+        )
+        val state = CreateReportFormState()
+            .applyReverseGeocodedAddress(firstAddress)
+            .updateLocationDetails(
+                referenceAddress = "Av. Alemania 123",
+                commune = "Comuna escrita por el usuario",
+                region = "La Araucanía",
+                sector = "Centro"
+            )
+
+        val updatedState = state.applyReverseGeocodedAddress(
+            ReverseGeocodedAddress(
+                referenceAddress = "Camino rural km 4",
+                commune = "Villarrica",
+                region = "Los Ríos"
+            )
+        )
+
+        assertEquals("Camino rural km 4", updatedState.referenceAddress)
+        assertEquals("Comuna escrita por el usuario", updatedState.commune)
+        assertEquals("Los Ríos", updatedState.region)
+        assertEquals("Centro", updatedState.sector)
+    }
+
+    @Test
     fun `empty reverse geocoding result finishes autofill without changing fields`() {
         val state = CreateReportFormState(referenceAddress = "Mi referencia")
             .startAddressAutofill()
