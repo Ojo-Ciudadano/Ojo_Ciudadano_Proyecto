@@ -73,6 +73,34 @@ class ImageCompressionPolicyTest {
     }
 
     @Test
+    fun `decides to compress oversized photos by the configured maximum`() {
+        assertFalse(
+            ImageCompressionPolicy.shouldCompress(
+                sizeBytes = 200 * 1024,
+                width = 1_000,
+                height = 800,
+                maxDimension = 1_024
+            )
+        )
+        assertTrue(
+            ImageCompressionPolicy.shouldCompress(
+                sizeBytes = 200 * 1024,
+                width = 1_200,
+                height = 800,
+                maxDimension = 1_024
+            )
+        )
+        assertFalse(
+            ImageCompressionPolicy.shouldCompress(
+                sizeBytes = 200 * 1024,
+                width = 1_024,
+                height = 800,
+                maxDimension = 1_024
+            )
+        )
+    }
+
+    @Test
     fun `downscales geometry without losing the aspect ratio`() {
         val (width, height) = ImageCompressionPolicy.downscale(2_048, 1_536)
 

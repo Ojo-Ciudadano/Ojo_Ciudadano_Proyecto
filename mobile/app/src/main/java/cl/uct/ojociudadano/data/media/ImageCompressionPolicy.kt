@@ -71,10 +71,21 @@ object ImageCompressionPolicy {
             max(1, (height * scale).roundToInt())
     }
 
-    /** Indica si merece la pena recomprimir un archivo del tamaño dado. */
-    fun shouldCompress(sizeBytes: Long, width: Int, height: Int): Boolean =
+    /**
+     * Indica si merece la pena recomprimir un archivo del tamaño dado.
+     *
+     * [maxDimension] permite que el compresor aplique su propio límite: una
+     * fotografía que ya cumple [MAX_DIMENSION] igual debe reducirse si el
+     * consumidor pidió dimensiones más pequeñas.
+     */
+    fun shouldCompress(
+        sizeBytes: Long,
+        width: Int,
+        height: Int,
+        maxDimension: Int = MAX_DIMENSION
+    ): Boolean =
         sizeBytes > COMPRESS_THRESHOLD_BYTES ||
-            max(width, height) > MAX_DIMENSION
+            max(width, height) > maxDimension
 
     /** Aplica [DOWNSCALE_FACTOR] sobre unas dimensiones ya escaladas. */
     fun downscale(width: Int, height: Int): Pair<Int, Int> {

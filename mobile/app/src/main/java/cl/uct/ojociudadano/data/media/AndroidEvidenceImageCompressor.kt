@@ -5,6 +5,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import java.io.File
@@ -57,7 +59,8 @@ class AndroidEvidenceImageCompressor(
             if (!ImageCompressionPolicy.shouldCompress(
                     file.length(),
                     bounds.first,
-                    bounds.second
+                    bounds.second,
+                    maxDimension = maxDimension
                 )
             ) {
                 return@withContext CompressedEvidence(
@@ -150,6 +153,8 @@ class AndroidEvidenceImageCompressor(
         }
 
         return runCatching {
+            // Rotación con matriz: no existe equivalente KTX en androidx.core
+            // 1.19 y el detector UseKtx no reporta esta sobrecarga.
             Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         }.getOrDefault(bitmap).also { rotated ->
             if (rotated !== bitmap) bitmap.recycle()
@@ -164,7 +169,7 @@ class AndroidEvidenceImageCompressor(
         )
         if (targetWidth == bitmap.width && targetHeight == bitmap.height) return bitmap
 
-        val scaled = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        val scaled = bitmap.scale(targetWidth, targetHeight, true)
         if (scaled !== bitmap) bitmap.recycle()
         return scaled
     }
@@ -176,7 +181,7 @@ class AndroidEvidenceImageCompressor(
     private fun flattenOverWhite(bitmap: Bitmap): Bitmap {
         if (!bitmap.hasAlpha()) return bitmap
 
-        val flattened = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val flattened = createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(flattened)
         canvas.drawColor(Color.WHITE)
         canvas.drawBitmap(bitmap, 0f, 0f, null)
@@ -212,7 +217,7 @@ class AndroidEvidenceImageCompressor(
                 ImageCompressionPolicy.downscale(current.width, current.height)
             if (targetWidth == current.width && targetHeight == current.height) break
 
-            val smaller = Bitmap.createScaledBitmap(current, targetWidth, targetHeight, true)
+            val smaller = current.scale(targetWidth, targetHeight, true)
             if (smaller === current) break
             if (ownsCurrent) current.recycle()
             current = smaller
