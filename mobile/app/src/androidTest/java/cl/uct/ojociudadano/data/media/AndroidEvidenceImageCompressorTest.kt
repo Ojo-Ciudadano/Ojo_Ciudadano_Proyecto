@@ -45,8 +45,8 @@ class AndroidEvidenceImageCompressorTest {
     }
 
     @Test
-    fun compressesLargePhotoBelowUploadLimitAndTargetDimension() = runBlocking {
-        val source = writePhoto("grande.jpg", width = 3_000, height = 2_000, quality = 100)
+    fun compressesLargePhotoBelowUploadLimitAndTargetDimension(): Unit = runBlocking {
+        val source = writeNoisyPhoto("grande.jpg", width = 3_000, height = 2_000)
         assertTrue("La foto de prueba debe superar el límite", source.length() > 300_000L)
 
         val compressed = compressor.compress(source, "image/jpeg")
@@ -68,7 +68,7 @@ class AndroidEvidenceImageCompressorTest {
     }
 
     @Test
-    fun keepsSmallPhotoUntouched() = runBlocking {
+    fun keepsSmallPhotoUntouched(): Unit = runBlocking {
         val source = writePhoto("pequena.jpg", width = 320, height = 240, quality = 80)
 
         val result = compressor.compress(source, "image/jpeg")
@@ -79,7 +79,7 @@ class AndroidEvidenceImageCompressorTest {
     }
 
     @Test
-    fun appliesExifOrientationBeforeScaling() = runBlocking {
+    fun appliesExifOrientationBeforeScaling(): Unit = runBlocking {
         val source = writePhoto("rotada.jpg", width = 2_000, height = 1_000, quality = 100)
         ExifInterface(source.absolutePath).apply {
             setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_ROTATE_90.toString())
@@ -99,7 +99,7 @@ class AndroidEvidenceImageCompressorTest {
     }
 
     @Test
-    fun rejectsCorruptFile() = runBlocking {
+    fun rejectsCorruptFile(): Unit = runBlocking {
         val corrupt = File(directory, "corrupta.jpg").apply {
             writeBytes(byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8))
         }
@@ -112,7 +112,7 @@ class AndroidEvidenceImageCompressorTest {
     }
 
     @Test
-    fun rejectsUnsupportedMimeType() = runBlocking {
+    fun rejectsUnsupportedMimeType(): Unit = runBlocking {
         val source = writePhoto("formato.jpg", width = 200, height = 200, quality = 80)
 
         val failure = runCatching { compressor.compress(source, "image/gif") }.exceptionOrNull()
@@ -123,7 +123,7 @@ class AndroidEvidenceImageCompressorTest {
     }
 
     @Test
-    fun rejectsMissingFile() = runBlocking {
+    fun rejectsMissingFile(): Unit = runBlocking {
         val missing = File(directory, "no-existe.jpg")
 
         val failure = runCatching { compressor.compress(missing, "image/jpeg") }.exceptionOrNull()
@@ -144,6 +144,25 @@ class AndroidEvidenceImageCompressorTest {
         }
         bitmap.recycle()
         assertNotNull(file)
+        return file
+    }
+
+    /**
+     * Genera una fotografía con ruido determinista: la textura aleatoria hace
+     * que el JPEG pese más de 300 KB incluso con la compresión de calidad 100.
+     */
+    private fun writeNoisyPhoto(name: String, width: Int, height: Int): File {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val random = kotlin.random.Random(7L)
+        val pixels = IntArray(width * height) {
+            Color.rgb(random.nextInt(256), random.nextInt(256), random.nextInt(256))
+        }
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        val file = File(directory, name)
+        FileOutputStream(file).use { output ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, output)
+        }
+        bitmap.recycle()
         return file
     }
 
