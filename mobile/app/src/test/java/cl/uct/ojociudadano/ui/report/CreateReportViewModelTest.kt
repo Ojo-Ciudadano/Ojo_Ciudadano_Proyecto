@@ -37,6 +37,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -385,6 +386,44 @@ class CreateReportViewModelTest {
         assertEquals("Temuco", location.commune)
         assertEquals("La Araucanía", location.region)
         assertEquals("Centro", location.sector)
+    }
+
+    @Test
+    fun `a geocoder without response does not block the report submission`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient,
+            reverseGeocodingClient = object : ReverseGeocodingClient {
+                override suspend fun reverseGeocode(
+                    latitude: Double,
+                    longitude: Double
+                ): ReverseGeocodingResult = awaitCancellation()
+            }
+        )
+        viewModel.fillValidForm()
+
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = GPS_LATITUDE,
+            longitude = GPS_LONGITUDE
+        )
+        viewModel.createReport()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            CreateReportAddressAutofillErrors.UNAVAILABLE,
+            viewModel.formState.addressAutofillError
+        )
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
     }
 
     @Test
