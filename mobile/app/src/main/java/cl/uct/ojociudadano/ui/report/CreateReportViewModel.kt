@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 class CreateReportViewModel(
@@ -426,10 +427,12 @@ class CreateReportViewModel(
         formState = formState.startAddressAutofill()
 
         val result = try {
-            reverseGeocodingClient.reverseGeocode(
-                latitude = location.latitude,
-                longitude = location.longitude
-            )
+            withTimeoutOrNull(ADDRESS_AUTOFILL_TIMEOUT_MILLIS) {
+                reverseGeocodingClient.reverseGeocode(
+                    latitude = location.latitude,
+                    longitude = location.longitude
+                )
+            } ?: ReverseGeocodingResult.Error(ADDRESS_AUTOFILL_TIMEOUT_MESSAGE)
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
@@ -964,6 +967,12 @@ class CreateReportViewModel(
 
     private fun CreateReportFormState.hasValidationErrors(): Boolean =
         titleError != null || descriptionError != null || categoryError != null || locationDetailsError != null
+
+    private companion object {
+        const val ADDRESS_AUTOFILL_TIMEOUT_MILLIS = 10_000L
+        const val ADDRESS_AUTOFILL_TIMEOUT_MESSAGE =
+            "La geocodificación no respondió a tiempo."
+    }
 
 }
 
