@@ -37,6 +37,7 @@ import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.registration.RegistrationRoute
 import cl.uct.ojociudadano.ui.registration.RegistrationViewModel
 import cl.uct.ojociudadano.ui.registration.RegistrationViewModelFactory
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun SessionStartupGate(
@@ -138,7 +139,7 @@ private fun StartupContainer(
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .padding(24.dp),
+            .padding(Spacing.large),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(
             space = 16.dp,

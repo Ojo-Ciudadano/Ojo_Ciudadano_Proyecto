@@ -26,8 +26,19 @@ enum class EvidenceCompatibilityIssue {
  */
 object EvidenceUploadConstraints {
 
+    /** Límite que acepta el backend para cada evidencia enviada. */
     const val MAX_FILE_SIZE_MB = 10L
     const val MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024L * 1024L
+
+    /**
+     * Límite del archivo local aceptado por el formulario antes de optimizarlo.
+     *
+     * Es mayor que el de envío porque #277 reduce la fotografía (redimensionado
+     * y recompresión) camino a la subida; rechazar en origen lo que la app ya
+     * sabe optimizar impediría enviar fotos de cámaras modernas.
+     */
+    const val MAX_SOURCE_FILE_SIZE_MB = 20L
+    const val MAX_SOURCE_FILE_SIZE_BYTES = MAX_SOURCE_FILE_SIZE_MB * 1024L * 1024L
 
     val SUPPORTED_MIME_TYPES = setOf(
         "image/jpeg",
@@ -58,7 +69,7 @@ object EvidenceUploadConstraints {
         if (photo.sizeBytes <= 0L) {
             add(EvidenceCompatibilityIssue.EMPTY_FILE)
         }
-        if (photo.sizeBytes > MAX_FILE_SIZE_BYTES) {
+        if (photo.sizeBytes > MAX_SOURCE_FILE_SIZE_BYTES) {
             add(EvidenceCompatibilityIssue.FILE_TOO_LARGE)
         }
     }

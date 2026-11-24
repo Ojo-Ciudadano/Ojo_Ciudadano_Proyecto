@@ -52,3 +52,33 @@ export async function obtenerNotificaciones(
     (dato: NotificacionDto) => mapearNotificacion(dato),
   )
 }
+
+export async function marcarNotificacionLeida(
+  id: string,
+  signal?: AbortSignal,
+): Promise<Notificacion> {
+  const dato = (
+    await apiClient.patch<NotificacionDto>(
+      `/notificaciones/${id}/leida`,
+      undefined,
+      { signal },
+    )
+  ).data
+  return mapearNotificacion(dato)
+}
+
+export async function marcarTodasNotificacionesLeidas(
+  signal?: AbortSignal,
+): Promise<{ marcadas: number }> {
+  const dato = (
+    await apiClient.patch<{ marcadas: number }>(
+      '/notificaciones/leidas',
+      undefined,
+      { signal },
+    )
+  ).data
+  if (!Number.isInteger(dato?.marcadas) || dato.marcadas < 0) {
+    throw new Error('El servidor devolvió un conteo inválido.')
+  }
+  return { marcadas: dato.marcadas }
+}

@@ -5,10 +5,15 @@ import cl.uct.ojociudadano.data.remote.dto.UpdateIncidentStatusRequestDto
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.data.session.SessionRoles
+import cl.uct.ojociudadano.data.mapper.toProfile
+import cl.uct.ojociudadano.data.model.UserProfile
 import cl.uct.ojociudadano.data.mapper.toCandidatePage
 import cl.uct.ojociudadano.data.mapper.toDomain
 import cl.uct.ojociudadano.data.mapper.toRequestDto
 import cl.uct.ojociudadano.data.model.CandidateUser
+import cl.uct.ojociudadano.data.media.EvidenceImageCompressor
+import cl.uct.ojociudadano.data.media.EvidenceMultipartFactory
+import cl.uct.ojociudadano.data.media.PassthroughEvidenceImageCompressor
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.Incident
@@ -26,16 +31,14 @@ import cl.uct.ojociudadano.data.session.SessionRequiredException
 import cl.uct.ojociudadano.data.session.UserRole
 import cl.uct.ojociudadano.data.session.requireIdentity
 import cl.uct.ojociudadano.domain.model.Evidence
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.ResponseBody
 import java.io.File
 
 class RemoteIncidentRepository(
     private val apiService: ApiService,
-    private val sessionManager: SessionManager
-) : IncidentRepository {
+    private val sessionManager: SessionManager,
+    private val evidenceImageCompressor: EvidenceImageCompressor = PassthroughEvidenceImageCompressor
+) : IncidentRepository, UserRepository {
 
     override suspend fun updateStatus(incidentId: String, status: String, observation: String): Incident {
         require(IncidentStatusTransitions.isCanonical(status))
@@ -117,20 +120,36 @@ class RemoteIncidentRepository(
         if (!file.exists() || !file.canRead() || file.length() <= 0L) {
             throw IllegalArgumentException("El archivo de evidencia no existe, está vacío o no es legible")
         }
-        if (file.length() > EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES) {
-            throw IllegalArgumentException("El archivo supera el límite máximo de 10 MB aceptado por el backend")
+        if (file.length() > EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES) {
+            throw IllegalArgumentException(
+                "El archivo supera el límite de " +
+                    "${EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_MB} MB aceptado antes de optimizarlo"
+            )
         }
         if (!EvidenceUploadConstraints.isSupportedMimeType(mimeType)) {
             throw IllegalArgumentException("Formato de archivo no soportado por el backend. Use JPEG, PNG o WebP")
         }
 
-        val requestFile = file.asRequestBody(mimeType.toMediaTypeOrNull())
-        val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
+        // #277: la fotografía se redimensiona y recomprime antes de construir el
+        // multipart; #276: la parte se crea con el campo y el MIME del contrato.
+        val prepared = evidenceImageCompressor.compress(file, mimeType)
+        try {
+            if (prepared.file.length() > EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES) {
+                throw IllegalArgumentException(
+                    "La fotografía optimizada sigue superando el límite de " +
+                        "${EvidenceUploadConstraints.MAX_FILE_SIZE_MB} MB aceptado por el backend"
+                )
+            }
 
-        val response = withCurrentIdentity { identity ->
-            apiService.uploadEvidence(incidenteId, body, identity.token)
+            val body = EvidenceMultipartFactory.create(prepared.file, prepared.mimeType)
+            val response = withCurrentIdentity { identity ->
+                apiService.uploadEvidence(incidenteId, body, identity.token)
+            }
+            return response.toDomain()
+        } finally {
+            // El archivo comprimido es temporal; el original pertenece al formulario.
+            if (prepared.isTemporary) prepared.file.delete()
         }
-        return response.toDomain()
     }
 
     override suspend fun getEvidencesByIncident(incidenteId: String): List<Evidence> {
@@ -177,6 +196,19 @@ class RemoteIncidentRepository(
             apiService.updatePriority(incidentId, request, identity.token)
         }
         return response.toDomain()
+    }
+
+    override suspend fun getUsers(page: Int, limit: Int, role: UserRole?): Paginated<UserProfile> {
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
+            apiService.getUsuarios(page, limit, role?.backendValue, identity.token)
+        }
+        return Paginated(
+            items = response.data.map { it.toProfile() },
+            page = response.meta.page,
+            limit = response.meta.limit,
+            total = response.meta.total,
+            totalPages = response.meta.totalPages
+        )
     }
 
     override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {

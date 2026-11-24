@@ -105,7 +105,8 @@ En la arquitectura de **Ojo Ciudadano**, la seguridad se evalúa en dos capas in
 | **M-17** | Evidencias | `POST /incidentes/:incidenteId/evidencias` (alias `POST /evidencias`) | Subir fotografía de evidencia (`multipart/form-data`) | `401 Unauthorized` (\*) | `201 Created` (`400` tipo no permitido, `404` incidente inexistente, `413` > 10 MB) | `201 Created` (`400`, `404`, `413`) | **Regla negativa:** máximo funcional **10 MB**; formatos `image/jpeg`, `image/png`, `image/webp`; el transporte admite hasta 12 MB. | #86 |
 | **M-18** | Evidencias | `GET /incidentes/:incidenteId/evidencias` (alias `GET /evidencias?incidenteId=`) | Listar evidencias de un incidente | `401 Unauthorized` (\*) | `200 OK` (`404` incidente inexistente) | `200 OK` (`404` incidente inexistente) | Retorna solo metadata (`id`, `incidenteId`, `tipoMime`, `tamanoArchivo`, `fechaCreacion`) y `url` relativa a la API, ordenada por `fechaCreacion`. **No** incluye `claveArchivo` ni URLs de Supabase Storage. | #86, #106 |
 | **M-19** | Notificaciones | `GET /notificaciones` | Consultar notificaciones del usuario | `401 Unauthorized` | `200 OK` (Solo propias) | `200 OK` (Solo propias) | **Propiedad estricta:** solo retorna notificaciones cuyo destinatario sea el usuario autenticado. | #114 |
-| **M-20** | Notificaciones | `PATCH /notificaciones/:id/leida` | Marcar notificación como leída | `401 Unauthorized` | `200 OK` (Propia) / `403 Forbidden` (Ajena) | `200 OK` (Propia) / `403 Forbidden` (Ajena) | **Propiedad estricta.** **Por confirmar:** este endpoint no figura en las Issues del Sprint 2 consultadas; si no existe, los casos asociados quedan `BLOQUEADO`. | Por confirmar |
+| **M-20** | Notificaciones | `PATCH /notificaciones/:id/leida` | Marcar notificación propia como leída | `401 Unauthorized` | `200 OK` (Propia) / `403 Forbidden` (Ajena) | `200 OK` (Propia) / `403 Forbidden` (Ajena) | **Propiedad estricta.** Idempotente: repetir la operación conserva `leido: true` y no modifica notificaciones ajenas. | #327 |
+| **M-23** | Notificaciones | `PATCH /notificaciones/leidas` | Marcar todas las notificaciones pendientes como leídas | `401 Unauthorized` | `200 OK` (`{"marcadas": N}`) | `200 OK` (`{"marcadas": N}`) | Solo afecta notificaciones del usuario con `leido: false`; una segunda llamada devuelve `{"marcadas": 0}`. | #327 |
 | **M-21** | Evidencias | `GET /evidencias/:id/archivo` | Descargar el archivo de una evidencia | `401 Unauthorized` (\*) | `200 OK` (binario con su `Content-Type`; `404` evidencia o archivo inexistente; `502` fallo de Storage) | Igual que `CIUDADANO` | La API transmite el archivo; el cliente nunca accede a Supabase Storage. | #86 |
 | **M-22** | Evidencias | `GET /evidencias/:id` | Consultar la metadata de una evidencia | `401 Unauthorized` (\*) | `200 OK` (`404` inexistente) | `200 OK` (`404` inexistente) | Mismo formato público que M-18. | #86 |
 
@@ -277,19 +278,22 @@ Para evitar vulnerabilidades de tipo *Broken Object Level Authorization (BOLA / 
 
 #### Caso CP-WEB-09: Consulta y lectura de notificaciones propias del usuario autenticado
 - **Rol:** `CIUDADANO` / `ADMIN`
-- **Issues vinculadas:** #114
-- **Cobertura automatizada:** Unitarias del microservicio `notificaciones`.
-- **Estado:** Diseñado. La consulta (pasos 1) está pendiente de integración en la bandeja Web; el marcado como leída (pasos 2 y 3) queda `BLOQUEADO` hasta confirmar que el endpoint existe (M-20).
+- **Issues vinculadas:** #114, #327
+- **Cobertura automatizada:** Unitarias e integración del microservicio `notificaciones` y del Gateway.
+- **Estado:** Implementado en #327 para el marcado individual y masivo; la consulta (paso 1) sigue pendiente de integración en la bandeja Web (FRN-05, fuera de alcance de #327).
 - **Prerrequisitos:** Usuario autenticado con al menos una notificación no leída asociada a su `usuarioId`, y otra notificación en BD perteneciente a un usuario distinto (`usuarioAjenoId`).
 - **Datos de prueba:** `notificacionPropiaId` y `notificacionAjenaId`.
 - **Pasos:**
   1. Abrir el panel de notificaciones en la Web (`GET /api/v1/notificaciones`).
-  2. *(Si M-20 existe)* Marcar como leída `notificacionPropiaId` (`PATCH /api/v1/notificaciones/:id/leida`).
-  3. *(Si M-20 existe)* Intentar marcar como leída `notificacionAjenaId` mediante solicitud autenticada con el token actual.
+  2. Marcar como leída `notificacionPropiaId` (`PATCH /api/v1/notificaciones/:id/leida`).
+  3. Repetir el paso 2 y verificar que la notificación conserva `leido: true`.
+  4. Intentar marcar como leída `notificacionAjenaId` mediante solicitud autenticada con el token actual.
+  5. Marcar todas como leídas (`PATCH /api/v1/notificaciones/leidas`) y repetir la llamada.
 - **Resultado esperado:**
   * El listado contiene únicamente las notificaciones del usuario autenticado (`200 OK`).
-  * Marcar `notificacionPropiaId` responde `200 OK` y cambia su estado a `leida: true`.
+  * Marcar `notificacionPropiaId` responde `200 OK` y cambia su estado a `leido: true`; repetirlo conserva ese estado.
   * Intentar modificar `notificacionAjenaId` responde **`403 Forbidden`** por violación de propiedad, manteniendo la sesión activa (#150).
+  * La operación masiva responde `{"marcadas": N}` y la segunda llamada `{"marcadas": 0}`, sin modificar notificaciones ajenas.
 
 ---
 
@@ -428,7 +432,7 @@ Para garantizar trazabilidad en el **Informe Final del Sprint 2 (`BER-08`)** y e
 | `CP-WEB-06` | `CIUDADANO` / `ADMIN` | `BLOQUEADO (FALTA IMPLEMENTACIÓN)` | — | — | — | — |
 | `CP-WEB-07` | `ADMIN` | `BLOQUEADO (FALTA IMPLEMENTACIÓN)` | — | — | — | — |
 | `CP-WEB-08` | `ADMIN` | `BLOQUEADO (FALTA IMPLEMENTACIÓN)` | — | — | — | — |
-| `CP-WEB-09` | `CIUDADANO` / `ADMIN` | `PENDIENTE` (consulta) / `BLOQUEADO (FALTA IMPLEMENTACIÓN)` (marcar leída) | — | — | — | — |
+| `CP-WEB-09` | `CIUDADANO` / `ADMIN` | `PENDIENTE` (consulta en UI) / `IMPLEMENTADO` (API de marcado en #327) | — | — | — | — |
 | `CP-NEG-01` | `CIUDADANO` | `AUTOMATIZADO (UNIT)` (parcial) | `403` | 2026-10-30 | `auth-permission-errors.test.ts` (Pass) | — |
 | `CP-NEG-02` | `ADMIN` | `PENDIENTE` | — | — | — | — |
 | `CP-NEG-03` | `ADMIN` | `PENDIENTE` | — | — | — | — |
@@ -460,7 +464,7 @@ Cuando un caso resulte **`REPROBADO`**, se documentará en el informe de pruebas
 
 Los siguientes puntos dependen del estado de `integration` al momento de ejecutar la campaña y deben confirmarse antes de pasar los casos de `PENDIENTE` a su ejecución:
 
-1. **`PATCH /notificaciones/:id/leida` (M-20, CP-WEB-09):** confirmar que el endpoint existe. La Issue #114 cubre solo la consulta. Si no existe, los pasos 2 y 3 de CP-WEB-09 quedan `BLOQUEADO`.
+1. **`PATCH /notificaciones/:id/leida` (M-20, CP-WEB-09):** resuelto en #327. El contrato individual y el masivo (`PATCH /notificaciones/leidas`) están documentados en `docs/API_NOTIFICACIONES_LEIDAS.md` y expuestos en Swagger. Queda pendiente solo conectar los controles de lectura en la vista Web (FRN-05, fuera de alcance de #327).
 2. **Autoría en `POST /incidentes` (M-12, CP-NEG-07):** confirmar si `usuarioReportaId` se toma del token o del cuerpo de la solicitud. Si proviene del cuerpo, registrar un defecto `Crítica`.
 3. **Autenticación en evidencias (M-17, M-18, M-21, M-22):** confirmar que #86 exige token JWT; de lo contrario, ajustar la columna "Sin Sesión".
 4. **Resultados por definir:** `#120` (M-16, visibilidad del historial para `CIUDADANO`), `#122` (M-05 y CP-NEG-03; confirmar además si la regla de auto-degradación forma parte de la Issue) y `#123` (M-15 y CP-NEG-04).

@@ -39,6 +39,7 @@ import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.reports.incidentDate
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /**
  * Perfil del usuario autenticado.
@@ -74,8 +75,8 @@ fun ProfileContent(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(Spacing.page),
+        verticalArrangement = Arrangement.spacedBy(Spacing.medium)
     ) {
         CitizenHeader("Mi perfil")
         when (state) {
@@ -102,9 +103,9 @@ private fun ProfileLoading() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(Spacing.page),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.medium)
         ) {
             CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
             Text("Cargando tu perfil…", style = MaterialTheme.typography.bodyMedium)
@@ -128,9 +129,9 @@ private fun ProfileIdentity(profile: UserProfile) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(Spacing.page),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.medium)
         ) {
             Icon(
                 imageVector = Icons.Filled.Person,

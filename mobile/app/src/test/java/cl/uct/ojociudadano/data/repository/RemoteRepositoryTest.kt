@@ -2,6 +2,9 @@ package cl.uct.ojociudadano.data.repository
 
 import cl.uct.ojociudadano.data.model.CreateIncidentInput
 import cl.uct.ojociudadano.data.model.CreateIncidentLocationInput
+import cl.uct.ojociudadano.data.media.CompressedEvidence
+import cl.uct.ojociudadano.data.media.EvidenceImageCompressor
+import cl.uct.ojociudadano.data.model.EvidenceUploadConstraints
 import cl.uct.ojociudadano.data.model.IncidentFilters
 import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.data.remote.ApiService
@@ -19,10 +22,14 @@ import cl.uct.ojociudadano.data.session.TokenSnapshot
 import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.data.session.testSessionManager
 import kotlinx.coroutines.test.runTest
+import java.io.File
 import okhttp3.ResponseBody
 import cl.uct.ojociudadano.data.remote.dto.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import okio.Buffer
 import org.junit.Test
 import cl.uct.ojociudadano.data.remote.dto.RegisterRequestDto
 import cl.uct.ojociudadano.data.remote.dto.RegisterResponseDto
@@ -273,6 +280,93 @@ class RemoteRepositoryTest {
         assertEquals(emptyList<Notification>(), notifications)
     }
 
+    @Test
+    fun `uploadEvidence sends the archivo field with a valid filename and mime type`() = runTest {
+        val apiService = FakeApiService()
+        val repository = RemoteIncidentRepository(apiService, testSessionManager())
+        val incidentId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        val file = File.createTempFile("evidencia", ".jpg").apply {
+            writeBytes(byteArrayOf(1, 2, 3, 4))
+        }
+
+        try {
+            val evidence = repository.uploadEvidence(incidentId, file, "image/jpeg")
+
+            val part = requireNotNull(apiService.lastUploadPart) { "El archivo no se envió" }
+            val disposition = requireNotNull(part.headers?.get("Content-Disposition"))
+            assertTrue(
+                "El campo multipart debe llamarse archivo: $disposition",
+                disposition.contains("name=\"archivo\"")
+            )
+            assertTrue(
+                "El nombre de archivo debe conservar la extensión: $disposition",
+                disposition.contains("filename=\"${file.name}\"")
+            )
+            assertEquals("image/jpeg", part.body.contentType().toString())
+            assertEquals(incidentId, apiService.lastUploadIncidentId)
+            assertEquals(testSession().accessToken, apiService.lastUploadSession?.value)
+            assertEquals("evidencia-1", evidence.id)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `uploadEvidence sends the compressed copy and deletes the temporary file`() = runTest {
+        val apiService = FakeApiService()
+        val compressed = File.createTempFile("evidence_upload_", ".jpg").apply {
+            writeBytes(byteArrayOf(9, 9))
+        }
+        val compressor = object : EvidenceImageCompressor {
+            override suspend fun compress(file: File, mimeType: String): CompressedEvidence {
+                assertEquals("image/jpeg", mimeType)
+                return CompressedEvidence(compressed, "image/jpeg", isTemporary = true)
+            }
+        }
+        val repository = RemoteIncidentRepository(apiService, testSessionManager(), compressor)
+        val original = File.createTempFile("evidencia", ".jpg").apply {
+            writeBytes(ByteArray(2_048))
+        }
+
+        try {
+            repository.uploadEvidence("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", original, "image/jpeg")
+
+            assertEquals(2, requireNotNull(apiService.lastUploadBytes).size)
+            assertFalse("El archivo temporal debe eliminarse", compressed.exists())
+        } finally {
+            original.delete()
+            compressed.delete()
+        }
+    }
+
+    @Test
+    fun `uploadEvidence rejects an oversized source before compressing`() = runTest {
+        val apiService = FakeApiService()
+        var compressed = false
+        val compressor = object : EvidenceImageCompressor {
+            override suspend fun compress(file: File, mimeType: String): CompressedEvidence {
+                compressed = true
+                return CompressedEvidence(file, mimeType, isTemporary = false)
+            }
+        }
+        val repository = RemoteIncidentRepository(apiService, testSessionManager(), compressor)
+        val file = File.createTempFile("evidencia", ".jpg")
+        file.writeBytes(ByteArray(0))
+        java.io.RandomAccessFile(file, "rw").use { it.setLength(EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1) }
+
+        try {
+            val failure = runCatching {
+                repository.uploadEvidence("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", file, "image/jpeg")
+            }.exceptionOrNull()
+
+            assertTrue(failure is IllegalArgumentException)
+            assertFalse("No debe comprimirse un archivo rechazado", compressed)
+            assertNull(apiService.lastUploadPart)
+        } finally {
+            file.delete()
+        }
+    }
+
     private class FakeApiService(
         private val incidents: List<IncidentDto> = emptyList(),
         private val incident: IncidentDto = sampleIncidentDto(),
@@ -293,12 +387,35 @@ class RemoteRepositoryTest {
             return loginResponse
         }
 
+        var lastUploadIncidentId: String? = null
+            private set
+
+        var lastUploadPart: okhttp3.MultipartBody.Part? = null
+            private set
+
+        var lastUploadSession: TokenSnapshot? = null
+            private set
+
+        var lastUploadBytes: ByteArray? = null
+            private set
+
         override suspend fun uploadEvidence(
             incidenteId: String,
-            file: okhttp3.MultipartBody.Part,
+            archivo: okhttp3.MultipartBody.Part,
             expectedSession: TokenSnapshot?
-        ): cl.uct.ojociudadano.data.remote.dto.EvidenceDto {
-            throw NotImplementedError("No implementado para esta prueba")
+        ): EvidenceDto {
+            lastUploadIncidentId = incidenteId
+            lastUploadPart = archivo
+            lastUploadSession = expectedSession
+            lastUploadBytes = Buffer().also { buffer -> archivo.body.writeTo(buffer) }.readByteArray()
+            return EvidenceDto(
+                id = "evidencia-1",
+                incidenteId = incidenteId,
+                tipoMime = "image/jpeg",
+                tamanoArchivo = 4L,
+                fechaCreacion = "2026-09-24T01:00:00.000Z",
+                url = "/evidencias/evidencia-1/archivo"
+            )
         }
 
         override suspend fun getEvidencesByIncident(incidenteId: String, expectedSession: TokenSnapshot?): List<cl.uct.ojociudadano.data.remote.dto.EvidenceDto> {
