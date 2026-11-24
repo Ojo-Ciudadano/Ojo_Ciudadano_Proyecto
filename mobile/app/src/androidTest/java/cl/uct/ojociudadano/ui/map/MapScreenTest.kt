@@ -30,4 +30,15 @@ class MapScreenTest {
             .onNodeWithTag("map_screen_tag")
             .assertIsDisplayed()
     }
+
+    @Test
+    fun mapScreen_showsTheCenterLocationFabEvenDuringLoading() {
+        composeTestRule.setContent {
+            MapScreen(modifier = Modifier.testTag("map_screen_tag"))
+        }
+
+        composeTestRule
+            .onNodeWithTag(MapTestTags.CENTER_LOCATION_FAB)
+            .assertIsDisplayed()
+    }
 }

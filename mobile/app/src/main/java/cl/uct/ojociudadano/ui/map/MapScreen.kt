@@ -13,6 +13,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
 import cl.uct.ojociudadano.ui.reports.incidentDate
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
@@ -66,6 +69,8 @@ internal object MapTestTags {
     const val FILTER_STATUS_PREFIX = "map_filter_status_"
     const val FILTERED_EMPTY = "map_state_filtered_empty"
     const val FILTERED_EMPTY_RESET = "map_state_filtered_empty_reset"
+    const val CENTER_LOCATION_FAB = "map_center_location_fab"
+    const val LOCATION_SNACKBAR = "map_location_snackbar"
 }
 
 @Composable
@@ -83,9 +88,28 @@ fun MapScreen(
     })
     val state by model.uiState.collectAsState()
     val userLocation by model.userLocation.collectAsState()
+    val isLocatingUser by model.isLocatingUser.collectAsState()
     val success = state as? MapUiState.Success
     val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val locationPermissionLauncher = rememberLocationPermissionLauncher(
+        onPermissionResult = { granted ->
+            if (granted) {
+                model.centerOnUserLocation()
+            } else {
+                model.onLocationPermissionDenied()
+            }
+        },
+        onReturnFromSettings = model::centerOnUserLocation
+    )
+
+    LaunchedEffect(model) {
+        model.userMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     Box(modifier.fillMaxSize()) {
         IncidentMap(
@@ -144,6 +168,26 @@ fun MapScreen(
                     .padding(Spacing.medium)
             )
         }
+        MapCenterLocationFab(
+            isLoading = isLocatingUser,
+            onClick = {
+                if (locationPermissionLauncher.isGranted()) {
+                    model.centerOnUserLocation()
+                } else {
+                    locationPermissionLauncher.request()
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = Spacing.medium)
+        )
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(Spacing.medium)
+                .testTag(MapTestTags.LOCATION_SNACKBAR)
+        )
     }
 }
 
