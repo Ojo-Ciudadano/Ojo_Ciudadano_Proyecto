@@ -316,4 +316,3 @@ private fun String.updatedWith(
 }
 
 private fun String?.normalized(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
-

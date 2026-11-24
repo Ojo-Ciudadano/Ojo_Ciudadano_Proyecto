@@ -298,7 +298,7 @@ class RoleNavigationTest {
         }
         val dashboard = compose.runOnIdle { requireNotNull(controller.currentBackStackEntry).id }
         saveScreenshot("admin-dashboard.png")
-        for (section in AdminFutureSection.entries) {
+        for (section in AdminFutureSection.entries.filter { it != AdminFutureSection.USERS }) {
             for (systemBack in listOf(false, true)) {
                 compose.onNodeWithText(section.title).performScrollTo().performClick()
                 compose.onNodeWithText("Próximamente").assertIsDisplayed()
@@ -307,7 +307,6 @@ class RoleNavigationTest {
                     assertEquals(AppRoutes.ADMIN_COMING_SOON, controller.currentDestination?.route)
                     assertEquals(section.id, controller.currentBackStackEntry?.arguments?.getString("section"))
                 }
-                if (section == AdminFutureSection.USERS) saveScreenshot("admin-coming-soon.png")
                 if (systemBack) compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
                 else compose.onNodeWithText("Volver al panel").performClick()
                 compose.onNodeWithText("Gestión de incidentes").performScrollTo().assertIsDisplayed()
@@ -317,6 +316,40 @@ class RoleNavigationTest {
                 }
             }
         }
+    }
+
+    @Test fun citizenCannotOpenUsersEvenByDirectNavigation() {
+        val manager = DefaultSessionManager(Storage(session("CIUDADANO")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme { AppNavigation(manager, controller, startDestination = AppRoutes.ADMIN_USERS) }
+        }
+        compose.waitUntil(5_000) { controller.currentDestination?.route == AppRoutes.HOME }
+        compose.onNodeWithText("Gestión de usuarios").assertDoesNotExist()
+        compose.onNodeWithText("Cargando usuarios…").assertDoesNotExist()
+        compose.runOnIdle {
+            assertFalse(controller.navigateIfAllowed(manager, AppRoutes.ADMIN_USERS))
+            controller.navigate(AppRoutes.ADMIN_USERS)
+        }
+        compose.waitUntil(5_000) { controller.currentDestination?.route == AppRoutes.HOME }
+        compose.onNodeWithText("Gestión de usuarios").assertDoesNotExist()
+    }
+
+    @Test fun administratorOpensUsersFromDashboardAndReturns() {
+        val manager = DefaultSessionManager(Storage(session("ADMIN")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme { AppNavigation(manager, controller, startDestination = AppRoutes.ADMIN) }
+        }
+        compose.onNodeWithText("Gestión de usuarios").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(AppRoutes.ADMIN_USERS, controller.currentDestination?.route) }
+        compose.onNodeWithText("Todos").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Volver").performClick()
+        compose.runOnIdle { assertEquals(AppRoutes.ADMIN, controller.currentDestination?.route) }
     }
 
     private fun saveScreenshot(name: String) {

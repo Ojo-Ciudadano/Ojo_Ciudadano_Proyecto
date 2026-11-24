@@ -12,6 +12,7 @@ import cl.uct.ojociudadano.data.media.EvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
+import cl.uct.ojociudadano.data.repository.UserRepository
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
@@ -102,13 +103,17 @@ class AppContainer(
         )
     }
 
-    val incidentRepository: IncidentRepository by lazy {
+    private val remoteIncidentRepository by lazy {
         RemoteIncidentRepository(
             apiService = apiService,
             sessionManager = sessionManager,
             evidenceImageCompressor = evidenceImageCompressor
         )
     }
+
+    val incidentRepository: IncidentRepository get() = remoteIncidentRepository
+
+    val userRepository: UserRepository get() = remoteIncidentRepository
 
     val notificationRepository: NotificationRepository by lazy {
         RemoteNotificationRepository(apiService, sessionManager)

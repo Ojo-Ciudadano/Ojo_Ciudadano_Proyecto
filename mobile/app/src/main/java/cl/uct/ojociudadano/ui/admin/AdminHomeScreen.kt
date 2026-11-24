@@ -34,6 +34,7 @@ fun AdminHomeScreen(
     onIncidentManagementClick: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    onUserManagementClick: () -> Unit = {},
     onFutureSectionClick: (AdminFutureSection) -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
@@ -67,8 +68,14 @@ fun AdminHomeScreen(
                 description = "Consulta el listado de incidentes, su ubicación y estado actual.",
                 onClick = onIncidentManagementClick
             )
+            AdminNavigationCard(
+                title = "Gestión de usuarios",
+                description = "Consulta los usuarios por rol y recorre sus páginas.",
+                onClick = onUserManagementClick,
+                icon = AdminFutureSection.USERS.icon
+            )
             Text("En futuras versiones", style = MaterialTheme.typography.titleMedium)
-            AdminFutureSection.entries.forEach { section ->
+            AdminFutureSection.entries.filter { it != AdminFutureSection.USERS }.forEach { section ->
                 AdminNavigationCard(
                     title = section.title,
                     description = section.description,
