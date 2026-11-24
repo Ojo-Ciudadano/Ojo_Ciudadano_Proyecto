@@ -14,7 +14,7 @@ const ubicacionValida = {
   longitud: -72.5904,
   direccionReferencia: 'Av. Alemania 0211',
   comuna: 'Temuco',
-  region: 'Araucania',
+  region: 'La Araucanía',
   sector: 'Centro',
 };
 
@@ -183,6 +183,18 @@ describe('IncidentesService', () => {
         latitud: -38.7368,
         longitud: -72.6065,
       });
+
+      await expect(service.create(dto)).resolves.toMatchObject({
+        id: INCIDENTE_ID,
+      });
+      expect(tx.ubicacion.create).toHaveBeenCalledWith({ data: dto.ubicacion });
+    });
+
+    it.each([
+      ['La Araucanía', 'La Araucanía'],
+      ['Región de la Araucanía', 'Región de la Araucanía'],
+    ])('acepta variantes reales de region: %s', async (_caso, region) => {
+      const dto = crearDtoConUbicacion({ region });
 
       await expect(service.create(dto)).resolves.toMatchObject({
         id: INCIDENTE_ID,

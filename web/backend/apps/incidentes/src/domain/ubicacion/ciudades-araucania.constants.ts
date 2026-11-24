@@ -52,8 +52,13 @@ export function esComunaDeAraucania(comuna: string): boolean {
 }
 
 export function esRegionAraucania(region: string): boolean {
-  const objetivo = normalizar(region);
-  return objetivo === 'araucania' || objetivo === 'laaraucania';
+  const objetivo = normalizar(region).replace(/\s+/g, ' ');
+  return (
+    objetivo === 'araucania' ||
+    objetivo === 'la araucania' ||
+    objetivo === 'region de la araucania' ||
+    objetivo === 'region de araucania'
+  );
 }
 
 export function coordenadasDentroDeAraucania(
