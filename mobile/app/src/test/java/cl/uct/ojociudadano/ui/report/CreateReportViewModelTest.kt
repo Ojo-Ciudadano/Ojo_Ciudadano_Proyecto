@@ -1796,7 +1796,7 @@ class CreateReportViewModelTest {
     fun `blocks submission when a photo exceeds the backend size limit`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val oversizedPhoto = samplePhoto.copy(
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -1812,7 +1812,7 @@ class CreateReportViewModelTest {
         assertTrue(incidentRepository.createInputs.isEmpty())
         assertTrue(incidentRepository.uploadAttempts.isEmpty())
         assertEquals(listOf(oversizedPhoto), viewModel.formState.evidencePhotos)
-        assertTrue(viewModel.formState.photoError.orEmpty().contains("límite de 10 MB"))
+        assertTrue(viewModel.formState.photoError.orEmpty().contains("límite de 20 MB"))
         assertTrue(viewModel.formState.photoError.orEmpty().contains(oversizedPhoto.fileName))
     }
 
@@ -1821,7 +1821,7 @@ class CreateReportViewModelTest {
         val incidentRepository = FakeIncidentRepository()
         val invalidPhoto = samplePhoto.copy(
             mimeType = "image/heic",
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -1835,7 +1835,7 @@ class CreateReportViewModelTest {
 
         val message = viewModel.formState.photoError.orEmpty()
         assertTrue(message.contains("formato no compatible"))
-        assertTrue(message.contains("límite de 10 MB"))
+        assertTrue(message.contains("límite de 20 MB"))
         assertTrue(incidentRepository.createInputs.isEmpty())
     }
 
@@ -1843,7 +1843,7 @@ class CreateReportViewModelTest {
     fun `accepts a photo exactly at the backend size limit`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val maxSizePhoto = samplePhoto.copy(
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),

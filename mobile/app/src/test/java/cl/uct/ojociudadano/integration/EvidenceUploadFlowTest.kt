@@ -181,7 +181,7 @@ class EvidenceUploadFlowTest {
             )
 
             val body = uploadRequest.body.readUtf8()
-            assertTrue(body.contains("name=\"file\""))
+            assertTrue(body.contains("name=\"archivo\""))
             assertTrue(body.contains(fileName))
         }
 

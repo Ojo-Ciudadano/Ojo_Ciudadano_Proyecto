@@ -5,7 +5,9 @@ import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
 import cl.uct.ojociudadano.data.location.DefaultLocationClient
+import cl.uct.ojociudadano.data.media.AndroidEvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
+import cl.uct.ojociudadano.data.media.EvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
@@ -26,6 +28,7 @@ import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.domain.repository.LocationClient
 import coil3.ImageLoader
 import com.google.android.gms.location.LocationServices
+import java.io.File
 
 class AppContainer(
     context: Context,
@@ -79,8 +82,23 @@ class AppContainer(
         RemoteCategoryRepository(apiService)
     }
 
+    /**
+     * Reduce y recomprime las evidencias antes de enviarlas (#277). El
+     * directorio temporal vive dentro de la caché de la app y cada archivo se
+     * borra al terminar la petición.
+     */
+    val evidenceImageCompressor: EvidenceImageCompressor by lazy {
+        AndroidEvidenceImageCompressor(
+            outputDirectory = File(context.applicationContext.cacheDir, "evidence-upload")
+        )
+    }
+
     val incidentRepository: IncidentRepository by lazy {
-        RemoteIncidentRepository(apiService, sessionManager)
+        RemoteIncidentRepository(
+            apiService = apiService,
+            sessionManager = sessionManager,
+            evidenceImageCompressor = evidenceImageCompressor
+        )
     }
 
     val notificationRepository: NotificationRepository by lazy {
