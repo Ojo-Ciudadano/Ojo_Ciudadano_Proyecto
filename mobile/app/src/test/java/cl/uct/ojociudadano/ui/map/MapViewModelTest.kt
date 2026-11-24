@@ -13,11 +13,14 @@ import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.domain.model.Evidence
+import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.ui.reports.incidentMessage
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -25,6 +28,8 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.ResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -432,6 +437,124 @@ class MapViewModelTest {
         assertEquals(2, repository.allQueryCount)
     }
 
+    @Test
+    fun `centering the map publishes the device coordinate and focus request`() = runTest {
+        val locations = FakeLocationClient(
+            LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
+        )
+        val model = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = locations
+        )
+
+        model.centerOnUserLocation()
+
+        val userLocation = model.userLocation.value
+        assertEquals(-38.7359, userLocation?.coordinate?.latitude ?: Double.NaN, 0.0)
+        assertEquals(-72.5904, userLocation?.coordinate?.longitude ?: Double.NaN, 0.0)
+        assertEquals(1L, userLocation?.focusRequestId)
+        assertFalse(model.isLocatingUser.value)
+        assertEquals(1, locations.requestCount)
+        assertTrue(model.uiState.value is MapUiState.Success)
+    }
+
+    @Test
+    fun `each successful request advances the focus request`() = runTest {
+        val locations = FakeLocationClient(
+            LocationResult.Success(latitude = -38.7359, longitude = -72.5904)
+        )
+        val model = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = locations
+        )
+
+        model.centerOnUserLocation()
+        model.centerOnUserLocation()
+
+        assertEquals(2L, model.userLocation.value?.focusRequestId)
+        assertEquals(2, locations.requestCount)
+    }
+
+    @Test
+    fun `missing location permissions keep the map unchanged and emit a message`() = runTest {
+        val model = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = FakeLocationClient(LocationResult.MissingPermissions)
+        )
+
+        model.centerOnUserLocation()
+
+        assertNull(model.userLocation.value)
+        assertFalse(model.isLocatingUser.value)
+        assertEquals(
+            MapLocationErrors.MISSING_PERMISSIONS,
+            model.userMessages.first()
+        )
+    }
+
+    @Test
+    fun `disabled gps emits a message without clearing the map`() = runTest {
+        val model = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        )
+
+        model.centerOnUserLocation()
+
+        assertNull(model.userLocation.value)
+        assertEquals(MapLocationErrors.NOT_AVAILABLE, model.userMessages.first())
+        assertTrue(model.uiState.value is MapUiState.Success)
+    }
+
+    @Test
+    fun `location errors use the reported message or a controlled fallback`() = runTest {
+        val reported = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = FakeLocationClient(LocationResult.Error("GPS ocupado"))
+        )
+        val blank = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = FakeLocationClient(LocationResult.Error(""))
+        )
+
+        reported.centerOnUserLocation()
+        blank.centerOnUserLocation()
+
+        assertEquals("GPS ocupado", reported.userMessages.first())
+        assertEquals(MapLocationErrors.UNKNOWN, blank.userMessages.first())
+    }
+
+    @Test
+    fun `invalid device coordinates are not represented on the map`() = runTest {
+        val model = MapViewModel(
+            incidentRepository = FakeIncidents(rows = listOf(incident("first"))),
+            locationClient = FakeLocationClient(
+                LocationResult.Success(latitude = 120.0, longitude = 300.0)
+            )
+        )
+
+        model.centerOnUserLocation()
+
+        assertNull(model.userLocation.value)
+        assertEquals(
+            MapLocationErrors.INVALID_COORDINATES,
+            model.userMessages.first()
+        )
+    }
+
+    @Test
+    fun `denied permission emits a message without changing incidents`() = runTest {
+        val model = MapViewModel(FakeIncidents(rows = listOf(incident("first"))))
+
+        model.onLocationPermissionDenied()
+
+        assertEquals(
+            MapLocationErrors.MISSING_PERMISSIONS,
+            model.userMessages.first()
+        )
+        assertTrue(model.uiState.value is MapUiState.Success)
+    }
+
     private fun incident(id: String) = Incident(
         id = id,
         title = "Poste caído",
@@ -457,6 +580,18 @@ class MapViewModelTest {
         region = "La Araucanía",
         sector = "Centro"
     )
+
+    private class FakeLocationClient(
+        var result: LocationResult
+    ) : LocationClient {
+
+        var requestCount = 0
+
+        override suspend fun getCurrentLocation(): LocationResult {
+            requestCount++
+            return result
+        }
+    }
 
     private class FakeIncidents(
         var rows: List<Incident> = emptyList(),

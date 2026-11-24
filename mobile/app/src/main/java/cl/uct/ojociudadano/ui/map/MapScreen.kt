@@ -73,7 +73,10 @@ fun MapScreen(
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: MapViewModel = mapViewModel ?: viewModel(factory = remember(application) {
-        MapViewModelFactory(application.container.incidentRepository)
+        MapViewModelFactory(
+            incidentRepository = application.container.incidentRepository,
+            locationClient = application.container.locationClient
+        )
     })
     val state by model.uiState.collectAsState()
     val success = state as? MapUiState.Success
