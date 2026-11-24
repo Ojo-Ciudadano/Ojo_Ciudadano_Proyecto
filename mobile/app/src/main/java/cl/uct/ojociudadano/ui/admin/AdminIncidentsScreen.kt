@@ -17,6 +17,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -66,10 +69,12 @@ fun AdminIncidentsScreen(onBack: () -> Unit, onIncidentSelected: (String) -> Uni
         onComunaSelected = model::selectComuna,
         onCategoriaSelected = model::selectCategoria,
         onClearFilters = model::clearFilters,
+        onRefresh = model::refresh,
         onRetryCategories = model::loadCategories
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminIncidentsContent(
     state: AdminIncidentsState,
@@ -81,6 +86,7 @@ fun AdminIncidentsContent(
     onComunaSelected: (String?) -> Unit = {},
     onCategoriaSelected: (String?) -> Unit = {},
     onClearFilters: () -> Unit = {},
+    onRefresh: () -> Unit = onRetry,
     onRetryCategories: () -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
@@ -108,28 +114,32 @@ fun AdminIncidentsContent(
                 onRetryCategories = onRetryCategories
             )
         }
-        if (state.status == IncidentsUiState.Loading) {
-            LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
-        } else LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            if (state.status == IncidentsUiState.Success) {
-                items(state.incidents, key = { it.id }) { incident ->
-                    AdminIncidentCard(incident, onIncidentSelected)
+        PullToRefreshBox(isRefreshing = state.isRefreshing, onRefresh = onRefresh,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("admin_refresh")) {
+            if (state.status == IncidentsUiState.Loading) {
+                LoadingContent(message = "Cargando incidentes…", modifier = Modifier.fillMaxSize())
+            } else LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (state.status != IncidentsUiState.Success) {
+                    item {
+                        IncidentLoadState(
+                            state.status,
+                            onRetry,
+                            emptyMessage = if (state.filters.isEmpty) {
+                                "Aún no hay incidentes para mostrar."
+                            } else {
+                                "No hay incidentes que coincidan con los filtros seleccionados."
+                            }
+                        )
+                    }
                 }
-            } else {
-                item {
-                    IncidentLoadState(
-                        state.status,
-                        onRetry,
-                        emptyMessage = if (state.filters.isEmpty) {
-                            "Aún no hay incidentes para mostrar."
-                        } else {
-                            "No hay incidentes que coincidan con los filtros seleccionados."
-                        }
-                    )
+                if (state.incidents.isNotEmpty()) {
+                    items(state.incidents, key = { it.id }) { incident ->
+                        AdminIncidentCard(incident, onIncidentSelected)
+                    }
                 }
             }
         }

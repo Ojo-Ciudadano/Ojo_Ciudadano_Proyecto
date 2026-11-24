@@ -18,6 +18,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -60,61 +63,71 @@ fun NotificationsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val state by model.state.collectAsState()
+    val isRefreshing by model.isRefreshing.collectAsState()
     val notifications by model.notifications.collectAsState()
     NotificationsContent(
         state = state,
         notifications = notifications,
         onBack = onBack,
         onRetry = model::retry,
+        isRefreshing = isRefreshing,
+        onRefresh = model::refresh,
         modifier = modifier
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsContent(
     state: NotificationsUiState,
     notifications: List<Notification>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = onRetry
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Notificaciones", subtitle = "Ciudadano", onBack = onBack)
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Tus notificaciones",
-                        modifier = Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Novedades de los reportes asociados a tu cuenta.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            when (state) {
-                NotificationsUiState.Loading -> item { NotificationsLoading() }
-                NotificationsUiState.Empty -> item {
-                    CitizenMessage("Aún no tienes notificaciones. Te avisaremos cuando haya novedades de tus reportes.")
-                }
-                is NotificationsUiState.Error -> item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CitizenMessage(state.message, isError = true)
-                        if (state.canRetry) {
-                            OutlinedButton(onClick = onRetry) { Text("Reintentar") }
-                        }
+        PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("notifications_refresh")) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Tus notificaciones",
+                            modifier = Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Novedades de los reportes asociados a tu cuenta.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-                NotificationsUiState.Success -> items(notifications, key = { it.id }) { notification ->
-                    NotificationCard(notification)
+                when (state) {
+                    NotificationsUiState.Loading -> item { NotificationsLoading() }
+                    NotificationsUiState.Empty -> item {
+                        CitizenMessage("Aún no tienes notificaciones. Te avisaremos cuando haya novedades de tus reportes.")
+                    }
+                    is NotificationsUiState.Error -> item {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CitizenMessage(state.message, isError = true)
+                            if (state.canRetry) {
+                                OutlinedButton(onClick = onRetry) { Text("Reintentar") }
+                            }
+                        }
+                    }
+                    NotificationsUiState.Success -> Unit
+                }
+                if (state != NotificationsUiState.Loading) {
+                    items(notifications, key = { it.id }) { NotificationCard(it) }
                 }
             }
         }

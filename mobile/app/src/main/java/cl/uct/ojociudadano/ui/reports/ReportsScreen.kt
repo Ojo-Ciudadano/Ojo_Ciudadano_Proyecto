@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -16,6 +18,7 @@ import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.components.LoadingContent
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
                   onIncidentClick: (String) -> Unit = {}, reportsViewModel: ReportsViewModel? = null) {
@@ -26,6 +29,7 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
     val incidents by model.incidents.collectAsState()
     val categories by model.categories.collectAsState()
     val state by model.uiState.collectAsState()
+    val isRefreshing by model.isRefreshing.collectAsState()
     val scope by model.scope.collectAsState()
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
     var date by rememberSaveable { mutableStateOf(DateFilter.RECENT) }
@@ -42,7 +46,7 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { showFilters = !showFilters }) { Text(if (showFilters) "Ocultar filtros" else "Filtrar") }
-            TextButton(onClick = model::loadIncidents, enabled = state != IncidentsUiState.Loading) { Text("Actualizar") }
+            TextButton(onClick = model::refresh, enabled = state != IncidentsUiState.Loading && !isRefreshing) { Text("Actualizar") }
             TextButton(onClick = onCreateReportClick) { Text("+ Nuevo reporte") }
         }
         if (showFilters) {
@@ -69,17 +73,21 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
                 }
             }
         }
-        if (state == IncidentsUiState.Loading) {
-            LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
-        } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { Text(if (scope == IncidentScope.MINE) "Reportes de tu cuenta" else "Reportes disponibles para tu sesión",
-                style = MaterialTheme.typography.bodyMedium) }
-            if (state != IncidentsUiState.Success) {
-                item { IncidentLoadState(state, model::loadIncidents) }
-            } else if (incidents.isEmpty()) {
-                item { CitizenMessage("No hay resultados para estos filtros.") }
-            } else items(incidents, key = { it.id }) { incident ->
-                IncidentCard(incident) { onIncidentClick(incident.id) }
+        PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = model::refresh,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("reports_refresh")) {
+            if (state == IncidentsUiState.Loading) {
+                LoadingContent(message = "Cargando incidentes…", modifier = Modifier.fillMaxSize())
+            } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                item { Text(if (scope == IncidentScope.MINE) "Reportes de tu cuenta" else "Reportes disponibles para tu sesión",
+                    style = MaterialTheme.typography.bodyMedium) }
+                if (state != IncidentsUiState.Success) {
+                    item { IncidentLoadState(state, model::loadIncidents) }
+                }
+                if (state == IncidentsUiState.Success && incidents.isEmpty()) {
+                    item { CitizenMessage("No hay resultados para estos filtros.") }
+                } else items(incidents, key = { it.id }) { incident ->
+                    IncidentCard(incident) { onIncidentClick(incident.id) }
+                }
             }
         }
     }

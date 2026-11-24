@@ -24,16 +24,24 @@ class NotificationsViewModel(
 
     private var loadJob: Job? = null
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         load()
     }
 
-    fun load() {
+    fun refresh() = queryNotifications(refresh = true)
+
+    fun load() = queryNotifications(refresh = false)
+
+    private fun queryNotifications(refresh: Boolean) {
         // Una consulta en curso no se duplica: la pantalla puede pedir recarga al
         // reanudarse sin provocar dos peticiones simultáneas.
         if (loadJob?.isActive == true) return
+        _isRefreshing.value = refresh
         loadJob = viewModelScope.launch {
-            _state.value = NotificationsUiState.Loading
+            if (!refresh) _state.value = NotificationsUiState.Loading
             try {
                 val rows = repository.getNotifications()
                 _notifications.value = rows
@@ -49,6 +57,8 @@ class NotificationsViewModel(
                     message = exception.notificationMessage(),
                     canRetry = exception.isNotificationRetryable()
                 )
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
