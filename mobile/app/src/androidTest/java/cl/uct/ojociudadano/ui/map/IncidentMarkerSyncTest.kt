@@ -2,6 +2,7 @@ package cl.uct.ojociudadano.ui.map
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Before
@@ -93,7 +94,66 @@ class IncidentMarkerSyncTest {
         assertEquals(1, incidentMarkers().size)
     }
 
-    private fun incidentMarkers(): List<Marker> = mapView.overlays.filterIsInstance<Marker>()
+    @Test
+    fun userLocationMarkerIsCreatedOnceAndUpdatedInPlace() {
+        onMainThread {
+            syncUserLocationMarker(mapView, userLocation(-38.7359, -72.5904))
+        }
+
+        var userMarkers = markerList().filter { it.title == "Tu ubicación actual" }
+        assertEquals(1, userMarkers.size)
+        assertEquals(-38.7359, userMarkers.single().position.latitude, 0.0)
+        assertEquals(-72.5904, userMarkers.single().position.longitude, 0.0)
+
+        onMainThread {
+            syncUserLocationMarker(mapView, userLocation(-38.74, -72.60))
+        }
+
+        userMarkers = markerList().filter { it.title == "Tu ubicación actual" }
+        assertEquals(1, userMarkers.size)
+        assertEquals(-38.74, userMarkers.single().position.latitude, 0.0)
+    }
+
+    @Test
+    fun incidentSyncDoesNotRemoveTheUserLocationMarker() {
+        onMainThread {
+            syncUserLocationMarker(mapView, userLocation(-38.7359, -72.5904))
+            syncIncidentMarkers(
+                mapView,
+                listOf(IncidentMapMarker("first", -38.7359, -72.5904))
+            )
+        }
+
+        assertEquals(1, incidentMarkers().size)
+        assertEquals(1, markerList().count { it.title == "Tu ubicación actual" })
+
+        onMainThread { syncIncidentMarkers(mapView, emptyList()) }
+
+        assertEquals(0, incidentMarkers().size)
+        assertEquals(1, markerList().count { it.title == "Tu ubicación actual" })
+    }
+
+    @Test
+    fun removingTheUserLocationClearsItsMarker() {
+        onMainThread {
+            syncUserLocationMarker(mapView, userLocation(-38.7359, -72.5904))
+            syncUserLocationMarker(mapView, null)
+        }
+
+        assertEquals(0, markerList().count { it.title == "Tu ubicación actual" })
+    }
+
+    private fun userLocation(latitude: Double, longitude: Double) = MapUserLocation(
+        coordinate = GeoCoordinate(
+            latitude = latitude,
+            longitude = longitude
+        )
+    )
+
+    private fun markerList(): List<Marker> = mapView.overlays.filterIsInstance<Marker>()
+
+    private fun incidentMarkers(): List<Marker> =
+        markerList().filter { it.relatedObject is String }
 
     private fun sync(markers: List<IncidentMapMarker>) {
         onMainThread { syncIncidentMarkers(mapView, markers) }

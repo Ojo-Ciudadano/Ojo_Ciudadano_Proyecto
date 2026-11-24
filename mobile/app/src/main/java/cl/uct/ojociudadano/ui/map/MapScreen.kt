@@ -17,9 +17,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +82,7 @@ fun MapScreen(
         )
     })
     val state by model.uiState.collectAsState()
+    val userLocation by model.userLocation.collectAsState()
     val success = state as? MapUiState.Success
     val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
@@ -86,6 +90,7 @@ fun MapScreen(
     Box(modifier.fillMaxSize()) {
         IncidentMap(
             markers = markers,
+            userLocation = userLocation,
             onMarkerClick = model::selectIncident,
             onMapClick = model::clearSelection,
             modifier = Modifier.fillMaxSize()
@@ -145,33 +150,53 @@ fun MapScreen(
 @Composable
 private fun IncidentMap(
     markers: List<IncidentMapMarker>,
+    userLocation: MapUserLocation?,
     onMarkerClick: (String) -> Unit,
     onMapClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val currentOnMapClick by rememberUpdatedState(onMapClick)
+    val mapView = remember(context) {
+        Configuration.getInstance().load(
+            context,
+            context.getSharedPreferences("osmdroid", 0)
+        )
+        MapView(context).apply {
+            setMultiTouchControls(true)
+            controller.setZoom(DEFAULT_ZOOM)
+            controller.setCenter(GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE))
+            // Se agrega antes que los marcadores: al despachar eventos en orden
+            // inverso, un toque sobre un marcador se consume primero y solo los
+            // toques sobre el mapa vacío llegan a este receptor.
+            overlays.add(MapEventsOverlay(object : MapEventsReceiver {
+                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                    currentOnMapClick()
+                    return false
+                }
+
+                override fun longPressHelper(p: GeoPoint): Boolean = false
+            }))
+        }
+    }
+
+    DisposableEffect(mapView) {
+        onDispose { mapView.onDetach() }
+    }
+
+    LaunchedEffect(mapView, userLocation?.focusRequestId) {
+        val target = userLocation ?: return@LaunchedEffect
+        mapView.post {
+            animateMapToUserLocation(mapView, target.coordinate)
+        }
+    }
+
     AndroidView(
         modifier = modifier,
-        factory = { context ->
-            Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
-            MapView(context).apply {
-                setMultiTouchControls(true)
-                controller.setZoom(DEFAULT_ZOOM)
-                controller.setCenter(GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE))
-                // Se agrega antes que los marcadores: al despachar eventos en orden
-                // inverso, un toque sobre un marcador se consume primero y solo los
-                // toques sobre el mapa vacío llegan a este receptor.
-                overlays.add(MapEventsOverlay(object : MapEventsReceiver {
-                    override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                        onMapClick()
-                        return false
-                    }
-
-                    override fun longPressHelper(p: GeoPoint): Boolean = false
-                }))
-            }
-        },
-        update = { mapView ->
-            syncIncidentMarkers(mapView, markers, onMarkerClick)
+        factory = { mapView },
+        update = { currentMap ->
+            syncIncidentMarkers(currentMap, markers, onMarkerClick)
+            syncUserLocationMarker(currentMap, userLocation)
         }
     )
 }
