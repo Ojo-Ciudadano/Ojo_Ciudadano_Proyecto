@@ -17,6 +17,8 @@ suspend fun <T> executeApiCall(
         throw exception.toApiException()
     } catch (exception: SessionRequiredException) {
         throw exception
+    } catch (exception: ApiException) {
+        throw exception
     } catch (exception: IOException) {
         throw ApiException.Network(exception)
     } catch (exception: Exception) {
@@ -29,6 +31,14 @@ private fun HttpException.toApiException(): ApiException.Http {
         ?.errorBody()
         ?.string()
         ?.let(::parseErrorBody)
+
+    if (code() == 403) {
+        return ApiException.InsufficientPermissions(
+            serverMessages = parsedError?.messages.orEmpty(),
+            error = parsedError?.error,
+            path = parsedError?.path
+        )
+    }
 
     return ApiException.Http(
         statusCode = code(),
