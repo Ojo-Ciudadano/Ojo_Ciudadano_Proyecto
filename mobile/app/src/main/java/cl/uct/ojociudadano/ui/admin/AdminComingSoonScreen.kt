@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.navigation.AdminFutureSection
 import cl.uct.ojociudadano.ui.components.CitizenHeader
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 internal val AdminFutureSection.icon get() = when (this) {
     AdminFutureSection.USERS -> Icons.Default.Groups
@@ -40,7 +41,7 @@ fun AdminComingSoonScreen(section: AdminFutureSection?, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         CitizenHeader(section?.title ?: "Sección no disponible", "Administrador", onBack = onBack)
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.large),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically)
         ) {

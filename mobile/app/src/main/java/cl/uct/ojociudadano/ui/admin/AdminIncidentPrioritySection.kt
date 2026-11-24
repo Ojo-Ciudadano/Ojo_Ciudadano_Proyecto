@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.ui.components.CitizenMessage
+import androidx.compose.foundation.layout.heightIn
+import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /** Callbacks exposed by the priority section so the screen stays free of ViewModel details. */
 data class AdminIncidentPriorityActions(
@@ -44,6 +47,7 @@ internal fun AdminIncidentPrioritySection(
             "Prioridad actual",
             state.currentPriority?.let { "Nivel $it de ${ADMIN_PRIORITY_LEVELS.last}" } ?: "Sin prioridad registrada"
         )
+        IncidentPriorityBadge(state.currentPriority)
         if (state.priorityUpdated) {
             CitizenMessage("Prioridad actualizada correctamente.")
         }
@@ -69,7 +73,7 @@ internal fun PriorityPickerDialog(
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(Spacing.small)
             ) {
                 Text(
                     "La prioridad admitida va de ${ADMIN_PRIORITY_LEVELS.first} (mínima) a " +
@@ -81,6 +85,7 @@ internal fun PriorityPickerDialog(
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = 48.dp)
                                 .selectable(
                                     selected = state.selectedPriority == level,
                                     enabled = !state.savingPriority,

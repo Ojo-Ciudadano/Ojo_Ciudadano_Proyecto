@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +38,7 @@ import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.reports.incidentDate
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun NotificationsScreen(
@@ -83,10 +83,10 @@ fun NotificationsContent(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(Spacing.medium)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                     Text(
                         "Tus notificaciones",
                         modifier = Modifier.semantics { heading() },
@@ -139,7 +139,7 @@ private fun NotificationCard(notification: Notification) {
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(Spacing.medium), verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -147,7 +147,7 @@ private fun NotificationCard(notification: Notification) {
             ) {
                 if (!notification.isRead) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(

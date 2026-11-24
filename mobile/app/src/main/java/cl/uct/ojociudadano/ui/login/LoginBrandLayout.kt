@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /** Encabezado de marca y formulario desplazable, independientes de la autenticación. */
 @Composable
@@ -41,8 +41,8 @@ internal fun LoginBrandLayout(
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF0B1F4D),
-                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = MaterialTheme.shapes.extraLarge
                 ) {
                     Column(
                         Modifier.padding(horizontal = 32.dp, vertical = if (compact) 16.dp else 28.dp),
@@ -50,20 +50,20 @@ internal fun LoginBrandLayout(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         logo()
-                        Text("Tu ciudad, tu reporte", color = Color.White,
+                        Text("Tu ciudad, tu reporte", color = MaterialTheme.colorScheme.onPrimary,
                             style = MaterialTheme.typography.bodyLarge)
                     }
                 }
                 Card(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
                         .widthIn(max = 480.dp).fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
                         Modifier.padding(if (compact) 20.dp else 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.medium),
                         content = content
                     )
                 }

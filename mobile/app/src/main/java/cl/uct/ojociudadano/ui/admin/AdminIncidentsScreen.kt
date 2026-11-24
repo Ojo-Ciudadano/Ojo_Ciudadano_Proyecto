@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
@@ -37,6 +36,10 @@ import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.IncidentLoadState
 import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.reports.incidentDate
+import cl.uct.ojociudadano.ui.components.IncidentCardSurface
+import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
+import cl.uct.ojociudadano.ui.components.IncidentStatusBadge
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun AdminIncidentsScreen(onBack: () -> Unit, onIncidentSelected: (String) -> Unit) {
@@ -86,7 +89,7 @@ fun AdminIncidentsContent(
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Incidentes", subtitle = "Administrador", onBack = onBack)
         Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Text(
                     "Listado de incidentes",
                     modifier = Modifier.semantics { heading() },
@@ -113,7 +116,7 @@ fun AdminIncidentsContent(
         } else LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(Spacing.medium)
         ) {
             if (state.status == IncidentsUiState.Success) {
                 items(state.incidents, key = { it.id }) { incident ->
@@ -143,8 +146,8 @@ private fun AdminIncidentCard(incident: Incident, onIncidentSelected: ((String) 
         onClickLabel = "Seleccionar incidente",
         onClick = { onIncidentSelected(incident.id) }
     )
-    OutlinedCard(modifier = Modifier.fillMaxWidth().then(selection)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    IncidentCardSurface(modifier = selection) {
+        Column(Modifier.padding(Spacing.medium), verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
             Text(
                 incident.category.name,
                 style = MaterialTheme.typography.labelLarge,
@@ -159,6 +162,7 @@ private fun AdminIncidentCard(incident: Incident, onIncidentSelected: ((String) 
                 Text(incident.description, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
             AdminIncidentStatusBadge(incident.status.name)
+            IncidentPriorityBadge(incident.priorityLevel)
             val location = listOfNotNull(
                 incident.location.referenceAddress,
                 incident.location.sector,
@@ -182,16 +186,4 @@ private fun AdminIncidentCard(incident: Incident, onIncidentSelected: ((String) 
 }
 
 @Composable
-internal fun AdminIncidentStatusBadge(name: String) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-    ) {
-        Text(
-            "Estado: ${name.ifBlank { "No disponible" }}",
-            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.labelLarge
-        )
-    }
-}
+internal fun AdminIncidentStatusBadge(name: String) = IncidentStatusBadge(name)

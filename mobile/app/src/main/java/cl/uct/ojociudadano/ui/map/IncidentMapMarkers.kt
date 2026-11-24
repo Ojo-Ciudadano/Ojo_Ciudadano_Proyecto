@@ -18,7 +18,8 @@ data class IncidentMapSummary(
     val statusId: String? = null,
     val statusName: String? = null,
     val createdAt: String? = null,
-    val referenceAddress: String? = null
+    val referenceAddress: String? = null,
+    val priorityLevel: Int? = null
 )
 
 /**
@@ -46,7 +47,8 @@ private fun Incident.toMapSummary(): IncidentMapSummary = IncidentMapSummary(
     statusId = status.id.cleanedOrNull(),
     statusName = status.name.cleanedOrNull(),
     createdAt = createdAt.cleanedOrNull(),
-    referenceAddress = location.referenceAddress.cleanedOrNull()
+    referenceAddress = location.referenceAddress.cleanedOrNull(),
+    priorityLevel = priorityLevel
 )
 
 /** Verifica que las coordenadas sean finitas y estén dentro del rango geográfico válido. */

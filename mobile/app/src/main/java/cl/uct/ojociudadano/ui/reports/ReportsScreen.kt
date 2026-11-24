@@ -15,6 +15,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.components.LoadingContent
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
@@ -46,7 +47,7 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
             TextButton(onClick = onCreateReportClick) { Text("+ Nuevo reporte") }
         }
         if (showFilters) {
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Box(Modifier.weight(1f)) {
                     OutlinedButton(onClick = { categoryMenu = true }) { Text(category?.name ?: "Categorías") }
                     DropdownMenu(categoryMenu, { categoryMenu = false }) {

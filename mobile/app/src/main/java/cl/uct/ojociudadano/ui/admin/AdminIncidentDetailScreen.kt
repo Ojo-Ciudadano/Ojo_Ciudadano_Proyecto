@@ -15,7 +15,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -36,6 +35,8 @@ import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.IncidentLoadState
 import cl.uct.ojociudadano.ui.reports.IncidentsUiState
 import cl.uct.ojociudadano.ui.reports.incidentDate
+import cl.uct.ojociudadano.ui.components.IncidentCardSurface
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun AdminIncidentDetailScreen(id: String?, onBack: () -> Unit) {
@@ -122,8 +123,8 @@ fun AdminIncidentDetailContent(
         if (state.status == IncidentsUiState.Loading) {
             LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
         } else Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(Spacing.page),
+            verticalArrangement = Arrangement.spacedBy(Spacing.medium)
         ) {
             when (val status = state.status) {
                 IncidentsUiState.Loading -> IncidentLoadState(status, onRetry)
@@ -219,8 +220,8 @@ internal fun DetailSection(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    OutlinedCard(modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    IncidentCardSurface(modifier) {
+        Column(Modifier.padding(Spacing.medium), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 title,
                 Modifier.semantics { heading() },

@@ -32,9 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
@@ -75,6 +73,7 @@ import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /**
  * Formulario visual desacoplado de la navegación y de la capa de datos.
@@ -124,7 +123,7 @@ fun CreateReportScreen(
             .animateContentSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(Spacing.medium)
     ) {
         CitizenHeader("Crear reporte", onBack = onBack)
 
@@ -260,7 +259,7 @@ fun CreateReportScreen(
         }
 
         when (submissionState) {
-            is CreateReportSubmissionState.Success -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            is CreateReportSubmissionState.Success -> Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Text(successMessage(submissionState.uploadedEvidenceCount, submissionState.discardedEvidenceCount))
                 OutlinedButton(onClick = { onViewReport(submissionState.incidentId) }, modifier = Modifier.fillMaxWidth()) {
                     Text("Ver reporte creado")
@@ -268,7 +267,7 @@ fun CreateReportScreen(
             }
 
             is CreateReportSubmissionState.EvidenceUploadFailed -> Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(Spacing.small)
             ) {
                 Text(
                     text = submissionState.message,
@@ -361,7 +360,7 @@ private fun ReportLocationSection(
     onChooseLocationOnMap: () -> Unit,
     canEditForm: Boolean
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
         Text(
             text = "Ubicación",
             style = MaterialTheme.typography.titleMedium,
@@ -374,7 +373,7 @@ private fun ReportLocationSection(
             )
         ) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(Spacing.medium),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
