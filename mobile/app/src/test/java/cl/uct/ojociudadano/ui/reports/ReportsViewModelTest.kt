@@ -156,6 +156,82 @@ class ReportsViewModelTest {
         assertEquals(1, model.incidents.value.size)
     }
 
+    @Test fun `manual refresh keeps mine scope and category date filters after failure and retry`() = runTest {
+        val repository = FakeIncidents()
+        val model = viewModel(repository)
+        model.filterIncidents(category, DateFilter.TODAY)
+        repository.failure = ApiException.Network(java.io.IOException())
+        model.refresh()
+        assertTrue(model.uiState.value is IncidentsUiState.Error)
+        assertFalse(model.isRefreshing.value)
+        assertTrue(model.incidents.value.isEmpty())
+        repository.failure = null
+        model.refresh()
+        assertEquals(3, repository.userQueryCount)
+        assertEquals(0, repository.allQueryCount)
+        assertEquals(IncidentScope.MINE, model.scope.value)
+        assertTrue(model.incidents.value.isEmpty())
+        model.filterIncidents(category, DateFilter.RECENT)
+        assertEquals(listOf(incident), model.incidents.value)
+    }
+
+    @Test fun `repeated refreshes keep rows and a scope change supersedes pending response`() = runTest {
+        val repository = FakeIncidents()
+        val model = viewModel(repository)
+        model.selectScope(IncidentScope.ALL)
+        val rows = model.incidents.value
+        val pending = kotlinx.coroutines.CompletableDeferred<List<Incident>>()
+        repository.pendingAll = pending
+        repeat(4) { model.refresh() }
+        assertEquals(2, repository.allQueryCount)
+        assertEquals(rows, model.incidents.value)
+        assertTrue(model.isRefreshing.value)
+        model.selectScope(IncidentScope.MINE)
+        pending.complete(listOf(incident.copy(id = "stale")))
+        assertEquals(listOf(incident), model.incidents.value)
+        assertFalse(model.isRefreshing.value)
+    }
+
+    @Test fun `refresh failure retains visible content and retry replaces it`() = runTest {
+        val repository = FakeIncidents()
+        val model = viewModel(repository)
+        repository.failure = ApiException.Network(java.io.IOException())
+        model.refresh()
+        assertEquals(listOf(incident), model.incidents.value)
+        assertTrue(model.uiState.value is IncidentsUiState.Error)
+        assertFalse(model.isRefreshing.value)
+        repository.failure = null
+        model.refresh()
+        assertEquals(IncidentsUiState.Success, model.uiState.value)
+    }
+
+    @Test fun `filters selected during refresh are applied to the new backend response`() = runTest {
+        val repository = FakeIncidents()
+        val model = viewModel(repository)
+        model.selectScope(IncidentScope.ALL)
+        val pending = kotlinx.coroutines.CompletableDeferred<List<Incident>>()
+        repository.pendingAll = pending
+        model.refresh()
+        model.filterIncidents(category, DateFilter.TODAY)
+        pending.complete(listOf(incident, incident.copy(id = "today", createdAt = java.time.Instant.now().toString()),
+            incident.copy(id = "other-category", category = category.copy(id = "other"), createdAt = java.time.Instant.now().toString())))
+        assertEquals(listOf("today"), model.incidents.value.map { it.id })
+        assertFalse(model.isRefreshing.value)
+    }
+
+    @Test fun `late non cooperative response cannot overwrite new scope`() = runTest {
+        val repository = FakeIncidents()
+        val model = viewModel(repository)
+        val pending = kotlinx.coroutines.CompletableDeferred<List<Incident>>()
+        repository.pendingAll = pending
+        repository.ignoreCancellation = true
+        model.selectScope(IncidentScope.ALL)
+        model.selectScope(IncidentScope.MINE)
+        pending.complete(listOf(incident.copy(id = "stale")))
+        assertEquals(listOf(incident), model.incidents.value)
+        assertEquals(IncidentScope.MINE, model.scope.value)
+    }
+
     private fun viewModel(repository: IncidentRepository) = ReportsViewModel(
         repository,
         object : CategoryRepository {
@@ -178,10 +254,14 @@ class ReportsViewModelTest {
             return incidents
         }
         var allQueryCount = 0
+        var ignoreCancellation = false
         var pendingAll: kotlinx.coroutines.CompletableDeferred<List<Incident>>? = null
         override suspend fun getIncidents(filters: IncidentFilters): List<Incident> {
             allQueryCount++
-            pendingAll?.let { return it.await() }
+            pendingAll?.let { pending ->
+                return if (ignoreCancellation) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { pending.await() }
+                else pending.await()
+            }
             failure?.let { throw it }
             return incidents + incident.copy(id = "other", reporterUserId = "other-user")
         }

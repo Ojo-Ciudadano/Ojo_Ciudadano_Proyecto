@@ -65,13 +65,36 @@ class IncidentBrowsingTest {
         compose.onNodeWithText("Luminaria de prueba").assertDoesNotExist()
     }
 
+    @Test fun pullRefreshWorksWithEmptyMineAndShortAllList() {
+        show()
+        compose.onNodeWithText("No hay incidentes en esta sección.").assertIsDisplayed()
+        val beforeMine = repository.mineCalls
+        compose.onNodeWithTag("reports_refresh").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        assertEquals(beforeMine + 1, repository.mineCalls)
+        compose.onNodeWithText("Todos los incidentes").performClick()
+        compose.runOnIdle { repository.other = true }
+        compose.onNodeWithTag("reports_refresh").performTouchInput { swipeDown() }
+        compose.onNodeWithText("Luminaria de prueba").assertIsDisplayed()
+        val beforeAll = repository.allCalls
+        compose.onNodeWithTag("reports_refresh").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        assertEquals(beforeAll + 1, repository.allCalls)
+    }
+
     private class Repository : IncidentRepository {
         override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
 
         @Volatile var failAll = false
         var other = false
-        override suspend fun getCurrentUserIncidents() = emptyList<Incident>()
+        var mineCalls = 0
+        var allCalls = 0
+        override suspend fun getCurrentUserIncidents(): List<Incident> {
+            mineCalls++
+            return emptyList()
+        }
         override suspend fun getIncidents(filters: IncidentFilters): List<Incident> {
+            allCalls++
             if (failAll) throw ApiException.Http(503, emptyList(), null, null)
             return if (!other) emptyList() else listOf(Incident(
                 "test-incident", "Luminaria de prueba", "Evidencia utilizada exclusivamente en pruebas",

@@ -4,6 +4,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -41,7 +45,10 @@ class NotificationsScreenTest {
 
     @Test fun successRendersMessageDateIncidentReferenceAndUnreadMarker() {
         val unread = notification(id = "unread", isRead = false)
-        val read = notification(id = "read", message = "Tu incidente fue cerrado.", isRead = true)
+        val read = notification(
+            id = "read", message = "Tu incidente fue cerrado.", isRead = true,
+            createdAt = "2026-11-02T08:30:00Z", incidentId = "another-incident"
+        )
         compose.setContent {
             OjoCiudadanoTheme {
                 NotificationsContent(
@@ -151,6 +158,20 @@ class NotificationsScreenTest {
         compose.onNodeWithText("Incidente: ${long.incidentId}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Volver").performClick()
         assertEquals(1, backs)
+    }
+
+    @Test fun pullRefreshFromEmptyNotificationsShowsNewResponse() {
+        val rows = mutableStateOf(emptyList<Notification>())
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    if (rows.value.isEmpty()) NotificationsUiState.Empty else NotificationsUiState.Success,
+                    rows.value, {}, {}, onRefresh = { rows.value = listOf(notification) }
+                )
+            }
+        }
+        compose.onNodeWithTag("notifications_refresh").performTouchInput { swipeDown() }
+        compose.onNodeWithText(notification.message).assertIsDisplayed()
     }
 
     private val notification = Notification(

@@ -289,6 +289,54 @@ class AdminIncidentsViewModelTest {
         assertEquals(IncidentsUiState.Empty, model.state.value.status)
     }
 
+    @Test fun `manual refresh preserves all filters deduplicates and recovers without losing rows`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentsViewModel(repository, FakeCategoryRepository())
+        runCurrent()
+        val filters = IncidentFilters("status", "category", "Temuco")
+        model.applyFilters(filters)
+        runCurrent()
+        val pending = CompletableDeferred<List<Incident>>()
+        repository.response = pending
+        repeat(4) { model.refresh() }
+        runCurrent()
+        assertEquals(3, repository.calls)
+        assertEquals(filters, repository.requestedFilters.last())
+        assertEquals(listOf(incident), model.state.value.incidents)
+        assertTrue(model.state.value.isRefreshing)
+        pending.completeExceptionally(IOException("offline"))
+        runCurrent()
+        assertFalse(model.state.value.isRefreshing)
+        assertEquals(listOf(incident), model.state.value.incidents)
+        assertTrue(model.state.value.status is IncidentsUiState.Error)
+        repository.response = null
+        repository.rows = emptyList()
+        model.refresh()
+        runCurrent()
+        assertEquals(filters, model.state.value.filters)
+        assertEquals(IncidentsUiState.Empty, model.state.value.status)
+        assertFalse(model.state.value.isRefreshing)
+    }
+
+    @Test fun `filter change during refresh supersedes previous response and indicator`() = runTest {
+        val repository = Repository()
+        val model = AdminIncidentsViewModel(repository, FakeCategoryRepository())
+        runCurrent()
+        val pending = CompletableDeferred<List<Incident>>()
+        repository.response = pending
+        model.refresh()
+        runCurrent()
+        repository.response = null
+        repository.rows = listOf(incident.copy(id = "new"))
+        model.selectComuna("Temuco")
+        runCurrent()
+        pending.complete(listOf(incident.copy(id = "stale")))
+        runCurrent()
+        assertEquals(listOf("new"), model.state.value.incidents.map { it.id })
+        assertEquals(IncidentFilters(comuna = "Temuco"), model.state.value.filters)
+        assertFalse(model.state.value.isRefreshing)
+    }
+
     private class Repository : IncidentRepository {
         override suspend fun updateStatus(incidentId: String, status: String, observation: String): cl.uct.ojociudadano.data.model.Incident = error("Unused")
 
