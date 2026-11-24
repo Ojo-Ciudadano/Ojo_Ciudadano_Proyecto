@@ -328,6 +328,9 @@ class CreateReportFormStateTest {
             CreateReportLocationErrors.NOT_AVAILABLE,
             updatedState.locationError
         )
+    }
+
+    @Test
     fun `reverse geocoded address fills only the empty location fields`() {
         val state = CreateReportFormState(
             referenceAddress = "",
