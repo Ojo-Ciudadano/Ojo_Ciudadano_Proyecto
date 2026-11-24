@@ -35,7 +35,8 @@ object EvidenceUploadErrors {
                     "el archivo está vacío"
 
                 EvidenceCompatibilityIssue.FILE_TOO_LARGE ->
-                    "supera el límite de ${EvidenceUploadConstraints.MAX_FILE_SIZE_MB} MB"
+                    "supera el límite de ${EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_MB} MB " +
+                        "aceptado antes de optimizarse"
             }
         }
 

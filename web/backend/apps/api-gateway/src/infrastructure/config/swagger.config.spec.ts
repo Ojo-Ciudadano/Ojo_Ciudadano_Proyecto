@@ -66,6 +66,14 @@ describe('Swagger OpenAPI Contracts (#156)', () => {
     expect(paths['/api/v1/evidencias/{id}/archivo']).toHaveProperty('get');
 
     expect(paths['/api/v1/notificaciones']).toHaveProperty('get');
+    expect(paths['/api/v1/notificaciones/leidas']).toHaveProperty('patch');
+    expect(paths['/api/v1/notificaciones/{id}/leida']).toHaveProperty('patch');
+    expect(paths['/api/v1/notificaciones/leidas'].patch.security).toEqual([
+      { bearer: [] },
+    ]);
+    expect(paths['/api/v1/notificaciones/{id}/leida'].patch.security).toEqual([
+      { bearer: [] },
+    ]);
 
     // Verificar que no expone operaciones pendientes como /usuarios/registro
     expect(paths['/api/v1/usuarios/registro']).toBeUndefined();
@@ -92,5 +100,17 @@ describe('Swagger OpenAPI Contracts (#156)', () => {
     expect(respuestasEstado).toHaveProperty('401');
     expect(respuestasEstado).toHaveProperty('403');
     expect(respuestasEstado).toHaveProperty('409');
+
+    const respuestasLeida =
+      body.paths['/api/v1/notificaciones/{id}/leida'].patch.responses;
+    expect(respuestasLeida).toHaveProperty('200');
+    expect(respuestasLeida).toHaveProperty('400');
+    expect(respuestasLeida).toHaveProperty('401');
+    expect(respuestasLeida).toHaveProperty('403');
+
+    const respuestasTodasLeidas =
+      body.paths['/api/v1/notificaciones/leidas'].patch.responses;
+    expect(respuestasTodasLeidas).toHaveProperty('200');
+    expect(respuestasTodasLeidas).toHaveProperty('401');
   });
 });
