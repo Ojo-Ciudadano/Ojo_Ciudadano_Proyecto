@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { obtenerIncidentes } from '../services/incidentes.service'
-import type {
-  FiltrosIncidentes,
-  Incidente,
-} from '../types/incidente'
+import type { Incidente } from '../types/incidente'
+import {
+  crearFiltrosBarraVacios,
+  type FiltrosBarraIncidentes,
+} from '../components/incidentes/incidentFilterBar.utils'
 
 interface ErrorConsulta {
   mensaje: string
@@ -15,11 +16,8 @@ interface OpcionFiltro {
   nombre: string
 }
 
-const FILTROS_INICIALES: FiltrosIncidentes = {
-  estadoId: '',
-  comuna: '',
-  categoriaId: '',
-}
+const FILTROS_INICIALES: FiltrosBarraIncidentes =
+  crearFiltrosBarraVacios()
 
 const POR_PAGINA = 10
 
@@ -78,7 +76,7 @@ function obtenerOpciones(
 
 export function useIncidentes() {
   const [filtros, setFiltros] =
-    useState<FiltrosIncidentes>(FILTROS_INICIALES)
+    useState<FiltrosBarraIncidentes>(FILTROS_INICIALES)
 
   const [incidentes, setIncidentes] = useState<Incidente[]>([])
   const [coleccionOpciones, setColeccionOpciones] =
@@ -93,9 +91,10 @@ export function useIncidentes() {
   const [consultaTerminada, setConsultaTerminada] =
     useState<string | null>(null)
 
-  const { estadoId, comuna, categoriaId } = filtros
+  const { ciudad, estadoId, comuna, categoriaId } = filtros
 
   const claveConsulta = JSON.stringify([
+    ciudad,
     estadoId,
     comuna,
     categoriaId,
@@ -111,6 +110,7 @@ export function useIncidentes() {
 
       try {
         const datos = await obtenerIncidentes(controller.signal, {
+          ciudad,
           estadoId,
           comuna,
           categoriaId,
@@ -122,7 +122,7 @@ export function useIncidentes() {
 
         // Las opciones se obtienen de la colección completa sin filtros.
         // Se conservan al filtrar, incluso cuando no hay coincidencias.
-        if (!estadoId && !comuna && !categoriaId) {
+        if (!ciudad && !estadoId && !comuna && !categoriaId) {
           setColeccionOpciones(datos)
         }
       } catch (error: unknown) {
@@ -142,7 +142,7 @@ export function useIncidentes() {
 
     // Una consulta anterior no puede actualizar el estado al cancelarse.
     return () => controller.abort()
-  }, [estadoId, comuna, categoriaId, claveConsulta])
+  }, [ciudad, estadoId, comuna, categoriaId, claveConsulta])
 
   const estados = useMemo(
     () => obtenerOpciones(coleccionOpciones, 'estado'),
@@ -185,17 +185,19 @@ export function useIncidentes() {
       ? []
       : incidentes.slice(inicio, inicio + POR_PAGINA)
 
-  const hayFiltros = Boolean(estadoId || comuna || categoriaId)
+  const hayFiltros = Boolean(ciudad || estadoId || comuna || categoriaId)
 
+  function cambiarFiltros(nuevosFiltros: FiltrosBarraIncidentes) {
+    setPagina(1)
+    setFiltros(nuevosFiltros)
+  }
+
+  // Conservado para consumidores que aún usan la firma anterior (#132/#177).
   function cambiarFiltro(
-    campo: keyof FiltrosIncidentes,
+    campo: keyof FiltrosBarraIncidentes,
     valor: string,
   ) {
-    setPagina(1)
-    setFiltros((actuales) => ({
-      ...actuales,
-      [campo]: valor,
-    }))
+    cambiarFiltros({ ...filtros, [campo]: valor })
   }
 
   function restablecerFiltros() {
@@ -232,6 +234,7 @@ export function useIncidentes() {
     categorias,
     comunas,
     hayFiltros,
+    cambiarFiltros,
     cambiarFiltro,
     restablecerFiltros,
     paginaActual,
