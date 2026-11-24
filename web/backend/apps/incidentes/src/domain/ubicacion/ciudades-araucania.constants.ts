@@ -17,12 +17,20 @@ export const CIUDADES_ARAUCANIA: Readonly<Record<string, readonly string[]>> = {
   Villarrica: ['Villarrica', 'Pucón'],
 };
 
-const normalizar = (valor: string): string =>
+export const normalizar = (valor: string): string =>
   valor
     .trim()
     .toLocaleLowerCase('es')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+
+/** Límites aproximados usados por el mapa web para acotar La Araucanía. */
+export const LIMITES_ARAUCANIA = {
+  latitudMinima: -39.7,
+  latitudMaxima: -37.4,
+  longitudMinima: -73.9,
+  longitudMaxima: -71.0,
+} as const;
 
 export function comunasDeCiudad(ciudad: string): readonly string[] {
   const clave = normalizar(ciudad);
@@ -36,4 +44,31 @@ export function comunasDeCiudad(ciudad: string): readonly string[] {
 export function comunaPerteneceACiudad(comuna: string, ciudad: string): boolean {
   const objetivo = normalizar(comuna);
   return comunasDeCiudad(ciudad).some((c) => normalizar(c) === objetivo);
+}
+
+export function esComunaDeAraucania(comuna: string): boolean {
+  const objetivo = normalizar(comuna);
+  return COMUNAS_ARAUCANIA.some((c) => normalizar(c) === objetivo);
+}
+
+export function esRegionAraucania(region: string): boolean {
+  const objetivo = normalizar(region).replace(/\s+/g, ' ');
+  return (
+    objetivo === 'araucania' ||
+    objetivo === 'la araucania' ||
+    objetivo === 'region de la araucania' ||
+    objetivo === 'region de araucania'
+  );
+}
+
+export function coordenadasDentroDeAraucania(
+  latitud: number,
+  longitud: number,
+): boolean {
+  return (
+    latitud >= LIMITES_ARAUCANIA.latitudMinima &&
+    latitud <= LIMITES_ARAUCANIA.latitudMaxima &&
+    longitud >= LIMITES_ARAUCANIA.longitudMinima &&
+    longitud <= LIMITES_ARAUCANIA.longitudMaxima
+  );
 }

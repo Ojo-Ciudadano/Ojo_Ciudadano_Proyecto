@@ -315,11 +315,18 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
         'sector',
       ],
       properties: {
-        latitud: { type: 'number', minimum: -90, maximum: 90, example: -38.7359 },
+        latitud: {
+          type: 'number',
+          minimum: -39.7,
+          maximum: -37.4,
+          description: 'Latitud dentro de los límites de La Araucanía (#336).',
+          example: -38.7359,
+        },
         longitud: {
           type: 'number',
-          minimum: -180,
-          maximum: 180,
+          minimum: -73.9,
+          maximum: -71.0,
+          description: 'Longitud dentro de los límites de La Araucanía (#336).',
           example: -72.5904,
         },
         direccionReferencia: {
