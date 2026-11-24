@@ -209,6 +209,20 @@ fun CreateReportScreen(
 
         Text("Referencia de ubicación", style = MaterialTheme.typography.titleMedium)
         Text("Completa los datos del lugar asociados a la ubicación GPS.")
+        if (state.isAutocompletingAddress) {
+            Text(
+                text = "Completando comuna, región y dirección...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        state.addressAutofillError?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         OutlinedTextField(value = state.referenceAddress,
             onValueChange = { onLocationDetailsChange(it, state.commune, state.region, state.sector) },
             label = { Text("Dirección de referencia") }, enabled = canEditForm, modifier = Modifier.fillMaxWidth())
@@ -649,7 +663,8 @@ fun CreateReportScreen(
                 categoryRepository = application.container.categoryRepository,
                 incidentRepository = application.container.incidentRepository,
                 photoFileStore = fileStore,
-                locationClient = application.container.locationClient
+                locationClient = application.container.locationClient,
+                reverseGeocodingClient = application.container.reverseGeocodingClient
             )
         }
     )

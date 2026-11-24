@@ -19,7 +19,9 @@ import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.model.ReverseGeocodingResult
 import cl.uct.ojociudadano.domain.repository.LocationClient
+import cl.uct.ojociudadano.domain.repository.ReverseGeocodingClient
 import cl.uct.ojociudadano.ui.reports.incidentMessage
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
@@ -28,6 +30,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 class CreateReportViewModel(
@@ -35,6 +38,8 @@ class CreateReportViewModel(
     private val incidentRepository: IncidentRepository,
     private val photoFileStore: EvidencePhotoFileStore,
     private val locationClient: LocationClient,
+    private val reverseGeocodingClient: ReverseGeocodingClient =
+        ReverseGeocodingClient.Unavailable,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val formValidator: CreateReportFormValidator = CreateReportFormValidator()
 ) : ViewModel() {
@@ -84,6 +89,14 @@ class CreateReportViewModel(
      */
     private var manualLocationVersion = 0
 
+    /**
+     * Identifica la última consulta de geocodificación inversa iniciada.
+     *
+     * Una respuesta antigua no debe completar el formulario con la dirección de
+     * una ubicación que ya fue reemplazada por el GPS o por el mapa.
+     */
+    private var addressAutofillRequestVersion = 0
+
     init {
         loadCategories()
         refreshLocation()
@@ -91,8 +104,7 @@ class CreateReportViewModel(
     }
 
     fun onLocationDetailsChange(referenceAddress: String, commune: String, region: String, sector: String) {
-        formState = formState.copy(referenceAddress = referenceAddress, commune = commune,
-            region = region, sector = sector, locationDetailsError = null)
+        formState = formState.updateLocationDetails(referenceAddress, commune, region, sector)
         onFormEdited()
     }
 
@@ -159,6 +171,12 @@ class CreateReportViewModel(
         formState = formState.updateManualLocation(coordinate)
         isManualLocationPickerVisible = false
         onFormEdited()
+
+        (formState.location as? LocationResult.Success)?.let { location ->
+            viewModelScope.launch {
+                autocompleteAddressDetails(location)
+            }
+        }
     }
 
     /**
@@ -398,6 +416,10 @@ class CreateReportViewModel(
 
             formState = formState.updateLocation(result)
 
+            if (result is LocationResult.Success) {
+                autocompleteAddressDetails(result)
+            }
+
             if (submitAfterLocation) {
                 submitAfterLocation = false
 
@@ -405,6 +427,54 @@ class CreateReportViewModel(
                     createReport()
                 }
             }
+        }
+    }
+
+    /**
+     * Completa comuna, región y dirección referencial a partir de la coordenada.
+     *
+     * El proveedor se ejecuta en su propio dispatcher de E/S. Un fallo o la
+     * falta de resultados solo deja un mensaje de ayuda: los campos siguen
+     * editables y la validación del envío no cambia.
+     */
+    private suspend fun autocompleteAddressDetails(location: LocationResult.Success) {
+        val requestVersion = ++addressAutofillRequestVersion
+        formState = formState.startAddressAutofill()
+
+        val result = try {
+            withTimeoutOrNull(ADDRESS_AUTOFILL_TIMEOUT_MILLIS) {
+                reverseGeocodingClient.reverseGeocode(
+                    latitude = location.latitude,
+                    longitude = location.longitude
+                )
+            } ?: ReverseGeocodingResult.Error(ADDRESS_AUTOFILL_TIMEOUT_MESSAGE)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            runCatching {
+                Log.w(
+                    "CreateReportViewModel",
+                    "Error al geocodificar la ubicación: " +
+                        "type=${exception::class.java.name}, message=${exception.message}",
+                    exception
+                )
+            }
+            ReverseGeocodingResult.Error(exception.message.orEmpty())
+        }
+
+        // Otra ubicación ya inició su propia consulta: este resultado quedó
+        // obsoleto y no debe modificar los datos visibles.
+        if (requestVersion != addressAutofillRequestVersion) return
+
+        formState = when (result) {
+            is ReverseGeocodingResult.Success ->
+                formState.applyReverseGeocodedAddress(result.address)
+
+            ReverseGeocodingResult.NoResults ->
+                formState.failAddressAutofill(CreateReportAddressAutofillErrors.NO_RESULTS)
+
+            is ReverseGeocodingResult.Error ->
+                formState.failAddressAutofill(CreateReportAddressAutofillErrors.UNAVAILABLE)
         }
     }
 
@@ -890,10 +960,11 @@ class CreateReportViewModel(
     }
 
     /**
-     * La geocodificación inversa está fuera del alcance de esta tarea. Se
-     * conservan las coordenadas reales y se completan los campos descriptivos
-     * obligatorios del contrato con valores explícitos, sin reutilizar la
-     * ubicación temporal de Sprint 1.
+     * Construye los metadatos descriptivos que acompañan a las coordenadas.
+     *
+     * Los valores pueden venir del autocompletado por geocodificación inversa
+     * o de una edición manual posterior del usuario; el envío solo usa lo que
+     * permanece visible en el formulario.
      */
     private fun LocationResult.Success.toIncidentLocationInput() =
         CreateIncidentLocationInput(
@@ -915,6 +986,12 @@ class CreateReportViewModel(
 
     private fun CreateReportFormState.hasValidationErrors(): Boolean =
         titleError != null || descriptionError != null || categoryError != null || locationDetailsError != null
+
+    private companion object {
+        const val ADDRESS_AUTOFILL_TIMEOUT_MILLIS = 10_000L
+        const val ADDRESS_AUTOFILL_TIMEOUT_MESSAGE =
+            "La geocodificación no respondió a tiempo."
+    }
 
 }
 

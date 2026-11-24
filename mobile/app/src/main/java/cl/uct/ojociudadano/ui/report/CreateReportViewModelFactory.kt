@@ -6,12 +6,15 @@ import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.domain.repository.LocationClient
+import cl.uct.ojociudadano.domain.repository.ReverseGeocodingClient
 
 class CreateReportViewModelFactory(
     private val categoryRepository: CategoryRepository,
     private val incidentRepository: IncidentRepository,
     private val photoFileStore: EvidencePhotoFileStore,
-    private val locationClient: LocationClient
+    private val locationClient: LocationClient,
+    private val reverseGeocodingClient: ReverseGeocodingClient =
+        ReverseGeocodingClient.Unavailable
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -21,7 +24,8 @@ class CreateReportViewModelFactory(
                 categoryRepository = categoryRepository,
                 incidentRepository = incidentRepository,
                 photoFileStore = photoFileStore,
-                locationClient = locationClient
+                locationClient = locationClient,
+                reverseGeocodingClient = reverseGeocodingClient
             ) as T
         }
 
