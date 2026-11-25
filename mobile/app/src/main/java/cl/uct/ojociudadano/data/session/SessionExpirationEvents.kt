@@ -1,14 +1,17 @@
 package cl.uct.ojociudadano.data.session
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 
 /**
- * Notificaciones globales del cliente HTTP, sin modificar la sesión ni navegar.
- * El consumidor debe comprobar el snapshot antes de actuar sobre la sesión (#291).
- * No se reproducen eventos antiguos a nuevos observadores. El buffer evita bloquear OkHttp.
+ * Notificaciones globales del cliente HTTP. El buffer permite que OkHttp emita
+ * los eventos sin esperar al gestor de sesión.
  */
 object SessionExpirationEvents {
     private val mutableEvents = MutableSharedFlow<TokenSnapshot>(
@@ -20,5 +23,12 @@ object SessionExpirationEvents {
 
     fun notifyExpired(rejectedToken: TokenSnapshot) {
         mutableEvents.tryEmit(rejectedToken)
+    }
+
+    internal fun observeIn(scope: CoroutineScope, sessionManager: SessionManager) {
+        // Start collecting before the application can send its first protected request.
+        scope.launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            events.collect(sessionManager::invalidateIfCurrent)
+        }
     }
 }

@@ -12,7 +12,8 @@ fun LoginRoute(
     viewModel: AuthViewModel,
     modifier: Modifier = Modifier,
     onRegister: (() -> Unit)? = null,
-    registrationSucceeded: Boolean = false
+    registrationSucceeded: Boolean = false,
+    onDismissExpiration: (() -> Unit)? = null
 ) {
     val authState by viewModel.uiState.collectAsState()
 
@@ -25,6 +26,7 @@ fun LoginRoute(
         authState = authState,
         modifier = modifier,
         onRegister = onRegister,
-        registrationSucceeded = registrationSucceeded
+        registrationSucceeded = registrationSucceeded,
+        onDismissExpiration = onDismissExpiration
     )
 }

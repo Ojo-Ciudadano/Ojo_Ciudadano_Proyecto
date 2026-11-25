@@ -90,8 +90,12 @@ class LoginRouteTest {
 
         override fun invalidateIfCurrent(rejectedToken: TokenSnapshot) {
             if (currentToken() == rejectedToken.value) {
-                _state.value = SessionState.Unauthenticated
+                _state.value = SessionState.Expired(rejectedToken.sessionGeneration ?: 0)
             }
+        }
+
+        override fun dismissExpiration(expired: SessionState.Expired) {
+            _state.compareAndSet(expired, SessionState.Unauthenticated)
         }
     }
 }

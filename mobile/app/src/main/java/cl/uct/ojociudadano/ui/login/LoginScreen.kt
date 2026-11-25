@@ -39,6 +39,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -72,7 +76,8 @@ fun LoginScreen(
     modifier: Modifier = Modifier,
     formValidator: LoginFormValidator = remember { LoginFormValidator() },
     onRegister: (() -> Unit)? = null,
-    registrationSucceeded: Boolean = false
+    registrationSucceeded: Boolean = false,
+    onDismissExpiration: (() -> Unit)? = null
 ) {
     var formState by rememberSaveable(stateSaver = LoginFormState.Saver) {
         mutableStateOf(LoginFormState())
@@ -103,7 +108,8 @@ fun LoginScreen(
         authState = authState,
         modifier = modifier,
         onRegister = onRegister,
-        registrationSucceeded = registrationSucceeded
+        registrationSucceeded = registrationSucceeded,
+        onDismissExpiration = onDismissExpiration
     )
 }
 
@@ -117,7 +123,8 @@ private fun LoginScreenContent(
     authState: AuthUiState,
     modifier: Modifier = Modifier,
     onRegister: (() -> Unit)? = null,
-    registrationSucceeded: Boolean = false
+    registrationSucceeded: Boolean = false,
+    onDismissExpiration: (() -> Unit)? = null
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -152,6 +159,14 @@ private fun LoginScreenContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
+
+        onDismissExpiration?.let { dismiss ->
+            CitizenMessage(
+                message = stringResource(R.string.session_expired_notice),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                onDismiss = dismiss
+            )
+        }
 
         AnimatedVisibility(registrationSucceeded) {
             CitizenMessage("Cuenta creada. Inicia sesión con tus credenciales.")

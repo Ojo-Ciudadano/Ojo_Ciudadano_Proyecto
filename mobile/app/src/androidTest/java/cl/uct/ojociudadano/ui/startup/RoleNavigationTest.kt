@@ -2,8 +2,11 @@ package cl.uct.ojociudadano.ui.startup
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -194,20 +197,36 @@ class RoleNavigationTest {
         compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
         compose.onNodeWithText("Panel de administración").assertDoesNotExist()
         compose.onNodeWithText("Listado de incidentes").assertDoesNotExist()
+        compose.onNodeWithText(expirationNotice).assertDoesNotExist()
         compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
     }
 
-    @Test fun invalidationWhileInIncidentsRemovesAdministrativeNavigation() {
+    @Test fun expirationInProtectedScreenShowsOneDismissibleNoticeAndClearsHistory() {
         val manager = DefaultSessionManager(Storage(session("ADMIN")))
-        showGate(manager)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            OjoCiudadanoTheme {
+                SessionStartupGate(manager, FailingAuthRepository)
+            }
+        }
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
         compose.onNodeWithText("Gestión de incidentes").performClick()
         compose.onNodeWithText("Listado de incidentes").assertIsDisplayed()
         compose.runOnIdle {
-            manager.invalidateIfCurrent(requireNotNull(manager.currentTokenSnapshot()))
+            val rejectedToken = requireNotNull(manager.currentTokenSnapshot())
+            repeat(3) { manager.invalidateIfCurrent(rejectedToken) }
         }
+        compose.onNodeWithText(expirationNotice).assertIsDisplayed()
+        compose.onAllNodesWithText(expirationNotice).assertCountEquals(1)
         compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
         compose.onNodeWithText("Listado de incidentes").assertDoesNotExist()
+
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onAllNodesWithText(expirationNotice).assertCountEquals(1)
+        compose.onNodeWithContentDescription("Cerrar aviso").performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText(expirationNotice).assertDoesNotExist()
+        compose.onNodeWithTag(LoginTestTags.EMAIL_FIELD).assertIsDisplayed()
         compose.runOnIdle { assertFalse(compose.activity.onBackPressedDispatcher.hasEnabledCallbacks()) }
     }
 
@@ -362,15 +381,17 @@ class RoleNavigationTest {
     private fun showGate(manager: SessionManager) {
         compose.setContent {
             OjoCiudadanoTheme {
-                SessionStartupGate(manager, object : AuthRepository {
-                    override suspend fun register(input: RegistrationInput): RegisteredUser =
-                        error("Registration is not used by this test")
-
-                    override suspend fun login(email: String, password: String): AuthenticatedSession =
-                        error("Restoration must not call login")
-                })
+                SessionStartupGate(manager, FailingAuthRepository)
             }
         }
+    }
+
+    private object FailingAuthRepository : AuthRepository {
+        override suspend fun register(input: RegistrationInput): RegisteredUser =
+            error("Registration is not used by this test")
+
+        override suspend fun login(email: String, password: String): AuthenticatedSession =
+            error("Restoration must not call login")
     }
 
     private class Storage(var session: AuthenticatedSession?) : SessionStorage {
@@ -385,5 +406,9 @@ class RoleNavigationTest {
             """{"exp":4102444800}""".toByteArray())
         return AuthenticatedSession("header.$payload.signature", "Bearer", "test-user",
             "test@example.invalid", "Test", roles.toList())
+    }
+
+    private companion object {
+        const val expirationNotice = "Tu sesión expiró. Vuelve a iniciar sesión"
     }
 }
