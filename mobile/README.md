@@ -168,3 +168,26 @@ Validación local:
 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.report.CreateReportLocationPickerTest
 ```
+
+## Centrar el mapa en la ubicación actual (#303)
+
+El mapa principal incorpora un botón flotante «Mi ubicación». Al pulsarlo se
+reutiliza el flujo de permisos de ubicación existente:
+
+- Con permisos concedidos y GPS disponible, se solicita una única lectura, se
+  dibuja la posición del usuario y la cámara se desplaza suavemente hacia ella
+  con un nivel de acercamiento cercano.
+- Si el usuario deniega el permiso, el GPS está desactivado o la lectura falla,
+  se muestra un `Snackbar` con un mensaje controlado sin cerrar el mapa.
+- Mientras la lectura está en curso, el botón muestra un indicador y no inicia
+  solicitudes adicionales.
+- No se realiza rastreo continuo de la posición ni se consultan nuevamente los
+  incidentes.
+
+Validación local:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin :app:lintDebug
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.map.MapScreenTest,cl.uct.ojociudadano.ui.map.MapCenterLocationFabTest,cl.uct.ojociudadano.ui.map.IncidentMarkerSyncTest
+```

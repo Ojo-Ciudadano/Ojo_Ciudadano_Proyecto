@@ -13,13 +13,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
 import cl.uct.ojociudadano.ui.reports.incidentDate
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
@@ -63,6 +69,8 @@ internal object MapTestTags {
     const val FILTER_STATUS_PREFIX = "map_filter_status_"
     const val FILTERED_EMPTY = "map_state_filtered_empty"
     const val FILTERED_EMPTY_RESET = "map_state_filtered_empty_reset"
+    const val CENTER_LOCATION_FAB = "map_center_location_fab"
+    const val LOCATION_SNACKBAR = "map_location_snackbar"
 }
 
 @Composable
@@ -73,16 +81,40 @@ fun MapScreen(
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: MapViewModel = mapViewModel ?: viewModel(factory = remember(application) {
-        MapViewModelFactory(application.container.incidentRepository)
+        MapViewModelFactory(
+            incidentRepository = application.container.incidentRepository,
+            locationClient = application.container.locationClient
+        )
     })
     val state by model.uiState.collectAsState()
+    val userLocation by model.userLocation.collectAsState()
+    val isLocatingUser by model.isLocatingUser.collectAsState()
     val success = state as? MapUiState.Success
     val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val locationPermissionLauncher = rememberLocationPermissionLauncher(
+        onPermissionResult = { granted ->
+            if (granted) {
+                model.centerOnUserLocation()
+            } else {
+                model.onLocationPermissionDenied()
+            }
+        },
+        onReturnFromSettings = model::centerOnUserLocation
+    )
+
+    LaunchedEffect(model) {
+        model.userMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     Box(modifier.fillMaxSize()) {
         IncidentMap(
             markers = markers,
+            userLocation = userLocation,
             onMarkerClick = model::selectIncident,
             onMapClick = model::clearSelection,
             modifier = Modifier.fillMaxSize()
@@ -136,39 +168,79 @@ fun MapScreen(
                     .padding(Spacing.medium)
             )
         }
+        MapCenterLocationFab(
+            isLoading = isLocatingUser,
+            onClick = {
+                if (locationPermissionLauncher.isGranted()) {
+                    model.centerOnUserLocation()
+                } else {
+                    locationPermissionLauncher.request()
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = Spacing.medium)
+        )
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(Spacing.medium)
+                .testTag(MapTestTags.LOCATION_SNACKBAR)
+        )
     }
 }
 
 @Composable
 private fun IncidentMap(
     markers: List<IncidentMapMarker>,
+    userLocation: MapUserLocation?,
     onMarkerClick: (String) -> Unit,
     onMapClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val currentOnMapClick by rememberUpdatedState(onMapClick)
+    val mapView = remember(context) {
+        Configuration.getInstance().load(
+            context,
+            context.getSharedPreferences("osmdroid", 0)
+        )
+        MapView(context).apply {
+            setMultiTouchControls(true)
+            controller.setZoom(DEFAULT_ZOOM)
+            controller.setCenter(GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE))
+            // Se agrega antes que los marcadores: al despachar eventos en orden
+            // inverso, un toque sobre un marcador se consume primero y solo los
+            // toques sobre el mapa vacío llegan a este receptor.
+            overlays.add(MapEventsOverlay(object : MapEventsReceiver {
+                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                    currentOnMapClick()
+                    return false
+                }
+
+                override fun longPressHelper(p: GeoPoint): Boolean = false
+            }))
+        }
+    }
+
+    DisposableEffect(mapView) {
+        onDispose { mapView.onDetach() }
+    }
+
+    LaunchedEffect(mapView, userLocation?.focusRequestId) {
+        val target = userLocation ?: return@LaunchedEffect
+        mapView.post {
+            animateMapToUserLocation(mapView, target.coordinate)
+        }
+    }
+
     AndroidView(
         modifier = modifier,
-        factory = { context ->
-            Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
-            MapView(context).apply {
-                setMultiTouchControls(true)
-                controller.setZoom(DEFAULT_ZOOM)
-                controller.setCenter(GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE))
-                // Se agrega antes que los marcadores: al despachar eventos en orden
-                // inverso, un toque sobre un marcador se consume primero y solo los
-                // toques sobre el mapa vacío llegan a este receptor.
-                overlays.add(MapEventsOverlay(object : MapEventsReceiver {
-                    override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                        onMapClick()
-                        return false
-                    }
-
-                    override fun longPressHelper(p: GeoPoint): Boolean = false
-                }))
-            }
-        },
-        update = { mapView ->
-            syncIncidentMarkers(mapView, markers, onMarkerClick)
+        factory = { mapView },
+        update = { currentMap ->
+            syncIncidentMarkers(currentMap, markers, onMarkerClick)
+            syncUserLocationMarker(currentMap, userLocation)
         }
     )
 }
