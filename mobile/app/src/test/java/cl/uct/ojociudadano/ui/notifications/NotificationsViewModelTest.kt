@@ -5,6 +5,9 @@ import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.NotificationRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
 import java.io.IOException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +46,73 @@ class NotificationsViewModelTest {
         assertEquals(repository.rows, model.notifications.value)
         assertEquals(listOf("newest", "middle", "oldest"), model.notifications.value.map { it.id })
         assertEquals(1, repository.calls)
+    }
+
+    @Test fun `empty state becomes success when the repository publishes a new notification`() = runTest {
+        val repository = Repository()
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+        assertEquals(NotificationsUiState.Empty, model.state.value)
+
+        // El scheduler (#282) publica sin pasar por load(); la pantalla debe seguirlo.
+        val incoming = notification(id = "n1", isRead = false)
+        repository.publish(listOf(incoming))
+        runCurrent()
+
+        assertEquals(NotificationsUiState.Success, model.state.value)
+        assertEquals(listOf(incoming), model.notifications.value)
+        assertEquals(1, model.unreadCount.value)
+    }
+
+    @Test fun `a publication cannot replace a terminal error`() = runTest {
+        val repository = Repository().apply { failure = ApiException.Network(IOException("offline")) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+        assertTrue(model.state.value is NotificationsUiState.Error)
+
+        repository.publish(listOf(notification(id = "n1")))
+        runCurrent()
+
+        assertTrue(model.state.value is NotificationsUiState.Error)
+    }
+
+    @Test fun `opening an unread notification marks it as read`() = runTest {
+        val repository = Repository().apply { rows = listOf(notification(id = "n1", isRead = false)) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.openNotification(repository.rows.single())
+        runCurrent()
+
+        assertEquals(listOf("n1"), repository.markedIds)
+        assertTrue(model.notifications.value.single().isRead)
+    }
+
+    @Test fun `opening an already read notification does not call the backend`() = runTest {
+        val repository = Repository().apply { rows = listOf(notification(id = "n1", isRead = true)) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.openNotification(repository.rows.single())
+        runCurrent()
+
+        assertTrue(repository.markedIds.isEmpty())
+    }
+
+    @Test fun `a rejected read operation stays silent for the navigation`() = runTest {
+        val repository = Repository().apply {
+            rows = listOf(notification(id = "n1", isRead = false))
+            markFailure = ApiException.Network(IOException("offline"))
+        }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.openNotification(repository.rows.single())
+        runCurrent()
+
+        // La navegación no se bloquea ni se convierte en un error de pantalla.
+        assertEquals(NotificationsUiState.Success, model.state.value)
+        assertFalse(model.notifications.value.single().isRead)
     }
 
     @Test fun `empty response is a valid empty state and not an error`() = runTest {
@@ -164,11 +234,44 @@ class NotificationsViewModelTest {
         var pending: CompletableDeferred<Unit>? = null
         var calls = 0
 
-        override suspend fun getNotifications(): List<Notification> {
+        private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
+        private val _unreadCount = MutableStateFlow(0)
+
+        override val notifications: StateFlow<List<Notification>> = _notifications.asStateFlow()
+        override val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+        override suspend fun refresh(): List<Notification> {
             calls++
             pending?.await()
             failure?.let { throw it }
+            _notifications.value = rows
+            _unreadCount.value = rows.count { !it.isRead }
             return rows
+        }
+
+        var markedIds = mutableListOf<String>()
+        var markFailure: Throwable? = null
+
+        override suspend fun markAsRead(id: String) {
+            markFailure?.let { throw it }
+            markedIds += id
+            _notifications.value = _notifications.value.map {
+                if (it.id == id) it.copy(isRead = true) else it
+            }
+            _unreadCount.value = _notifications.value.count { !it.isRead }
+        }
+
+        override suspend fun markAllAsRead(): Int = error("Not used by this test")
+
+        /** Simula una publicación del ciclo periódico de #282. */
+        fun publish(rows: List<Notification>) {
+            _notifications.value = rows
+            _unreadCount.value = rows.count { !it.isRead }
+        }
+
+        override fun clear() {
+            _notifications.value = emptyList()
+            _unreadCount.value = 0
         }
     }
 

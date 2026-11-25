@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -16,6 +17,7 @@ import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.ui.reports.incidentDate
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -128,6 +130,61 @@ class NotificationsScreenTest {
         }
         compose.onNodeWithText("Tu sesión expiró. Inicia sesión nuevamente.").assertIsDisplayed()
         compose.onNodeWithText("Reintentar").assertDoesNotExist()
+    }
+
+    @Test fun notificationWithIncidentIsClickableAndWithoutItIsNot() {
+        val opened = mutableListOf<String>()
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(
+                        notification(id = "with-incident"),
+                        notification(id = "without-incident", incidentId = "  ")
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onNotificationClick = { opened += it.id }
+                )
+            }
+        }
+
+        compose.onNodeWithTag("notification_with-incident").performClick()
+        compose.onNodeWithTag("notification_without-incident").performClick()
+
+        assertEquals(listOf("with-incident"), opened)
+    }
+
+    @Test fun invalidIncidentIsNotMarkedNorNavigatedAndShowsAControlledMessage() {
+        val opened = mutableListOf<String>()
+        val invalid = mutableListOf<String>()
+        var dismissed = false
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(
+                        notification(id = "broken-incident", incidentId = "incidente/otro")
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onNotificationClick = { opened += it.id },
+                    onInvalidIncident = { invalid += it.id },
+                    invalidIncidentMessage = "El incidente asociado a esta notificación no es válido.",
+                    onDismissInvalidIncident = { dismissed = true }
+                )
+            }
+        }
+
+        compose.onNodeWithText("El incidente asociado a esta notificación no es válido.")
+            .assertIsDisplayed()
+        compose.onNodeWithTag("notification_broken-incident").performClick()
+
+        assertEquals(listOf("broken-incident"), invalid)
+        assertTrue(opened.isEmpty())
+
+        compose.onNodeWithText("Entendido").performClick()
+        assertTrue(dismissed)
     }
 
     @Test fun backActionAndNarrowLayoutKeepContentReachable() {

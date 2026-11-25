@@ -21,10 +21,17 @@ import cl.uct.ojociudadano.data.remote.dto.NotificationDto
 import cl.uct.ojociudadano.data.session.TokenSnapshot
 import cl.uct.ojociudadano.data.session.testSession
 import cl.uct.ojociudadano.data.session.testSessionManager
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import java.io.File
+import kotlinx.coroutines.test.runCurrent
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.Response
 import cl.uct.ojociudadano.data.remote.dto.*
+import cl.uct.ojociudadano.data.remote.error.ApiException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -254,9 +261,9 @@ class RemoteRepositoryTest {
         val apiService = FakeApiService(
             notifications = listOf(sampleNotificationDto())
         )
-        val repository = RemoteNotificationRepository(apiService, testSessionManager())
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
 
-        val notifications = repository.getNotifications()
+        val notifications = repository.refresh()
 
         assertEquals(testSession().accessToken, apiService.lastNotificationsSession?.value)
         assertEquals(1, notifications.size)
@@ -273,11 +280,118 @@ class RemoteRepositoryTest {
     @Test
     fun `getNotifications maps empty response to empty list`() = runTest {
         val apiService = FakeApiService(notifications = emptyList())
-        val repository = RemoteNotificationRepository(apiService, testSessionManager())
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
 
-        val notifications = repository.getNotifications()
+        val notifications = repository.refresh()
 
         assertEquals(emptyList<Notification>(), notifications)
+    }
+
+    @Test
+    fun `markAsRead forwards the id and token and updates the unread count`() = runTest {
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto()))
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+        repository.refresh()
+        assertEquals(1, repository.unreadCount.value)
+
+        repository.markAsRead("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+        assertEquals("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", apiService.lastMarkReadId)
+        assertEquals(testSession().accessToken, apiService.lastMarkReadSession?.value)
+        assertTrue(repository.notifications.value.single().isRead)
+        assertEquals(0, repository.unreadCount.value)
+    }
+
+    @Test
+    fun `markAsRead keeps the notification unread when the backend rejects it`() = runTest {
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto()))
+            .apply { markReadStatus = 404 }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+        repository.refresh()
+
+        val failure = runCatching {
+            repository.markAsRead("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        }.exceptionOrNull()
+
+        assertTrue(failure is ApiException.Http)
+        assertFalse(repository.notifications.value.single().isRead)
+        assertEquals(1, repository.unreadCount.value)
+    }
+
+    @Test
+    fun `markAllAsRead marks pending rows and tolerates a failing row`() = runTest {
+        val failing = sampleNotificationDto().copy(id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        val apiService = FakeApiService(
+            notifications = listOf(sampleNotificationDto(), failing)
+        ).apply { failMarkReadIds = setOf(failing.id) }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+        repository.refresh()
+
+        val marked = repository.markAllAsRead()
+
+        assertEquals(1, marked)
+        assertTrue(repository.notifications.value.first { it.id != failing.id }.isRead)
+        assertFalse(repository.notifications.value.first { it.id == failing.id }.isRead)
+        assertEquals(1, repository.unreadCount.value)
+    }
+
+    @Test
+    fun `a stale refresh cannot revert a confirmed read`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto()))
+            .apply { refreshGate = gate }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+
+        // El refresco retiene el lock; el marcado debe esperar y publicar después.
+        val refreshJob = launch { repository.refresh() }
+        runCurrent()
+        val markJob = launch { repository.markAsRead("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") }
+        runCurrent()
+
+        gate.complete(Unit)
+        refreshJob.join()
+        markJob.join()
+
+        assertTrue(repository.notifications.value.single().isRead)
+        assertEquals(0, repository.unreadCount.value)
+    }
+
+    @Test
+    fun `markAllAsRead does not deadlock with an in-flight refresh`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val second = sampleNotificationDto().copy(id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto(), second))
+            .apply { refreshGate = gate }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+
+        val refreshJob = launch { repository.refresh() }
+        runCurrent()
+        var marked = 0
+        val markAllJob = launch { marked = repository.markAllAsRead() }
+
+        gate.complete(Unit)
+        refreshJob.join()
+        markAllJob.join()
+
+        assertEquals(2, marked)
+        assertTrue(repository.notifications.value.all { it.isRead })
+        assertEquals(0, repository.unreadCount.value)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun `closing the session clears the published notifications`() = runTest {
+        val sessionManager = testSessionManager()
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto()))
+        val repository = RemoteNotificationRepository(apiService, sessionManager, backgroundScope)
+        repository.refresh()
+        assertEquals(1, repository.notifications.value.size)
+
+        sessionManager.logout()
+        runCurrent()
+
+        assertTrue(repository.notifications.value.isEmpty())
+        assertEquals(0, repository.unreadCount.value)
     }
 
     @Test
@@ -493,9 +607,40 @@ class RemoteRepositoryTest {
         var lastNotificationsSession: TokenSnapshot? = null
             private set
 
+        /** Permite retener un refresco para probar la serialización con el marcado. */
+        var refreshGate: CompletableDeferred<Unit>? = null
+
         override suspend fun getNotifications(expectedSession: TokenSnapshot?): List<NotificationDto> {
             lastNotificationsSession = expectedSession
+            refreshGate?.await()
             return notifications
+        }
+
+        var lastMarkReadId: String? = null
+            private set
+        var lastMarkReadSession: TokenSnapshot? = null
+            private set
+        var markReadStatus: Int? = null
+        var failMarkReadIds: Set<String> = emptySet()
+
+        override suspend fun markNotificationAsRead(
+            id: String,
+            expectedSession: TokenSnapshot?
+        ): Response<Unit> {
+            lastMarkReadId = id
+            lastMarkReadSession = expectedSession
+            val status = markReadStatus
+            return when {
+                status != null -> Response.error(
+                    status,
+                    "".toResponseBody("application/json".toMediaType())
+                )
+                id in failMarkReadIds -> Response.error(
+                    500,
+                    "".toResponseBody("application/json".toMediaType())
+                )
+                else -> Response.success(Unit)
+            }
         }
 
         override suspend fun getUsuarios(
