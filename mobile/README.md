@@ -153,3 +153,35 @@ Validación local:
 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.report.CreateReportLocationPickerTest
 ```
+
+## Marcadores personalizados del mapa (#304)
+
+El mapa de incidentes reemplaza los pines genéricos de OSMDroid por marcadores
+que combinan el estado y la prioridad reales del reporte:
+
+- El color del pin identifica el estado (`Nuevo`, `En revisión`, `En atención`,
+  `Resuelto` o `Cerrado`) mediante los mismos tonos semánticos de los badges.
+  Un estado ausente o desconocido usa el tono neutro.
+- El número central identifica la prioridad (`1` mínima … `5` crítica). Los
+  incidentes sin prioridad registrada muestran un guion.
+- El chip «Leyenda» abre una referencia compacta con ambos grupos. La leyenda
+  comparte la fila superior con el acceso a filtros y puede cerrarse sin alterar
+  el mapa ni las consultas.
+- El marcador seleccionado se renderiza más grande, con contorno azul
+  institucional, se dibuja por encima del resto y acompaña el resumen abierto.
+- Los íconos se generan una sola vez por combinación de estado, prioridad y
+  selección y se reutilizan desde un caché en memoria. La caché solo se recrea
+  si cambia la densidad de pantalla.
+
+La interpretación de los nombres del catálogo ignora mayúsculas, espacios y
+tildes, pero no modifica los estados ni las prioridades definidos por el
+backend. Los colores se derivan de los tonos ya auditados por
+`DesignContrastTest`.
+
+Validación local:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin :app:lintDebug
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.map.IncidentMarkerIconCacheTest,cl.uct.ojociudadano.ui.map.IncidentMarkerSyncTest,cl.uct.ojociudadano.ui.map.MapLegendTest
+```
