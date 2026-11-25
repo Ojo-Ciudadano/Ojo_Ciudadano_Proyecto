@@ -29,6 +29,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
@@ -38,6 +41,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -366,6 +370,35 @@ private fun ReportLocationSection(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
+        Text(
+            text = "Elige cómo fijar la ubicación del reporte.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = state.locationSource == LocationSelectionSource.DEVICE,
+                onClick = onRefreshLocation,
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                enabled = canEditForm && !state.isLoadingLocation,
+                icon = {
+                    Icon(Icons.Filled.MyLocation, contentDescription = null)
+                },
+                label = { Text("Usar mi GPS actual") }
+            )
+            SegmentedButton(
+                selected = state.locationSource == LocationSelectionSource.MANUAL,
+                onClick = onChooseLocationOnMap,
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                enabled = canEditForm,
+                icon = {
+                    Icon(Icons.Filled.Map, contentDescription = null)
+                },
+                label = { Text("Elegir en el mapa") }
+            )
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -398,9 +431,9 @@ private fun ReportLocationSection(
                                 text = if (state.locationSource ==
                                     LocationSelectionSource.MANUAL
                                 ) {
-                                    "Ubicación seleccionada en el mapa"
+                                    "Seleccionada en el mapa"
                                 } else {
-                                    "Ubicación GPS obtenida"
+                                    "Obtenida por GPS"
                                 },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -442,16 +475,6 @@ private fun ReportLocationSection(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
-        }
-
-        OutlinedButton(
-            onClick = onChooseLocationOnMap,
-            enabled = canEditForm,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Filled.Map, contentDescription = null)
-            Spacer(modifier = Modifier.size(8.dp))
-            Text("Elegir ubicación en el mapa")
         }
     }
 }
@@ -691,6 +714,14 @@ fun CreateReportScreen(
         }
     }
 
+    val refreshLocation = {
+        if (locationPermissionLauncher.isGranted()) {
+            viewModel.refreshLocation()
+        } else {
+            locationPermissionLauncher.request()
+        }
+    }
+
     val currentOnExitRiskChanged by rememberUpdatedState(onExitRiskChanged)
     val exitRisk = CreateReportExitPolicy.riskOf(
         state = viewModel.submissionState,
@@ -740,7 +771,7 @@ fun CreateReportScreen(
         onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
         onBack = onBack,
-        onRefreshLocation = viewModel::refreshLocation,
+        onRefreshLocation = refreshLocation,
         onRequestLocationPermission = locationPermissionLauncher::request,
         onOpenLocationSettings = locationPermissionLauncher::openLocationSettings,
         onChooseLocationOnMap = viewModel::openManualLocationPicker,

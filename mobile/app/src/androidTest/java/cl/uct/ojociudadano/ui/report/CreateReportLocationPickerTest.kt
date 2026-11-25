@@ -18,17 +18,32 @@ class CreateReportLocationPickerTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun opensTheMapPickerFromTheLocationSection() {
+    fun opensTheMapPickerFromTheLocationSelector() {
         var openRequests = 0
         setScreen(onChooseLocationOnMap = { openRequests += 1 })
 
         composeTestRule
-            .onNodeWithText("Elegir ubicación en el mapa")
+            .onNodeWithText("Elegir en el mapa")
             .performScrollTo()
             .performClick()
 
         composeTestRule.runOnIdle {
             assertEquals(1, openRequests)
+        }
+    }
+
+    @Test
+    fun requestsTheCurrentGpsLocationFromTheLocationSelector() {
+        var refreshRequests = 0
+        setScreen(onRefreshLocation = { refreshRequests += 1 })
+
+        composeTestRule
+            .onNodeWithText("Usar mi GPS actual")
+            .performScrollTo()
+            .performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals(1, refreshRequests)
         }
     }
 
@@ -40,19 +55,37 @@ class CreateReportLocationPickerTest {
         )
 
         composeTestRule
-            .onNodeWithText("Ubicación seleccionada en el mapa")
+            .onNodeWithText("Seleccionada en el mapa")
             .performScrollTo()
             .assertIsDisplayed()
     }
 
     @Test
-    fun disablesTheMapActionWhileTheFormIsNotEditable() {
+    fun identifiesWhenTheLocationComesFromTheGps() {
+        setScreen(
+            location = LocationResult.Success(latitude = -38.7396, longitude = -72.5984),
+            locationSource = LocationSelectionSource.DEVICE
+        )
+
+        composeTestRule
+            .onNodeWithText("Obtenida por GPS")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun disablesTheLocationActionsWhileTheFormIsNotEditable() {
         setScreen(
             submissionState = CreateReportSubmissionState.CreatingIncident
         )
 
         composeTestRule
-            .onNodeWithText("Elegir ubicación en el mapa")
+            .onNodeWithText("Usar mi GPS actual")
+            .performScrollTo()
+            .assertIsNotEnabled()
+
+        composeTestRule
+            .onNodeWithText("Elegir en el mapa")
             .performScrollTo()
             .assertIsNotEnabled()
     }
@@ -61,6 +94,7 @@ class CreateReportLocationPickerTest {
         location: LocationResult = LocationResult.NotAvailable,
         locationSource: LocationSelectionSource = LocationSelectionSource.NONE,
         submissionState: CreateReportSubmissionState = CreateReportSubmissionState.Idle,
+        onRefreshLocation: () -> Unit = {},
         onChooseLocationOnMap: () -> Unit = {}
     ) {
         composeTestRule.setContent {
@@ -84,6 +118,7 @@ class CreateReportLocationPickerTest {
                     onCreateReportClick = {},
                     onConfirmRetry = {},
                     onFinishWithoutPendingEvidence = {},
+                    onRefreshLocation = onRefreshLocation,
                     onChooseLocationOnMap = onChooseLocationOnMap
                 )
             }
