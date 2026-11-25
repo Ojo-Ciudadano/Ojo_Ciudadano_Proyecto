@@ -83,6 +83,7 @@ fun MapScreen(
     Box(modifier.fillMaxSize()) {
         IncidentMap(
             markers = markers,
+            selectedIncidentId = selectedMarker?.incidentId,
             onMarkerClick = model::selectIncident,
             onMapClick = model::clearSelection,
             modifier = Modifier.fillMaxSize()
@@ -142,6 +143,7 @@ fun MapScreen(
 @Composable
 private fun IncidentMap(
     markers: List<IncidentMapMarker>,
+    selectedIncidentId: String?,
     onMarkerClick: (String) -> Unit,
     onMapClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -168,7 +170,12 @@ private fun IncidentMap(
             }
         },
         update = { mapView ->
-            syncIncidentMarkers(mapView, markers, onMarkerClick)
+            syncIncidentMarkers(
+                mapView = mapView,
+                desiredMarkers = markers,
+                onMarkerClick = onMarkerClick,
+                selectedIncidentId = selectedIncidentId
+            )
         }
     )
 }
@@ -180,13 +187,20 @@ private fun IncidentMap(
  * clave: los marcadores existentes se reutilizan, los que ya no corresponden se
  * eliminan y cualquier duplicado previo se descarta. Así las actualizaciones
  * normales del estado no acumulan marcadores.
+ *
+ * Los íconos se obtienen del [iconCache], por lo que solo se renderiza un pin
+ * nuevo cuando cambia el estado, la prioridad o la selección del incidente. El
+ * marcador seleccionado se dibuja al final para quedar por encima del resto.
  */
 internal fun syncIncidentMarkers(
     mapView: MapView,
     desiredMarkers: List<IncidentMapMarker>,
-    onMarkerClick: (String) -> Unit = {}
+    onMarkerClick: (String) -> Unit = {},
+    selectedIncidentId: String? = null,
+    iconCache: IncidentMarkerIconCache = IncidentMarkerIconProvider.cacheFor(mapView.context)
 ) {
     val desiredById = desiredMarkers.associateBy { it.incidentId }
+    val selectedId = selectedIncidentId?.takeIf { it in desiredById }
 
     val currentById = HashMap<String, Marker>()
     val duplicateMarkers = ArrayList<Marker>()
@@ -213,20 +227,53 @@ internal fun syncIncidentMarkers(
     }
 
     desiredById.forEach { (incidentId, data) ->
+        val visual = data.visual(selected = incidentId == selectedId)
         val previous = currentById[incidentId]
-        if (previous == null) {
-            mapView.overlays.add(createIncidentMarker(mapView, data, onMarkerClick))
-            changed = true
-        } else {
-            previous.setOnMarkerClickListener { _, _ ->
-                onMarkerClick(incidentId)
-                true
-            }
-            val position = previous.position
-            if (position.latitude != data.latitude || position.longitude != data.longitude) {
-                previous.position = GeoPoint(data.latitude, data.longitude)
+        when {
+            previous == null -> {
+                mapView.overlays.add(
+                    createIncidentMarker(mapView, data, visual, iconCache, onMarkerClick)
+                )
                 changed = true
             }
+
+            previous !is IncidentMarker -> {
+                // Reemplaza marcadores creados por versiones anteriores para que
+                // también adopten el ícono personalizado y el estado de selección.
+                mapView.overlays.remove(previous)
+                mapView.overlays.add(
+                    createIncidentMarker(mapView, data, visual, iconCache, onMarkerClick)
+                )
+                changed = true
+            }
+
+            else -> {
+                previous.setOnMarkerClickListener { _, _ ->
+                    onMarkerClick(incidentId)
+                    true
+                }
+                val position = previous.position
+                if (position.latitude != data.latitude || position.longitude != data.longitude) {
+                    previous.position = GeoPoint(data.latitude, data.longitude)
+                    changed = true
+                }
+                if (previous.visual != visual) {
+                    previous.setIcon(iconCache.iconFor(visual))
+                    previous.visual = visual
+                    changed = true
+                }
+            }
+        }
+    }
+
+    selectedId?.let { id ->
+        val selectedOverlay = mapView.overlays.firstOrNull { overlay ->
+            overlay is Marker && overlay.relatedObject == id
+        }
+        if (selectedOverlay != null && mapView.overlays.lastOrNull() !== selectedOverlay) {
+            mapView.overlays.remove(selectedOverlay)
+            mapView.overlays.add(selectedOverlay)
+            changed = true
         }
     }
 
@@ -235,13 +282,22 @@ internal fun syncIncidentMarkers(
     }
 }
 
+/** Marcador que recuerda la apariencia aplicada para evitar re-renderizarla. */
+private class IncidentMarker(mapView: MapView) : Marker(mapView) {
+    var visual: IncidentMarkerVisual? = null
+}
+
 private fun createIncidentMarker(
     mapView: MapView,
     data: IncidentMapMarker,
+    visual: IncidentMarkerVisual,
+    iconCache: IncidentMarkerIconCache,
     onMarkerClick: (String) -> Unit
-): Marker = Marker(mapView).apply {
+): Marker = IncidentMarker(mapView).apply {
     position = GeoPoint(data.latitude, data.longitude)
     relatedObject = data.incidentId
+    this.visual = visual
+    setIcon(iconCache.iconFor(visual))
     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
     setOnMarkerClickListener { _, _ ->
         onMarkerClick(data.incidentId)
