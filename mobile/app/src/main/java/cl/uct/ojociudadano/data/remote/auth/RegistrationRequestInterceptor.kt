@@ -9,6 +9,9 @@ import okio.BufferedSink
 internal fun Request.isRegistrationRequest() =
     method == "POST" && url.encodedPath == "/api/v1/auth/register"
 
+internal fun Request.isPublicAuthRequest() =
+    isRegistrationRequest() || (method == "POST" && url.encodedPath == "/api/v1/auth/login")
+
 /** Una respuesta perdida no debe provocar el reenvío automático de un registro. */
 class RegistrationRequestInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {

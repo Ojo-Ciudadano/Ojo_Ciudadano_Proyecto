@@ -9,6 +9,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.domain.model.LocationResult
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun LocationScreen(viewModel: LocationViewModel) {
@@ -26,7 +27,7 @@ fun LocationContent(
     onFetchLocation: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(Spacing.medium),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

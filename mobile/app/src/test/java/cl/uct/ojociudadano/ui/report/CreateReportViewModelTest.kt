@@ -23,7 +23,10 @@ import cl.uct.ojociudadano.data.repository.IncidentRepository
 import cl.uct.ojociudadano.data.session.SessionRequiredException
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.model.ReverseGeocodedAddress
+import cl.uct.ojociudadano.domain.model.ReverseGeocodingResult
 import cl.uct.ojociudadano.domain.repository.LocationClient
+import cl.uct.ojociudadano.domain.repository.ReverseGeocodingClient
 import cl.uct.ojociudadano.ui.report.photo.PhotoCaptureErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoPreviewErrors
 import cl.uct.ojociudadano.ui.report.photo.PhotoSelectionErrors
@@ -34,6 +37,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -246,6 +250,183 @@ class CreateReportViewModelTest {
     }
 
     @Test
+    fun `autocompletes location details from the device coordinates`() = runTest {
+        val reverseGeocodingClient = FakeReverseGeocodingClient(
+            resultToReturn = ReverseGeocodingResult.Success(
+                ReverseGeocodedAddress(
+                    referenceAddress = "Av. Alemania 123",
+                    commune = "Temuco",
+                    region = "La Araucanía"
+                )
+            )
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            reverseGeocodingClient = reverseGeocodingClient
+        )
+
+        assertEquals("Av. Alemania 123", viewModel.formState.referenceAddress)
+        assertEquals("Temuco", viewModel.formState.commune)
+        assertEquals("La Araucanía", viewModel.formState.region)
+        assertEquals("", viewModel.formState.sector)
+        assertFalse(viewModel.formState.isAutocompletingAddress)
+        assertNull(viewModel.formState.addressAutofillError)
+        assertEquals(
+            listOf(GPS_LATITUDE to GPS_LONGITUDE),
+            reverseGeocodingClient.requests
+        )
+    }
+
+    @Test
+    fun `autocomplete keeps location details written by the user`() = runTest {
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val reverseGeocodingClient = FakeReverseGeocodingClient(
+            resultToReturn = ReverseGeocodingResult.Success(
+                ReverseGeocodedAddress(
+                    referenceAddress = "Dirección sugerida",
+                    commune = "Comuna sugerida",
+                    region = "Región sugerida"
+                )
+            )
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = locationClient,
+            reverseGeocodingClient = reverseGeocodingClient
+        )
+        viewModel.onLocationDetailsChange(
+            referenceAddress = "Mi dirección",
+            commune = "Mi comuna",
+            region = "Mi región",
+            sector = "Mi sector"
+        )
+
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = GPS_LATITUDE,
+            longitude = GPS_LONGITUDE
+        )
+        viewModel.refreshLocation()
+
+        assertEquals("Mi dirección", viewModel.formState.referenceAddress)
+        assertEquals("Mi comuna", viewModel.formState.commune)
+        assertEquals("Mi región", viewModel.formState.region)
+        assertEquals("Mi sector", viewModel.formState.sector)
+        assertEquals(1, reverseGeocodingClient.requests.size)
+    }
+
+    @Test
+    fun `reverse geocoding failure does not block a report with manual details`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient,
+            reverseGeocodingClient = FakeReverseGeocodingClient(
+                resultToReturn = ReverseGeocodingResult.Error("Proveedor no disponible")
+            )
+        )
+        viewModel.fillValidForm()
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = GPS_LATITUDE,
+            longitude = GPS_LONGITUDE
+        )
+
+        viewModel.refreshLocation()
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportAddressAutofillErrors.UNAVAILABLE,
+            viewModel.formState.addressAutofillError
+        )
+        assertNull(viewModel.formState.locationDetailsError)
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
+        assertEquals("Plaza central", incidentRepository.createInputs.single().location.referenceAddress)
+    }
+
+    @Test
+    fun `autocompletes location details when the location becomes available later`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient,
+            reverseGeocodingClient = FakeReverseGeocodingClient(
+                resultToReturn = ReverseGeocodingResult.Success(
+                    ReverseGeocodedAddress(
+                        referenceAddress = "Av. Alemania 123",
+                        commune = "Temuco",
+                        region = "La Araucanía"
+                    )
+                )
+            )
+        )
+        viewModel.onTitleChange("Poste dañado")
+        viewModel.onDescriptionChange("El poste bloquea la vereda")
+        viewModel.onCategorySelected(sampleCategory)
+        viewModel.onLocationDetailsChange("", "", "", "Centro")
+
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = GPS_LATITUDE,
+            longitude = GPS_LONGITUDE
+        )
+        viewModel.refreshLocation()
+        viewModel.createReport()
+
+        val location = incidentRepository.createInputs.single().location
+        assertEquals("Av. Alemania 123", location.referenceAddress)
+        assertEquals("Temuco", location.commune)
+        assertEquals("La Araucanía", location.region)
+        assertEquals("Centro", location.sector)
+    }
+
+    @Test
+    fun `a geocoder without response does not block the report submission`() = runTest {
+        val incidentRepository = FakeIncidentRepository()
+        val locationClient = FakeLocationClient(LocationResult.NotAvailable)
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            locationClient = locationClient,
+            reverseGeocodingClient = object : ReverseGeocodingClient {
+                override suspend fun reverseGeocode(
+                    latitude: Double,
+                    longitude: Double
+                ): ReverseGeocodingResult = awaitCancellation()
+            }
+        )
+        viewModel.fillValidForm()
+
+        locationClient.resultToReturn = LocationResult.Success(
+            latitude = GPS_LATITUDE,
+            longitude = GPS_LONGITUDE
+        )
+        viewModel.createReport()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            CreateReportAddressAutofillErrors.UNAVAILABLE,
+            viewModel.formState.addressAutofillError
+        )
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 0
+            ),
+            viewModel.submissionState
+        )
+        assertEquals(1, incidentRepository.createInputs.size)
+    }
+
+    @Test
     fun `does not create the incident when there is no valid location`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val locationClient = FakeLocationClient(LocationResult.NotAvailable)
@@ -365,6 +546,80 @@ class CreateReportViewModelTest {
         val input = incidentRepository.createInputs.single()
         assertEquals(-38.7396, input.location.latitude, 0.0)
         assertEquals(-72.5984, input.location.longitude, 0.0)
+    }
+
+    @Test
+    fun `confirmed manual coordinate autocompletes location details`() = runTest {
+        val reverseGeocodingClient = FakeReverseGeocodingClient(
+            resultToReturn = ReverseGeocodingResult.Success(
+                ReverseGeocodedAddress(
+                    referenceAddress = "Camino rural km 4",
+                    commune = "Villarrica",
+                    region = "La Araucanía"
+                )
+            )
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            locationClient = FakeLocationClient(LocationResult.NotAvailable),
+            reverseGeocodingClient = reverseGeocodingClient
+        )
+        viewModel.onLocationDetailsChange("", "", "", "Sector rural")
+
+        viewModel.openManualLocationPicker()
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -39.2800, longitude = -72.2300)
+        )
+
+        assertEquals("Camino rural km 4", viewModel.formState.referenceAddress)
+        assertEquals("Villarrica", viewModel.formState.commune)
+        assertEquals("La Araucanía", viewModel.formState.region)
+        assertEquals("Sector rural", viewModel.formState.sector)
+        assertEquals(
+            listOf(-39.2800 to -72.2300),
+            reverseGeocodingClient.requests
+        )
+    }
+
+    @Test
+    fun `new location updates autocompleted details but keeps manual edits`() = runTest {
+        val reverseGeocodingClient = FakeReverseGeocodingClient(
+            resultToReturn = ReverseGeocodingResult.Success(
+                ReverseGeocodedAddress(
+                    referenceAddress = "Av. Alemania 123",
+                    commune = "Temuco",
+                    region = "La Araucanía"
+                )
+            )
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            reverseGeocodingClient = reverseGeocodingClient
+        )
+        assertEquals("Av. Alemania 123", viewModel.formState.referenceAddress)
+        viewModel.onLocationDetailsChange(
+            referenceAddress = viewModel.formState.referenceAddress,
+            commune = "Comuna escrita por el usuario",
+            region = viewModel.formState.region,
+            sector = "Centro"
+        )
+        reverseGeocodingClient.resultToReturn = ReverseGeocodingResult.Success(
+            ReverseGeocodedAddress(
+                referenceAddress = "Camino rural km 4",
+                commune = "Villarrica",
+                region = "La Araucanía"
+            )
+        )
+
+        viewModel.openManualLocationPicker()
+        viewModel.confirmManualLocation(
+            GeoCoordinate(latitude = -39.2800, longitude = -72.2300)
+        )
+
+        assertEquals("Camino rural km 4", viewModel.formState.referenceAddress)
+        assertEquals("Comuna escrita por el usuario", viewModel.formState.commune)
+        assertEquals("La Araucanía", viewModel.formState.region)
+        assertEquals("Centro", viewModel.formState.sector)
     }
 
     @Test
@@ -1796,7 +2051,7 @@ class CreateReportViewModelTest {
     fun `blocks submission when a photo exceeds the backend size limit`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val oversizedPhoto = samplePhoto.copy(
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -1812,7 +2067,7 @@ class CreateReportViewModelTest {
         assertTrue(incidentRepository.createInputs.isEmpty())
         assertTrue(incidentRepository.uploadAttempts.isEmpty())
         assertEquals(listOf(oversizedPhoto), viewModel.formState.evidencePhotos)
-        assertTrue(viewModel.formState.photoError.orEmpty().contains("límite de 10 MB"))
+        assertTrue(viewModel.formState.photoError.orEmpty().contains("límite de 20 MB"))
         assertTrue(viewModel.formState.photoError.orEmpty().contains(oversizedPhoto.fileName))
     }
 
@@ -1821,7 +2076,7 @@ class CreateReportViewModelTest {
         val incidentRepository = FakeIncidentRepository()
         val invalidPhoto = samplePhoto.copy(
             mimeType = "image/heic",
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -1835,7 +2090,7 @@ class CreateReportViewModelTest {
 
         val message = viewModel.formState.photoError.orEmpty()
         assertTrue(message.contains("formato no compatible"))
-        assertTrue(message.contains("límite de 10 MB"))
+        assertTrue(message.contains("límite de 20 MB"))
         assertTrue(incidentRepository.createInputs.isEmpty())
     }
 
@@ -1843,7 +2098,7 @@ class CreateReportViewModelTest {
     fun `accepts a photo exactly at the backend size limit`() = runTest {
         val incidentRepository = FakeIncidentRepository()
         val maxSizePhoto = samplePhoto.copy(
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES
         )
         val viewModel = createViewModel(
             categoryRepository = FakeCategoryRepository(),
@@ -2042,14 +2297,33 @@ private fun createViewModel(
     incidentRepository: IncidentRepository = FakeIncidentRepository(),
     photoFileStore: EvidencePhotoFileStore = FakeEvidencePhotoFileStore(),
     locationClient: LocationClient = FakeLocationClient(),
+    reverseGeocodingClient: ReverseGeocodingClient = FakeReverseGeocodingClient(),
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ): CreateReportViewModel = CreateReportViewModel(
     categoryRepository = categoryRepository,
     incidentRepository = incidentRepository,
     photoFileStore = photoFileStore,
     locationClient = locationClient,
+    reverseGeocodingClient = reverseGeocodingClient,
     ioDispatcher = ioDispatcher
 )
+
+private class FakeReverseGeocodingClient(
+    var resultToReturn: ReverseGeocodingResult = ReverseGeocodingResult.NoResults,
+    private val failure: Throwable? = null
+) : ReverseGeocodingClient {
+
+    val requests = mutableListOf<Pair<Double, Double>>()
+
+    override suspend fun reverseGeocode(
+        latitude: Double,
+        longitude: Double
+    ): ReverseGeocodingResult {
+        requests += latitude to longitude
+        failure?.let { throw it }
+        return resultToReturn
+    }
+}
 
 private class FakeLocationClient(
     var resultToReturn: LocationResult = LocationResult.Success(

@@ -23,7 +23,7 @@ class EvidenceUploadConstraintsTest {
 
     @Test
     fun `accepts a photo exactly at the size limit`() {
-        val photo = samplePhoto.copy(sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES)
+        val photo = samplePhoto.copy(sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES)
 
         assertTrue(
             EvidenceUploadConstraints.issuesFor(photo, fileAvailable = true).isEmpty()
@@ -33,12 +33,20 @@ class EvidenceUploadConstraintsTest {
     @Test
     fun `rejects a photo above the size limit`() {
         val photo = samplePhoto.copy(
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1
         )
 
         assertEquals(
             listOf(EvidenceCompatibilityIssue.FILE_TOO_LARGE),
             EvidenceUploadConstraints.issuesFor(photo, fileAvailable = true)
+        )
+    }
+
+    @Test
+    fun `keeps the upload limit below the source limit so compression can act`() {
+        assertTrue(
+            EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES <
+                EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES
         )
     }
 
@@ -60,7 +68,7 @@ class EvidenceUploadConstraintsTest {
     fun `reports every issue that applies to the same photo`() {
         val photo = samplePhoto.copy(
             mimeType = "image/heic",
-            sizeBytes = EvidenceUploadConstraints.MAX_FILE_SIZE_BYTES + 1
+            sizeBytes = EvidenceUploadConstraints.MAX_SOURCE_FILE_SIZE_BYTES + 1
         )
 
         assertEquals(

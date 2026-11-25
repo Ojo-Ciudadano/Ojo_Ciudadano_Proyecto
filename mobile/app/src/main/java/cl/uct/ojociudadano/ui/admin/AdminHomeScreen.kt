@@ -20,12 +20,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.navigation.AdminFutureSection
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun AdminHomeScreen(
@@ -34,17 +34,18 @@ fun AdminHomeScreen(
     onIncidentManagementClick: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    onUserManagementClick: () -> Unit = {},
     onFutureSectionClick: (AdminFutureSection) -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Ojo Ciudadano", subtitle = "Administrador") {
             TextButton(onClick = onLogout) {
-                Text("Cerrar sesión", color = Color.White)
+                Text("Cerrar sesión", color = MaterialTheme.colorScheme.onPrimary)
             }
         }
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.page),
+            verticalArrangement = Arrangement.spacedBy(Spacing.page)
         ) {
             Text(
                 "Panel de administración",
@@ -67,8 +68,14 @@ fun AdminHomeScreen(
                 description = "Consulta el listado de incidentes, su ubicación y estado actual.",
                 onClick = onIncidentManagementClick
             )
+            AdminNavigationCard(
+                title = "Gestión de usuarios",
+                description = "Consulta los usuarios por rol y recorre sus páginas.",
+                onClick = onUserManagementClick,
+                icon = AdminFutureSection.USERS.icon
+            )
             Text("En futuras versiones", style = MaterialTheme.typography.titleMedium)
-            AdminFutureSection.entries.forEach { section ->
+            AdminFutureSection.entries.filter { it != AdminFutureSection.USERS }.forEach { section ->
                 AdminNavigationCard(
                     title = section.title,
                     description = section.description,
@@ -91,9 +98,9 @@ private fun AdminNavigationCard(
 ) {
     OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
-            Modifier.padding(20.dp),
+            Modifier.padding(Spacing.page),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.medium)
         ) {
             Icon(
                 icon,
@@ -101,7 +108,7 @@ private fun AdminNavigationCard(
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.secondary
             )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodyMedium)
                 if (comingSoon) Text("Próximamente", style = MaterialTheme.typography.labelMedium,

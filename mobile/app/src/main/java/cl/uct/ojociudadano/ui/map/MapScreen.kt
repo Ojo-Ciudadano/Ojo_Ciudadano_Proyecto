@@ -9,12 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +37,9 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
+import cl.uct.ojociudadano.ui.components.IncidentStatusBadge
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /** Centro inicial: plaza de Temuco, Región de La Araucanía. */
 private const val DEFAULT_LATITUDE = -38.7359
@@ -103,7 +104,7 @@ fun MapScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .widthIn(max = 480.dp)
-                        .padding(16.dp)
+                        .padding(Spacing.medium)
                 )
             } else {
                 MapFilterToggle(
@@ -111,7 +112,7 @@ fun MapScreen(
                     onClick = { model.setFiltersVisible(true) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                        .padding(Spacing.medium)
                 )
             }
         }
@@ -121,7 +122,7 @@ fun MapScreen(
             onClearFilters = model::clearFilters,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(Spacing.medium)
         )
         selectedMarker?.let { marker ->
             IncidentSummaryCard(
@@ -132,7 +133,7 @@ fun MapScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp)
+                    .padding(Spacing.medium)
             )
         }
     }
@@ -275,13 +276,13 @@ internal fun IncidentSummaryCard(
             .widthIn(max = 480.dp)
             .fillMaxWidth()
             .testTag(MapTestTags.SUMMARY),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         tonalElevation = 6.dp,
         shadowElevation = 6.dp
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(Spacing.medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.small)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -315,8 +316,10 @@ internal fun IncidentSummaryCard(
             }
 
             summary.statusName?.let {
-                SuggestionChip(onClick = {}, label = { Text(it) })
+                IncidentStatusBadge(it)
             }
+
+            IncidentPriorityBadge(summary.priorityLevel)
 
             summary.description?.let {
                 Text(
@@ -439,7 +442,7 @@ private fun MapStatusCard(
 ) {
     Surface(
         modifier = modifier.widthIn(max = 420.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         color = if (isError) {
             MaterialTheme.colorScheme.errorContainer
         } else {
@@ -449,9 +452,9 @@ private fun MapStatusCard(
         shadowElevation = 4.dp
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(Spacing.medium),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(Spacing.small)
         ) {
             content()
         }

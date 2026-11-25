@@ -4,6 +4,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.domain.model.ReverseGeocodedAddress
 
 /**
  * Cantidad máxima de fotografías que el formulario acepta como evidencia.
@@ -51,6 +52,9 @@ data class CreateReportFormState(
     val locationSource: LocationSelectionSource = LocationSelectionSource.NONE,
     val isLoadingLocation: Boolean = false,
     val locationError: String? = null,
+    val isAutocompletingAddress: Boolean = false,
+    val addressAutofillError: String? = null,
+    val lastAutocompletedAddress: ReverseGeocodedAddress? = null,
     val titleError: String? = null,
     val descriptionError: String? = null,
     val categoryError: String? = null,
@@ -83,10 +87,98 @@ data class CreateReportFormState(
         copy(selectedCategory = category, categoryError = null)
 
     /**
+     * Conserva los datos de ubicación escritos por el usuario.
+     *
+     * Cualquier edición manual descarta el mensaje de autocompletado para que
+     * la ayuda no permanezca visible sobre datos que el usuario ya corrigió.
+     */
+    fun updateLocationDetails(
+        referenceAddress: String,
+        commune: String,
+        region: String,
+        sector: String
+    ): CreateReportFormState = copy(
+        referenceAddress = referenceAddress,
+        commune = commune,
+        region = region,
+        sector = sector,
+        locationDetailsError = null,
+        addressAutofillError = null
+    )
+
+    /**
+     * Marca el inicio de una consulta de geocodificación inversa.
+     */
+    fun startAddressAutofill(): CreateReportFormState =
+        copy(isAutocompletingAddress = true, addressAutofillError = null)
+
+    /**
+     * Completa los campos vacíos o que todavía conservan la sugerencia anterior.
+     *
+     * Un valor escrito manualmente siempre tiene prioridad sobre la sugerencia
+     * del geocodificador, incluso si la respuesta llega después de la edición.
+     * Si el usuario cambia de ubicación, los valores que solo habían sido
+     * autocompletados se actualizan, mientras que las ediciones manuales se
+     * mantienen. [sector] no se completa porque el proveedor no entrega un
+     * equivalente confiable y el usuario debe precisarlo.
+     */
+    fun applyReverseGeocodedAddress(address: ReverseGeocodedAddress): CreateReportFormState {
+        if (!address.hasAnyValue) {
+            return finishAddressAutofill()
+        }
+
+        val previousAddress = lastAutocompletedAddress
+        val nextAddress = ReverseGeocodedAddress(
+            referenceAddress = address.referenceAddress.normalized(),
+            commune = address.commune.normalized(),
+            region = address.region.normalized()
+        )
+
+        return copy(
+            referenceAddress = referenceAddress.updatedWith(
+                previousAutocompletedValue = previousAddress?.referenceAddress,
+                newValue = nextAddress.referenceAddress
+            ),
+            commune = commune.updatedWith(
+                previousAutocompletedValue = previousAddress?.commune,
+                newValue = nextAddress.commune
+            ),
+            region = region.updatedWith(
+                previousAutocompletedValue = previousAddress?.region,
+                newValue = nextAddress.region
+            ),
+            lastAutocompletedAddress = nextAddress,
+            isAutocompletingAddress = false,
+            addressAutofillError = null
+        )
+    }
+
+    /**
+     * Finaliza la consulta sin datos sin modificar los campos del formulario.
+     */
+    fun finishAddressAutofill(): CreateReportFormState =
+        copy(isAutocompletingAddress = false)
+
+    /**
+     * Informa un fallo de autocompletado sin convertirlo en un error de
+     * validación: el usuario puede escribir los datos manualmente y enviar.
+     */
+    fun failAddressAutofill(message: String): CreateReportFormState =
+        copy(
+            isAutocompletingAddress = false,
+            addressAutofillError = message
+        )
+
+    /**
      * Marca el inicio de una consulta de ubicación y limpia el error previo.
      */
     fun startLocationRequest(): CreateReportFormState =
-        copy(isLoadingLocation = true, locationError = null)
+        copy(
+            isLoadingLocation = true,
+            locationError = null,
+            isAutocompletingAddress = false,
+            addressAutofillError = null
+        )
 
     /**
      * Conserva el resultado del GPS en el formulario hasta que el incidente se
@@ -102,7 +194,8 @@ data class CreateReportFormState(
                 LocationSelectionSource.NONE
             },
             isLoadingLocation = false,
-            locationError = CreateReportLocationErrors.messageFor(location)
+            locationError = CreateReportLocationErrors.messageFor(location),
+            isAutocompletingAddress = false
         )
 
     /**
@@ -207,3 +300,19 @@ data class CreateReportFormState(
     fun failPhotoOperation(message: String): CreateReportFormState =
         copy(activePhotoOperation = null, photoError = message)
 }
+
+/**
+ * Conserva una edición manual y actualiza solo los valores que seguían siendo
+ * una sugerencia automática o que todavía estaban vacíos.
+ */
+private fun String.updatedWith(
+    previousAutocompletedValue: String?,
+    newValue: String?
+): String {
+    val canReplace = isBlank() ||
+        (previousAutocompletedValue != null && this == previousAutocompletedValue)
+
+    return if (canReplace) newValue.orEmpty() else this
+}
+
+private fun String?.normalized(): String? = this?.trim()?.takeIf { it.isNotEmpty() }

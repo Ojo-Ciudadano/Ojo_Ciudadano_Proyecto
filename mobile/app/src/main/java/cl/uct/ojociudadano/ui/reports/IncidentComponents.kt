@@ -3,7 +3,6 @@ package cl.uct.ojociudadano.ui.reports
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -15,6 +14,11 @@ import cl.uct.ojociudadano.ui.reports.evidence.IncidentEvidenceGallery
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.clickable
+import cl.uct.ojociudadano.ui.components.IncidentCardSurface
+import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
+import cl.uct.ojociudadano.ui.components.IncidentStatusBadge
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 fun incidentDate(value: String): String = runCatching {
     DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm", java.util.Locale.forLanguageTag("es-CL"))
@@ -23,9 +27,8 @@ fun incidentDate(value: String): String = runCatching {
 
 @Composable
 fun IncidentCard(incident: Incident, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    IncidentCardSurface(Modifier.clickable(onClick = onClick, role = androidx.compose.ui.semantics.Role.Button)) {
+        Column(Modifier.padding(Spacing.medium), verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
             IncidentEvidenceGallery(incident.evidences, compact = true)
             Text(incident.category.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text(incident.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -33,7 +36,8 @@ fun IncidentCard(incident: Incident, onClick: () -> Unit) {
             Text(listOfNotNull(incident.location.referenceAddress, incident.location.commune).filter { it.isNotBlank() }.joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(incidentDate(incident.createdAt), style = MaterialTheme.typography.labelMedium)
-            SuggestionChip(onClick = onClick, label = { Text(incident.status.name) })
+            IncidentStatusBadge(incident.status.name)
+            IncidentPriorityBadge(incident.priorityLevel)
             Text("Ver detalle", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
     }
@@ -41,7 +45,7 @@ fun IncidentCard(incident: Incident, onClick: () -> Unit) {
 
 @Composable
 fun IncidentLoadState(state: IncidentsUiState, onRetry: () -> Unit, emptyMessage: String = "No hay incidentes en esta sección.") {
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(Spacing.medium), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (state) {
             IncidentsUiState.Loading -> {
                 LoadingContent(message = "Cargando incidentes…", modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp))

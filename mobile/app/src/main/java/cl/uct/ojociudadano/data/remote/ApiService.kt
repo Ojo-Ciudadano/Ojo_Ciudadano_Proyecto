@@ -78,7 +78,7 @@ interface ApiService {
     @POST("api/v1/incidentes/{incidenteId}/evidencias")
     suspend fun uploadEvidence(
         @Path("incidenteId") incidenteId: String,
-        @Part file: MultipartBody.Part,
+        @Part archivo: MultipartBody.Part,
         @Tag expectedSession: TokenSnapshot? = null
     ): EvidenceDto
 

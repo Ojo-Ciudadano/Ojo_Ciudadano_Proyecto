@@ -66,6 +66,14 @@ describe('Swagger OpenAPI Contracts (#156)', () => {
     expect(paths['/api/v1/evidencias/{id}/archivo']).toHaveProperty('get');
 
     expect(paths['/api/v1/notificaciones']).toHaveProperty('get');
+    expect(paths['/api/v1/notificaciones/leidas']).toHaveProperty('patch');
+    expect(paths['/api/v1/notificaciones/{id}/leida']).toHaveProperty('patch');
+    expect(paths['/api/v1/notificaciones/leidas'].patch.security).toEqual([
+      { bearer: [] },
+    ]);
+    expect(paths['/api/v1/notificaciones/{id}/leida'].patch.security).toEqual([
+      { bearer: [] },
+    ]);
 
     // Verificar que no expone operaciones pendientes como /usuarios/registro
     expect(paths['/api/v1/usuarios/registro']).toBeUndefined();
@@ -78,7 +86,35 @@ describe('Swagger OpenAPI Contracts (#156)', () => {
       (p: { name: string }) => p.name,
     );
     expect(filtrosIncidentes).toEqual(
-      expect.arrayContaining(['estadoId', 'categoriaId', 'comuna', 'usuarioReportaId']),
+      expect.arrayContaining([
+        'estadoId',
+        'categoriaId',
+        'ciudad',
+        'comuna',
+        'usuarioReportaId',
+      ]),
+    );
+
+    const registroOp = body.paths['/api/v1/auth/register'].post;
+    expect(registroOp.requestBody.content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/RegisterUsuarioRequestDto',
+    });
+    expect(registroOp.responses).toHaveProperty('201');
+    expect(registroOp.responses).toHaveProperty('400');
+    expect(registroOp.responses).toHaveProperty('409');
+    expect(registroOp.responses['201'].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/RegisterUsuarioResponseDto',
+    });
+    expect(body.components.schemas.RegisterUsuarioRequestDto.required).toEqual([
+      'nombre',
+      'email',
+      'password',
+    ]);
+    expect(body.components.schemas.RegisterUsuarioRequestDto.properties).toHaveProperty(
+      'telefono',
+    );
+    expect(body.components.schemas.RegisterUsuarioResponseDto.required).not.toContain(
+      'roles',
     );
 
     const filtrosUsuarios = body.paths['/api/v1/usuarios'].get.parameters.map(
@@ -92,5 +128,17 @@ describe('Swagger OpenAPI Contracts (#156)', () => {
     expect(respuestasEstado).toHaveProperty('401');
     expect(respuestasEstado).toHaveProperty('403');
     expect(respuestasEstado).toHaveProperty('409');
+
+    const respuestasLeida =
+      body.paths['/api/v1/notificaciones/{id}/leida'].patch.responses;
+    expect(respuestasLeida).toHaveProperty('200');
+    expect(respuestasLeida).toHaveProperty('400');
+    expect(respuestasLeida).toHaveProperty('401');
+    expect(respuestasLeida).toHaveProperty('403');
+
+    const respuestasTodasLeidas =
+      body.paths['/api/v1/notificaciones/leidas'].patch.responses;
+    expect(respuestasTodasLeidas).toHaveProperty('200');
+    expect(respuestasTodasLeidas).toHaveProperty('401');
   });
 });

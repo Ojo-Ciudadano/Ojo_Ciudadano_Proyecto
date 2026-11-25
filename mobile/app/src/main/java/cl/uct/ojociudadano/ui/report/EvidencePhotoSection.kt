@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import java.util.Locale
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 object ReportPhotoTestTags {
     const val SECTION = "report_photo_section"
@@ -89,7 +90,7 @@ internal fun EvidencePhotoSection(
         modifier = modifier
             .fillMaxWidth()
             .testTag(ReportPhotoTestTags.SECTION),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(Spacing.small)
     ) {
         Text(
             text = "Evidencia fotográfica",
@@ -113,7 +114,7 @@ internal fun EvidencePhotoSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(ReportPhotoTestTags.PHOTO_LIST),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.small)
             ) {
                 itemsIndexed(
                     items = evidencePhotos,

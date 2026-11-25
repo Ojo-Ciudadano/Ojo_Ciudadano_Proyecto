@@ -55,6 +55,24 @@ export class ProxyController {
     await this.proxyService.forward(req, res);
   }
 
+  @Patch('notificaciones/leidas')
+  @UseGuards(JwtAuthGuard)
+  async handleMarcarTodasLeidasProxy(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyService.forward(req, res);
+  }
+
+  @Patch('notificaciones/:id/leida')
+  @UseGuards(JwtAuthGuard)
+  async handleMarcarLeidaProxy(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.proxyService.forward(req, res);
+  }
+
   // Issue #114: consultar notificaciones del usuario autenticado
   @Get('notificaciones')
   @UseGuards(JwtAuthGuard)

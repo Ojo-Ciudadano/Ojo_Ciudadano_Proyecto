@@ -39,12 +39,15 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
       },
       'bearer',
     )
-    .addTag('Auth', 'Registro de ciudadanos e inicio de sesión con emisión de JWT')
+    .addTag('Auth', 'Registro de ciudadanos e inicio de sesión con emisión de JWT (#315)')
     .addTag('Usuarios', 'Perfil propio (/usuarios/me), listado paginado y gestión de roles (#118, #121, #122)')
-    .addTag('Incidentes', 'Reporte, filtros, detalle ampliado, estados, historial, prioridad y asignación (#117, #119, #120, #123, #124, #125)')
+    .addTag('Incidentes', 'Reporte, filtros, detalle ampliado, estados, historial, prioridad y asignación (#117, #119, #120, #123, #124, #125, #314, #315)')
     .addTag('Evidencias', 'Subida multipart/form-data, consulta de metadata y descarga binaria de fotografías (#86, #106)')
     .addTag('Categorías', 'Catálogo de categorías de incidentes y prioridad base')
-    .addTag('Notificaciones', 'Consulta de notificaciones del usuario autenticado (#114)')
+    .addTag(
+      'Notificaciones',
+      'Consulta y marcado como leídas de las notificaciones del usuario autenticado (#114, #327)',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -141,18 +144,62 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
       type: 'object',
       required: ['nombre', 'email', 'password'],
       properties: {
+        nombre: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 120,
+          description: 'Nombre completo del ciudadano (no vacío tras recortar espacios).',
+          example: 'Camila Soto Riquelme',
+        },
+        email: {
+          type: 'string',
+          format: 'email',
+          maxLength: 254,
+          description: 'Correo electrónico único (se normaliza a minúsculas y sin espacios extremos).',
+          example: 'camila.soto@ojociudadano.cl',
+        },
+        password: {
+          type: 'string',
+          minLength: 6,
+          maxLength: 128,
+          description: 'Contraseña de acceso (entre 6 y 128 caracteres).',
+          example: 'ClaveFicticia123!',
+        },
+        telefono: {
+          type: 'string',
+          nullable: true,
+          pattern: '^\\+?[0-9\\s\\-()]{7,20}$',
+          description:
+            'Teléfono de contacto opcional. Puede omitirse o enviarse null; si se informa debe tener entre 7 y 20 caracteres numéricos válidos.',
+          example: '+56987654321',
+        },
+      },
+    },
+    RegisterUsuarioResponseDto: {
+      type: 'object',
+      required: ['id', 'nombre', 'email', 'telefono', 'fechaRegistro'],
+      properties: {
+        id: {
+          type: 'string',
+          format: 'uuid',
+          example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
+        },
         nombre: { type: 'string', example: 'Camila Soto Riquelme' },
         email: {
           type: 'string',
           format: 'email',
           example: 'camila.soto@ojociudadano.cl',
         },
-        password: {
+        telefono: {
           type: 'string',
-          minLength: 6,
-          example: 'ClaveFicticia123!',
+          nullable: true,
+          example: '+56987654321',
         },
-        telefono: { type: 'string', example: '+56987654321' },
+        fechaRegistro: {
+          type: 'string',
+          format: 'date-time',
+          example: '2026-10-15T12:00:00.000Z',
+        },
       },
     },
     PerfilUsuarioDto: {
@@ -268,11 +315,18 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
         'sector',
       ],
       properties: {
-        latitud: { type: 'number', minimum: -90, maximum: 90, example: -38.7359 },
+        latitud: {
+          type: 'number',
+          minimum: -39.7,
+          maximum: -37.4,
+          description: 'Latitud dentro de los límites de La Araucanía (#336).',
+          example: -38.7359,
+        },
         longitud: {
           type: 'number',
-          minimum: -180,
-          maximum: 180,
+          minimum: -73.9,
+          maximum: -71.0,
+          description: 'Longitud dentro de los límites de La Araucanía (#336).',
           example: -72.5904,
         },
         direccionReferencia: {
@@ -672,6 +726,19 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
         },
       },
     },
+    MarcarTodasLeidasResponseDto: {
+      type: 'object',
+      required: ['marcadas'],
+      properties: {
+        marcadas: {
+          type: 'integer',
+          minimum: 0,
+          example: 2,
+          description:
+            'Cantidad de notificaciones pendientes que pasaron a leídas.',
+        },
+      },
+    },
   };
 
   document.paths = {
@@ -679,9 +746,9 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     '/api/v1/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: 'Registrar una nueva cuenta de ciudadano',
+        summary: 'Registrar una nueva cuenta de ciudadano (#315)',
         description:
-          'Crea un nuevo usuario asignándole el rol CIUDADANO por defecto y retorna sus datos sin passwordHash.',
+          'Valida nombre, correo electrónico, contraseña (mínimo 6 caracteres) y teléfono opcional en el API Gateway, crea un usuario con rol CIUDADANO por defecto y retorna sus datos públicos sin passwordHash.',
         requestBody: {
           required: true,
           content: {
@@ -695,16 +762,20 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
             description: 'Usuario registrado exitosamente.',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/PerfilUsuarioDto' },
+                schema: { $ref: '#/components/schemas/RegisterUsuarioResponseDto' },
               },
             },
           },
           '400': {
-            description: 'Error de validación en los datos de entrada.',
+            description:
+              'Error de validación en nombre, correo electrónico, contraseña o teléfono informado.',
             ...errorResponse(
               400,
               'Bad Request',
-              ['El formato de correo electronico es invalido'],
+              [
+                'El formato de correo electronico es invalido',
+                'El telefono debe tener un formato valido (7 a 20 caracteres numericos)',
+              ],
               '/api/v1/auth/register',
             ),
           },
@@ -1020,9 +1091,9 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
       get: {
         tags: ['Incidentes'],
         security: [{ bearer: [] }],
-        summary: 'Listar incidentes con filtros por estado, comuna, categoría y autor (#119, #106)',
+        summary: 'Listar incidentes con filtros por ciudad, comuna, estado, categoría y autor (#119, #106, #314, #315)',
         description:
-          'Retorna la lista de incidentes ordenada por fechaCreacion descendente, incluyendo sus evidencias disponibles ([] si no posee). Todos los filtros son opcionales y se combinan con operador lógico AND. Acceso permitido para ADMIN y CIUDADANO.',
+          'Retorna la lista de incidentes ordenada por fechaCreacion descendente, incluyendo sus evidencias disponibles ([] si no posee). Todos los filtros son opcionales y se combinan con operador lógico AND (ciudad y comuna se intersectan contra el catálogo de La Araucanía). Acceso permitido para ADMIN y CIUDADANO.',
         parameters: [
           {
             name: 'estadoId',
@@ -1045,6 +1116,14 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
               format: 'uuid',
               example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
             },
+          },
+          {
+            name: 'ciudad',
+            in: 'query',
+            required: false,
+            description:
+              'Nombre exacto de ciudad dentro de La Araucanía (insensible a mayúsculas, tildes y espacios extremos; ej. Temuco incluye Temuco y Padre Las Casas, Villarrica incluye Villarrica y Pucón)',
+            schema: { type: 'string', example: 'Temuco' },
           },
           {
             name: 'comuna',
@@ -1081,7 +1160,8 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
             },
           },
           '400': {
-            description: 'Alguno de los filtros enviados no es un UUID válido o comuna está vacía.',
+            description:
+              'Alguno de los filtros enviados no es un UUID válido, o ciudad/comuna están vacías.',
             ...errorResponse(
               400,
               'Bad Request',
@@ -2077,6 +2157,97 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
               'Unauthorized',
               'Se requiere un token Bearer valido',
               '/api/v1/notificaciones',
+            ),
+          },
+        },
+      },
+    },
+    '/api/v1/notificaciones/leidas': {
+      patch: {
+        tags: ['Notificaciones'],
+        security: [{ bearer: [] }],
+        summary: 'Marcar todas las notificaciones pendientes como leídas (#327)',
+        description:
+          'Marca como leídas todas las notificaciones pendientes del usuario autenticado (claim sub del JWT). No modifica notificaciones de otras cuentas. Es idempotente: una segunda llamada devuelve 0. Acceso permitido para ADMIN y CIUDADANO.',
+        responses: {
+          '200': {
+            description: 'Cantidad de notificaciones marcadas como leídas.',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/MarcarTodasLeidasResponseDto',
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Token Bearer JWT ausente, inválido o expirado.',
+            ...errorResponse(
+              401,
+              'Unauthorized',
+              'Se requiere un token Bearer valido',
+              '/api/v1/notificaciones/leidas',
+            ),
+          },
+        },
+      },
+    },
+    '/api/v1/notificaciones/{id}/leida': {
+      patch: {
+        tags: ['Notificaciones'],
+        security: [{ bearer: [] }],
+        summary: 'Marcar como leída una notificación propia (#327)',
+        description:
+          'Marca como leída una notificación del usuario autenticado (claim sub del JWT). Si la notificación ya estaba leída, conserva ese estado. Una notificación ajena se rechaza sin modificarla. Acceso permitido para ADMIN y CIUDADANO.',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'UUID de la notificación',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: '11eebc99-9c0b-4ef8-bb6d-6bb9bd380a77',
+            },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Notificación actualizada.',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/NotificacionResponseDto',
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'El id no es un UUID válido.',
+            ...errorResponse(
+              400,
+              'Bad Request',
+              'El id debe ser un UUID válido',
+              '/api/v1/notificaciones/id-invalido/leida',
+            ),
+          },
+          '401': {
+            description: 'Token Bearer JWT ausente, inválido o expirado.',
+            ...errorResponse(
+              401,
+              'Unauthorized',
+              'Se requiere un token Bearer valido',
+              '/api/v1/notificaciones/11eebc99-9c0b-4ef8-bb6d-6bb9bd380a77/leida',
+            ),
+          },
+          '403': {
+            description: 'La notificación no pertenece al usuario autenticado.',
+            ...errorResponse(
+              403,
+              'Forbidden',
+              'No tiene permiso sobre esa notificación',
+              '/api/v1/notificaciones/11eebc99-9c0b-4ef8-bb6d-6bb9bd380a77/leida',
             ),
           },
         },

@@ -1,12 +1,16 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 
-import { CreateNotificacionDto } from '../dto/create-notificacion.dto';
+import {
+  CreateNotificacionDto,
+  NotificacionResponseDto,
+} from '../dto/create-notificacion.dto';
 import { PrismaService } from '../../infrastructure/persistence/prisma/prisma.service';
 
 @Injectable()
@@ -49,6 +53,40 @@ async obtenerMisNotificaciones(usuarioId: string) {
     );
   }
 }
+
+  async marcarLeida(
+    id: string,
+    usuarioId: string,
+  ): Promise<NotificacionResponseDto> {
+    if (!isUUID(id, 'all') || !isUUID(usuarioId, 'all')) {
+      throw new BadRequestException('El id debe ser un UUID válido');
+    }
+
+    const propia = await this.prisma.notificacion.findFirst({
+      where: { id, usuarioId },
+    });
+    if (!propia) {
+      throw new ForbiddenException('No tiene permiso sobre esa notificación');
+    }
+
+    return this.prisma.notificacion.update({
+      where: { id },
+      data: { leido: true },
+    });
+  }
+
+  async marcarTodasLeidas(usuarioId: string): Promise<{ marcadas: number }> {
+    if (!isUUID(usuarioId, 'all')) {
+      throw new BadRequestException('El usuario debe ser un UUID válido');
+    }
+
+    const resultado = await this.prisma.notificacion.updateMany({
+      where: { usuarioId, leido: false },
+      data: { leido: true },
+    });
+    return { marcadas: resultado.count };
+  }
+
   async create(dto: CreateNotificacionDto) {
     if (!isUUID(dto?.usuarioId, 'all')) {
       throw new BadRequestException(
