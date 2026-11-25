@@ -9,10 +9,11 @@ import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -29,8 +30,8 @@ class ReportsViewModel(
 
     private val _scope = MutableStateFlow(IncidentScope.MINE)
     val scope = _scope.asStateFlow()
-    private var loadJob: kotlinx.coroutines.Job? = null
-    private var selectedCategory: Category? = null
+    private var loadJob: Job? = null
+    private var selectedCategoryId: String? = null
     private var selectedDate = DateFilter.RECENT
 
     fun selectScope(scope: IncidentScope) {
@@ -90,8 +91,7 @@ class ReportsViewModel(
 
                 coroutineContext.ensureActive()
                 _allIncidents.value = resultI
-                _incidents.value = resultI
-                filterIncidents(selectedCategory, selectedDate)
+                filterIncidents(selectedCategoryId, selectedDate)
 
                 // Estado vacío o exitoso
                 _uiState.value = if (resultI.isEmpty()) {
@@ -127,7 +127,7 @@ class ReportsViewModel(
                     message = exception.incidentMessage()
                 )
             } finally {
-                if (coroutineContext[kotlinx.coroutines.Job]?.isActive == true) {
+                if (coroutineContext[Job]?.isActive == true) {
                     _isRefreshing.value = false
                 }
             }
@@ -218,17 +218,17 @@ class ReportsViewModel(
     }
 
     fun filterIncidents(
-        category: Category?,
+        categoryId: String?,
         dateFilter: DateFilter
     ) {
-        selectedCategory = category
+        selectedCategoryId = categoryId
         selectedDate = dateFilter
         var filtered = _allIncidents.value
 
         // Filtrar por categoría
-        if (category != null) {
+        if (categoryId != null) {
             filtered = filtered.filter { incident ->
-                incident.category.id == category.id
+                incident.category.id == categoryId
             }
         }
 

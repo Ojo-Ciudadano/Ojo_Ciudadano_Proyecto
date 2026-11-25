@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.notifications
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,25 +11,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -39,14 +43,18 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Notification
+import cl.uct.ojociudadano.navigation.NotificationClickOutcome
+import cl.uct.ojociudadano.navigation.notificationClickOutcome
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.reports.incidentDate
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun NotificationsScreen(
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onOpenIncident: (String) -> Unit = {}
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: NotificationsViewModel = viewModel(factory = remember(application) {
@@ -63,8 +71,9 @@ fun NotificationsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val state by model.state.collectAsState()
-    val isRefreshing by model.isRefreshing.collectAsState()
     val notifications by model.notifications.collectAsState()
+    val isRefreshing by model.isRefreshing.collectAsState()
+    var invalidIncidentMessage by remember { mutableStateOf<String?>(null) }
     NotificationsContent(
         state = state,
         notifications = notifications,
@@ -72,6 +81,17 @@ fun NotificationsScreen(
         onRetry = model::retry,
         isRefreshing = isRefreshing,
         onRefresh = model::refresh,
+        onNotificationClick = { notification ->
+            // El marcado es best-effort; la navegación no espera al backend.
+            model.openNotification(notification)
+            onOpenIncident(notification.incidentId)
+        },
+        onInvalidIncident = {
+            invalidIncidentMessage = "El incidente asociado a esta notificación no es válido. " +
+                "Intenta nuevamente más tarde."
+        },
+        invalidIncidentMessage = invalidIncidentMessage,
+        onDismissInvalidIncident = { invalidIncidentMessage = null },
         modifier = modifier
     )
 }
@@ -83,21 +103,33 @@ fun NotificationsContent(
     notifications: List<Notification>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onNotificationClick: (Notification) -> Unit = {},
+    onInvalidIncident: (Notification) -> Unit = {},
+    invalidIncidentMessage: String? = null,
+    onDismissInvalidIncident: () -> Unit = {},
     modifier: Modifier = Modifier,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = onRetry
 ) {
+    val showNotifications = when (state) {
+        NotificationsUiState.Success -> true
+        is NotificationsUiState.Error -> state.duringRefresh
+        else -> false
+    }
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Notificaciones", subtitle = "Ciudadano", onBack = onBack)
-        PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh,
-            modifier = Modifier.weight(1f).fillMaxWidth().testTag("notifications_refresh")) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("notifications_refresh")
+        ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(Spacing.medium)
             ) {
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                         Text(
                             "Tus notificaciones",
                             modifier = Modifier.semantics { heading() },
@@ -109,6 +141,14 @@ fun NotificationsContent(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+                if (invalidIncidentMessage != null) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CitizenMessage(invalidIncidentMessage, isError = true)
+                            TextButton(onClick = onDismissInvalidIncident) { Text("Entendido") }
+                        }
                     }
                 }
                 when (state) {
@@ -126,8 +166,23 @@ fun NotificationsContent(
                     }
                     NotificationsUiState.Success -> Unit
                 }
-                if (state != NotificationsUiState.Loading) {
-                    items(notifications, key = { it.id }) { NotificationCard(it) }
+                if (showNotifications) {
+                    items(notifications, key = { it.id }) { notification ->
+                        val outcome = notificationClickOutcome(notification.incidentId)
+                        NotificationCard(
+                            notification = notification,
+                            onClick = when (outcome) {
+                                is NotificationClickOutcome.Open -> {
+                                    { onNotificationClick(notification) }
+                                }
+                                NotificationClickOutcome.InvalidIncident -> {
+                                    // No se marca como leída ni se navega a una ruta inválida.
+                                    { onInvalidIncident(notification) }
+                                }
+                                NotificationClickOutcome.NoIncident -> null
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -147,12 +202,24 @@ private fun NotificationsLoading() {
 }
 
 @Composable
-private fun NotificationCard(notification: Notification) {
+private fun NotificationCard(
+    notification: Notification,
+    onClick: (() -> Unit)?
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("notification_${notification.id}")
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(Spacing.medium), verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -160,7 +227,7 @@ private fun NotificationCard(notification: Notification) {
             ) {
                 if (!notification.isRead) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
@@ -182,8 +249,8 @@ private fun NotificationCard(notification: Notification) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            // La referencia se conserva solo si el backend la entregó; navegar al
-            // incidente queda fuera del alcance de esta issue.
+            // La referencia se conserva solo si el backend la entregó; la tarjeta
+            // solo es clicable en ese caso.
             if (notification.incidentId.isNotBlank()) {
                 Text(
                     "Incidente: ${notification.incidentId}",

@@ -27,6 +27,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cl.uct.ojociudadano.ui.components.AppBottomNavigation
+import cl.uct.ojociudadano.ui.admin.AdminUsersScreen
 import cl.uct.ojociudadano.ui.admin.AdminHomeScreen
 import cl.uct.ojociudadano.ui.admin.AdminComingSoonScreen
 import cl.uct.ojociudadano.ui.admin.AdminIncidentsScreen
@@ -44,6 +45,7 @@ import cl.uct.ojociudadano.ui.reports.ReportsScreen
 
 object AppRoutes {
     const val ADMIN = "admin"
+    const val ADMIN_USERS = "admin/users"
     const val ADMIN_INCIDENTS = "admin/incidents"
     const val ADMIN_INCIDENT_DETAIL = "admin/incidents/{id}"
     const val ADMIN_COMING_SOON = "admin/coming-soon/{section}"
@@ -165,9 +167,17 @@ fun AppNavigation(
                     name = session?.name.orEmpty(),
                     email = session?.email.orEmpty(),
                     onIncidentManagementClick = { navigate(AppRoutes.ADMIN_INCIDENTS) },
+                    onUserManagementClick = { navigate(AppRoutes.ADMIN_USERS) },
                     onLogout = onLogout,
                     onFutureSectionClick = { navigate(it.route) }
                 )
+            }
+            protectedComposable(sessionManager, navController, AppRoutes.ADMIN_USERS) {
+                AdminUsersScreen(onBack = {
+                    if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN) &&
+                        !navController.popBackStack(AppRoutes.ADMIN, inclusive = false)
+                    ) navigate(AppRoutes.ADMIN)
+                })
             }
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN_COMING_SOON) { entry ->
                 AdminComingSoonScreen(
@@ -194,10 +204,13 @@ fun AppNavigation(
                 AdminIncidentDetailScreen(
                     id = entry.arguments?.getString("id"),
                     onBack = {
-                        if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN_INCIDENTS) &&
-                            !navController.popBackStack(AppRoutes.ADMIN_INCIDENTS, inclusive = false)
+                        // Regresa a la pantalla que abrió el detalle (por ejemplo,
+                        // notificaciones) y solo cae al listado si el detalle es la
+                        // entrada raíz del grafo.
+                        if (!navController.navigateUp() &&
+                            RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN_INCIDENTS)
                         ) {
-                            navigate(AppRoutes.ADMIN_INCIDENTS)
+                            navController.navigate(AppRoutes.ADMIN_INCIDENTS) { launchSingleTop = true }
                         }
                     }
                 )
@@ -250,7 +263,13 @@ fun AppNavigation(
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.NOTIFICATIONS) {
-                NotificationsScreen(onBack = navController::navigateUp)
+                NotificationsScreen(
+                    onBack = navController::navigateUp,
+                    onOpenIncident = { incidentId ->
+                        // El rol decide entre el detalle ciudadano y el administrativo.
+                        notificationIncidentRoute(sessionManager.state.value, incidentId)?.let(::navigate)
+                    }
+                )
             }
             protectedComposable(sessionManager, navController, AppRoutes.MAP) {
                 MapScreen(onIncidentDetail = ::navigateToIncidentDetail)

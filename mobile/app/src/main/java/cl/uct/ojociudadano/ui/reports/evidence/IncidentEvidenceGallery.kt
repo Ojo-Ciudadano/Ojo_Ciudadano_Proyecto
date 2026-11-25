@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,10 +35,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.domain.model.Evidence
 import coil3.compose.AsyncImage
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 private val CompactPhotoSize = 112.dp
 private val DetailPhotoHeight = 220.dp
-private val PhotoCornerRadius = 12.dp
 
 /**
  * Galería reutilizable de evidencias fotográficas de un incidente.
@@ -77,7 +76,7 @@ fun IncidentEvidenceGallery(
 
     LazyRow(
         modifier = modifier.testTag(IncidentEvidenceTestTags.GALLERY),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.small)
     ) {
         itemsIndexed(photos, key = { _, evidence -> evidence.id }) { index, evidence ->
             IncidentEvidencePhoto(
@@ -110,7 +109,7 @@ private fun IncidentEvidencePhoto(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(PhotoCornerRadius))
+            .clip(MaterialTheme.shapes.small)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .testTag(IncidentEvidenceTestTags.photo(evidence.id))
     ) {

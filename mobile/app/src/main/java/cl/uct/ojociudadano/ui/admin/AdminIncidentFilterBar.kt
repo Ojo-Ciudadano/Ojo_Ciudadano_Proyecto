@@ -27,7 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cl.uct.ojociudadano.data.model.IncidentFilters
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +42,7 @@ fun AdminIncidentFilterBar(
 ) {
     val filters = state.filters
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
             AdminFilterDropdown(
                 label = "Estado",
                 options = state.availableStates.map { FilterOption(it.id, it.name) },
@@ -83,7 +83,7 @@ fun AdminIncidentFilterBar(
         }
 
         if (!filters.isEmpty) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -92,7 +92,7 @@ fun AdminIncidentFilterBar(
                     Text("Filtros activos", style = MaterialTheme.typography.labelLarge)
                     TextButton(onClick = onClearFilters) { Text("Limpiar filtros") }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
                     filters.estadoId?.let { id ->
                         val label = state.availableStates.firstOrNull { it.id == id }?.name ?: "Estado"
                         ActiveFilterChip("Estado: $label") { onEstadoSelected(null) }

@@ -7,7 +7,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -15,7 +14,10 @@ import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.LoadingContent
 import cl.uct.ojociudadano.ui.reports.evidence.IncidentEvidenceGallery
-import cl.uct.ojociudadano.ui.reports.IncidentsUiState
+import cl.uct.ojociudadano.data.model.Incident
+import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
+import cl.uct.ojociudadano.ui.components.IncidentStatusBadge
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @Composable
 fun IncidentDetailScreen(id: String, onBack: () -> Unit) {
@@ -32,22 +34,28 @@ fun IncidentDetailScreen(id: String, onBack: () -> Unit) {
         CitizenHeader("Detalle del incidente", onBack = onBack)
         if (state.status == IncidentsUiState.Loading) {
             LoadingContent(message = "Cargando incidentes…", modifier = Modifier.weight(1f).fillMaxWidth())
-        } else Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        } else Column(Modifier.verticalScroll(rememberScrollState()).padding(Spacing.page), verticalArrangement = Arrangement.spacedBy(Spacing.medium)) {
             IncidentLoadState(state.status, model::load)
             state.incident?.let { incident ->
-                Text(incident.category.name, color = MaterialTheme.colorScheme.primary)
-                Text(incident.title, style = MaterialTheme.typography.headlineSmall)
-                SuggestionChip(onClick = {}, label = { Text(incident.status.name) })
-                Text("Evidencias fotográficas", style = MaterialTheme.typography.titleMedium)
-                IncidentEvidenceGallery(incident.evidences, showEmptyMessage = true)
-                Text(incident.description, style = MaterialTheme.typography.bodyLarge)
-                HorizontalDivider()
-                Text("Ubicación", style = MaterialTheme.typography.titleMedium)
-                Text(listOfNotNull(incident.location.referenceAddress, incident.location.commune, incident.location.region)
-                    .filter { it.isNotBlank() }.joinToString(" · "))
-                Text("Reportado el "+incidentDate(incident.createdAt), style = MaterialTheme.typography.bodySmall)
-                Text("Actualizado el "+incidentDate(incident.updatedAt), style = MaterialTheme.typography.bodySmall)
+                IncidentInformation(incident)
             }
         }
     }
+}
+
+@Composable
+internal fun IncidentInformation(incident: Incident) {
+    Text(incident.category.name, color = MaterialTheme.colorScheme.primary)
+    Text(incident.title, style = MaterialTheme.typography.headlineSmall)
+    IncidentStatusBadge(incident.status.name)
+    IncidentPriorityBadge(incident.priorityLevel)
+    Text("Evidencias fotográficas", style = MaterialTheme.typography.titleMedium)
+    IncidentEvidenceGallery(incident.evidences, showEmptyMessage = true)
+    Text(incident.description, style = MaterialTheme.typography.bodyLarge)
+    HorizontalDivider()
+    Text("Ubicación", style = MaterialTheme.typography.titleMedium)
+    Text(listOfNotNull(incident.location.referenceAddress, incident.location.commune, incident.location.region)
+        .filter { it.isNotBlank() }.joinToString(" · "))
+    Text("Reportado el "+incidentDate(incident.createdAt), style = MaterialTheme.typography.bodySmall)
+    Text("Actualizado el "+incidentDate(incident.updatedAt), style = MaterialTheme.typography.bodySmall)
 }

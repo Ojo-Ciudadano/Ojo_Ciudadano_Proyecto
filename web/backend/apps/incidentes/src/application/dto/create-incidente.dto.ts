@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsDefined,
   IsNotEmpty,
   IsNumber,
   IsString,
@@ -10,29 +11,47 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { LIMITES_ARAUCANIA } from '../../domain/ubicacion/ciudades-araucania.constants';
+
 export class CreateUbicacionDto {
   @ApiProperty({
-    description: 'Latitud geográfica en grados decimales (WGS84)',
-    minimum: -90,
-    maximum: 90,
+    description:
+      'Latitud geográfica en grados decimales (WGS84) dentro de La Araucanía',
+    minimum: LIMITES_ARAUCANIA.latitudMinima,
+    maximum: LIMITES_ARAUCANIA.latitudMaxima,
     example: -38.7359,
   })
-  @Type(() => Number)
-  @IsNumber({}, { message: 'La latitud debe ser un valor numerico' })
-  @Min(-90, { message: 'La latitud minima es -90' })
-  @Max(90, { message: 'La latitud maxima es 90' })
+  @IsDefined({ message: 'La latitud es obligatoria' })
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    { message: 'La latitud debe ser un valor numerico finito' },
+  )
+  @Min(LIMITES_ARAUCANIA.latitudMinima, {
+    message: `La latitud minima es ${LIMITES_ARAUCANIA.latitudMinima}`,
+  })
+  @Max(LIMITES_ARAUCANIA.latitudMaxima, {
+    message: `La latitud maxima es ${LIMITES_ARAUCANIA.latitudMaxima}`,
+  })
   latitud!: number;
 
   @ApiProperty({
-    description: 'Longitud geográfica en grados decimales (WGS84)',
-    minimum: -180,
-    maximum: 180,
+    description:
+      'Longitud geográfica en grados decimales (WGS84) dentro de La Araucanía',
+    minimum: LIMITES_ARAUCANIA.longitudMinima,
+    maximum: LIMITES_ARAUCANIA.longitudMaxima,
     example: -72.5904,
   })
-  @Type(() => Number)
-  @IsNumber({}, { message: 'La longitud debe ser un valor numerico' })
-  @Min(-180, { message: 'La longitud minima es -180' })
-  @Max(180, { message: 'La longitud maxima es 180' })
+  @IsDefined({ message: 'La longitud es obligatoria' })
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    { message: 'La longitud debe ser un valor numerico finito' },
+  )
+  @Min(LIMITES_ARAUCANIA.longitudMinima, {
+    message: `La longitud minima es ${LIMITES_ARAUCANIA.longitudMinima}`,
+  })
+  @Max(LIMITES_ARAUCANIA.longitudMaxima, {
+    message: `La longitud maxima es ${LIMITES_ARAUCANIA.longitudMaxima}`,
+  })
   longitud!: number;
 
   @ApiProperty({

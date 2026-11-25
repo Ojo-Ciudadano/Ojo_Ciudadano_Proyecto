@@ -39,7 +39,7 @@ class ReportsViewModelTest {
         assertEquals(1, repository.userQueryCount)
         assertEquals(listOf(incident), viewModel.incidents.value)
         assertEquals(IncidentsUiState.Success, viewModel.uiState.value)
-        viewModel.filterIncidents(category, DateFilter.RECENT)
+        viewModel.filterIncidents(category.id, DateFilter.RECENT)
         assertEquals(listOf(incident), viewModel.incidents.value)
     }
 
@@ -148,7 +148,7 @@ class ReportsViewModelTest {
 
     @Test fun `invalid date cannot crash filtering and filters survive reload`() = runTest {
         val model = viewModel(FakeIncidents(listOf(incident.copy(createdAt = "invalid"))))
-        model.filterIncidents(category, DateFilter.TODAY)
+        model.filterIncidents(category.id, DateFilter.TODAY)
         assertTrue(model.incidents.value.isEmpty())
         model.loadIncidents()
         assertTrue(model.incidents.value.isEmpty())
@@ -159,7 +159,7 @@ class ReportsViewModelTest {
     @Test fun `manual refresh keeps mine scope and category date filters after failure and retry`() = runTest {
         val repository = FakeIncidents()
         val model = viewModel(repository)
-        model.filterIncidents(category, DateFilter.TODAY)
+        model.filterIncidents(category.id, DateFilter.TODAY)
         repository.failure = ApiException.Network(java.io.IOException())
         model.refresh()
         assertTrue(model.uiState.value is IncidentsUiState.Error)
@@ -171,7 +171,7 @@ class ReportsViewModelTest {
         assertEquals(0, repository.allQueryCount)
         assertEquals(IncidentScope.MINE, model.scope.value)
         assertTrue(model.incidents.value.isEmpty())
-        model.filterIncidents(category, DateFilter.RECENT)
+        model.filterIncidents(category.id, DateFilter.RECENT)
         assertEquals(listOf(incident), model.incidents.value)
     }
 
@@ -212,7 +212,7 @@ class ReportsViewModelTest {
         val pending = kotlinx.coroutines.CompletableDeferred<List<Incident>>()
         repository.pendingAll = pending
         model.refresh()
-        model.filterIncidents(category, DateFilter.TODAY)
+        model.filterIncidents(category.id, DateFilter.TODAY)
         pending.complete(listOf(incident, incident.copy(id = "today", createdAt = java.time.Instant.now().toString()),
             incident.copy(id = "other-category", category = category.copy(id = "other"), createdAt = java.time.Instant.now().toString())))
         assertEquals(listOf("today"), model.incidents.value.map { it.id })

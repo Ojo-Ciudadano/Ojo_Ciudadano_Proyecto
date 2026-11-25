@@ -18,9 +18,14 @@ class NotificationsViewModel(
     private val _state = MutableStateFlow<NotificationsUiState>(NotificationsUiState.Loading)
     val state = _state.asStateFlow()
 
-    /** Colección tal como la entrega la capa de datos; no se reordena en la UI. */
-    private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
-    val notifications = _notifications.asStateFlow()
+    /**
+     * La colección vive en la capa de datos: la pantalla, el marcado de lectura
+     * y el ciclo periódico publican sobre el mismo flujo.
+     */
+    val notifications = repository.notifications
+
+    /** Conteo derivado que consumirá el indicador de no leídas (#283). */
+    val unreadCount = repository.unreadCount
 
     private var loadJob: Job? = null
 
@@ -29,6 +34,21 @@ class NotificationsViewModel(
 
     init {
         load()
+        // El ciclo periódico publica en el repositorio sin pasar por load(); el
+        // estado visual debe seguir a la colección para no quedarse en Empty
+        // cuando llega una notificación nueva.
+        viewModelScope.launch {
+            repository.notifications.collect { rows ->
+                val current = _state.value
+                if (current !is NotificationsUiState.Loading && current !is NotificationsUiState.Error) {
+                    _state.value = if (rows.isEmpty()) {
+                        NotificationsUiState.Empty
+                    } else {
+                        NotificationsUiState.Success
+                    }
+                }
+            }
+        }
     }
 
     fun refresh() = queryNotifications(refresh = true)
@@ -43,8 +63,7 @@ class NotificationsViewModel(
         loadJob = viewModelScope.launch {
             if (!refresh) _state.value = NotificationsUiState.Loading
             try {
-                val rows = repository.getNotifications()
-                _notifications.value = rows
+                val rows = repository.refresh()
                 _state.value = if (rows.isEmpty()) {
                     NotificationsUiState.Empty
                 } else {
@@ -55,7 +74,8 @@ class NotificationsViewModel(
             } catch (exception: Exception) {
                 _state.value = NotificationsUiState.Error(
                     message = exception.notificationMessage(),
-                    canRetry = exception.isNotificationRetryable()
+                    canRetry = exception.isNotificationRetryable(),
+                    duringRefresh = refresh
                 )
             } finally {
                 _isRefreshing.value = false
@@ -64,6 +84,26 @@ class NotificationsViewModel(
     }
 
     fun retry() = load()
+
+    /**
+     * Abrir una notificación la marca como leída sin bloquear la navegación.
+     *
+     * Es best-effort: si el backend aún no expone la operación (404/405) o falla
+     * la red, la notificación permanece pendiente y no se muestra un error al
+     * usuario mientras navega al detalle.
+     */
+    fun openNotification(notification: Notification) {
+        if (notification.isRead) return
+        viewModelScope.launch {
+            try {
+                repository.markAsRead(notification.id)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // Silencioso a propósito.
+            }
+        }
+    }
 
     class Factory(
         private val repository: NotificationRepository

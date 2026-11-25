@@ -1,43 +1,48 @@
 package cl.uct.ojociudadano.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.ui.theme.Spacing
 
-val CitizenNavy = Color(0xFF102A43)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CitizenHeader(title: String, subtitle: String = "Ojo Ciudadano", onBack: (() -> Unit)? = null,
                   actions: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().background(CitizenNavy).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (onBack != null) IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
-        } else Icon(Icons.Default.Visibility, null, Modifier.padding(8.dp).size(30.dp), tint = Color.White)
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
-            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = Color(0xFFD3DFEB))
-        }
-        actions()
-    }
+    TopAppBar(
+        title = {
+            Column {
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                Text(subtitle, style = MaterialTheme.typography.labelMedium)
+            }
+        },
+        navigationIcon = {
+            if (onBack != null) IconButton(onClick = onBack, modifier = Modifier.size(Spacing.touchTarget)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+            } else Icon(Icons.Default.Visibility, null, Modifier.padding(12.dp).size(24.dp))
+        },
+        actions = actions,
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+        )
+    )
 }
 
 @Composable
 fun CitizenMessage(message: String, modifier: Modifier = Modifier, isError: Boolean = false) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer) {
-        Text(message, Modifier.padding(16.dp),
-            color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer) {
+        Text(message, Modifier.padding(Spacing.medium),
+            color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
             style = MaterialTheme.typography.bodyMedium)
     }
 }

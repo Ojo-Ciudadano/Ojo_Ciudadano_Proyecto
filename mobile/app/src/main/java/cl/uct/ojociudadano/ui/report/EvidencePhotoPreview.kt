@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -35,6 +34,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
+import cl.uct.ojociudadano.ui.theme.EvidenceCanvas
+import cl.uct.ojociudadano.ui.theme.EvidenceScrim
+import cl.uct.ojociudadano.ui.theme.OnEvidenceCanvas
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 private val ThumbnailSize = 112.dp
 
@@ -139,14 +142,14 @@ internal fun EvidencePhotoThumbnail(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp)
-                    .size(40.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    .size(48.dp)
+                    .background(EvidenceScrim, CircleShape)
                     .testTag(ReportPhotoTestTags.removeButton(photo.fileName))
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Eliminar fotografía $position",
-                    tint = Color.White
+                    tint = OnEvidenceCanvas
                 )
             }
         }
@@ -177,7 +180,7 @@ internal fun EvidencePhotoPreviewDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag(ReportPhotoTestTags.PREVIEW_DIALOG),
-            color = Color.Black
+            color = EvidenceCanvas
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
@@ -186,7 +189,7 @@ internal fun EvidencePhotoPreviewDialog(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(Spacing.medium),
                     onSuccess = { loadFailed = false },
                     onError = {
                         loadFailed = true
@@ -202,16 +205,16 @@ internal fun EvidencePhotoPreviewDialog(
                     Column(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(Spacing.small)
                     ) {
                         Icon(
                             imageVector = Icons.Filled.BrokenImage,
                             contentDescription = null,
-                            tint = Color.White
+                            tint = OnEvidenceCanvas
                         )
                         Text(
                             text = "No fue posible mostrar la fotografía",
-                            color = Color.White,
+                            color = OnEvidenceCanvas,
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -221,13 +224,13 @@ internal fun EvidencePhotoPreviewDialog(
                     onClick = onDismiss,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                        .padding(Spacing.medium)
                         .testTag(ReportPhotoTestTags.CLOSE_PREVIEW_BUTTON)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = "Cerrar vista previa",
-                        tint = Color.White
+                        tint = OnEvidenceCanvas
                     )
                 }
 
@@ -235,8 +238,8 @@ internal fun EvidencePhotoPreviewDialog(
                     text = formatEvidencePhotoSize(photo.sizeBytes),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    color = Color.White,
+                        .padding(Spacing.medium),
+                    color = OnEvidenceCanvas,
                     style = MaterialTheme.typography.bodySmall
                 )
             }

@@ -3,23 +3,27 @@ package cl.uct.ojociudadano.ui.notifications
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeDown
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.ui.reports.incidentDate
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -137,6 +141,61 @@ class NotificationsScreenTest {
         compose.onNodeWithText("Reintentar").assertDoesNotExist()
     }
 
+    @Test fun notificationWithIncidentIsClickableAndWithoutItIsNot() {
+        val opened = mutableListOf<String>()
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(
+                        notification(id = "with-incident"),
+                        notification(id = "without-incident", incidentId = "  ")
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onNotificationClick = { opened += it.id }
+                )
+            }
+        }
+
+        compose.onNodeWithTag("notification_with-incident").performClick()
+        compose.onNodeWithTag("notification_without-incident").performClick()
+
+        assertEquals(listOf("with-incident"), opened)
+    }
+
+    @Test fun invalidIncidentIsNotMarkedNorNavigatedAndShowsAControlledMessage() {
+        val opened = mutableListOf<String>()
+        val invalid = mutableListOf<String>()
+        var dismissed = false
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(
+                        notification(id = "broken-incident", incidentId = "incidente/otro")
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onNotificationClick = { opened += it.id },
+                    onInvalidIncident = { invalid += it.id },
+                    invalidIncidentMessage = "El incidente asociado a esta notificación no es válido.",
+                    onDismissInvalidIncident = { dismissed = true }
+                )
+            }
+        }
+
+        compose.onNodeWithText("El incidente asociado a esta notificación no es válido.")
+            .assertIsDisplayed()
+        compose.onNodeWithTag("notification_broken-incident").performClick()
+
+        assertEquals(listOf("broken-incident"), invalid)
+        assertTrue(opened.isEmpty())
+
+        compose.onNodeWithText("Entendido").performClick()
+        assertTrue(dismissed)
+    }
+
     @Test fun backActionAndNarrowLayoutKeepContentReachable() {
         var backs = 0
         val long = notification(
@@ -160,18 +219,55 @@ class NotificationsScreenTest {
         assertEquals(1, backs)
     }
 
-    @Test fun pullRefreshFromEmptyNotificationsShowsNewResponse() {
+    @Test fun pullRefreshFromEmptyShowsIndicatorAndKeepsRowsOnLaterError() {
+        val state = mutableStateOf<NotificationsUiState>(NotificationsUiState.Empty)
         val rows = mutableStateOf(emptyList<Notification>())
+        val refreshing = mutableStateOf(false)
+        val indicator = compose.onNode(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo,
+                ProgressBarRangeInfo.Indeterminate
+            )
+        )
         compose.setContent {
             OjoCiudadanoTheme {
                 NotificationsContent(
-                    if (rows.value.isEmpty()) NotificationsUiState.Empty else NotificationsUiState.Success,
-                    rows.value, {}, {}, onRefresh = { rows.value = listOf(notification) }
+                    state = state.value,
+                    notifications = rows.value,
+                    onBack = {},
+                    onRetry = {},
+                    isRefreshing = refreshing.value,
+                    onRefresh = { refreshing.value = true }
                 )
             }
         }
-        compose.onNodeWithTag("notifications_refresh").performTouchInput { swipeDown() }
+        val list = compose.onNodeWithTag("notifications_refresh")
+        list.performTouchInput { swipeDown() }
+        indicator.assertIsDisplayed()
+        compose.runOnIdle {
+            rows.value = listOf(notification)
+            state.value = NotificationsUiState.Success
+            refreshing.value = false
+        }
         compose.onNodeWithText(notification.message).assertIsDisplayed()
+        indicator.assertDoesNotExist()
+
+        list.performTouchInput { swipeDown() }
+        indicator.assertIsDisplayed()
+        compose.onNodeWithText(notification.message).assertIsDisplayed()
+        compose.runOnIdle {
+            state.value = NotificationsUiState.Error(
+                "Revisa tu conexión.",
+                canRetry = true,
+                duringRefresh = true
+            )
+            refreshing.value = false
+        }
+        compose.onNodeWithText("Revisa tu conexión.").assertIsDisplayed()
+        compose.onNodeWithText(notification.message).assertIsDisplayed()
+        indicator.assertDoesNotExist()
+        list.performTouchInput { swipeDown() }
+        indicator.assertIsDisplayed()
     }
 
     private val notification = Notification(

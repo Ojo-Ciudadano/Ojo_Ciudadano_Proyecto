@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
@@ -27,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /**
  * Controles de filtrado de la pantalla de mapa.
@@ -52,13 +52,13 @@ internal fun MapIncidentFilterBar(
         modifier = modifier
             .fillMaxWidth()
             .testTag(MapTestTags.FILTERS),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         tonalElevation = 4.dp,
         shadowElevation = 4.dp
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(Spacing.small)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -177,7 +177,7 @@ private fun MapFilterChipRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.small)
         ) {
             FilterChip(
                 selected = selectedValue == null,

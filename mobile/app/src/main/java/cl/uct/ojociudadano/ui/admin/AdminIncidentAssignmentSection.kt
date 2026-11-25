@@ -28,6 +28,7 @@ import cl.uct.ojociudadano.data.model.CandidateUser
 import cl.uct.ojociudadano.data.model.IncidentAssignment
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.reports.incidentDate
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /** Callbacks owned by the screen so the section stays stateless. */
 data class AdminIncidentAssignmentActions(
@@ -169,10 +170,11 @@ private fun CandidateRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.small)
     ) {
         RadioButton(selected = selected, onClick = null, enabled = enabled)
         Column(Modifier.weight(1f)) {

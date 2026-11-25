@@ -15,7 +15,7 @@ class RoleAccessPolicyTest {
     private val citizenRoutes = listOf(AppRoutes.HOME, AppRoutes.REPORTS,
         AppRoutes.INCIDENT_DETAIL, "incident/test-id", "incident/id%2Fencoded",
         AppRoutes.CREATE_REPORT, AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE)
-    private val adminRoutes = listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_INCIDENTS,
+    private val adminRoutes = listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_USERS, AppRoutes.ADMIN_INCIDENTS,
         AppRoutes.ADMIN_INCIDENT_DETAIL, "admin/incidents/test-id", "admin/incidents/id%2Fencoded",
         AppRoutes.ADMIN_COMING_SOON) + AdminFutureSection.entries.map { it.route }
     private val routes = citizenRoutes + adminRoutes + listOf(AppRoutes.ROLE_UNAVAILABLE,

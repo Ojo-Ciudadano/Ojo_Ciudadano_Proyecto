@@ -17,6 +17,7 @@ import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
 import cl.uct.ojociudadano.ui.components.LoadingContent
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,7 +37,10 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var categoryMenu by remember { mutableStateOf(false) }
     var dateMenu by remember { mutableStateOf(false) }
-    LaunchedEffect(model) { model.loadIncidents() }
+    LaunchedEffect(model) {
+        model.filterIncidents(categoryId, date)
+        model.loadIncidents()
+    }
     val category = categories.firstOrNull { it.id == categoryId }
     Column(Modifier.fillMaxSize()) {
         CitizenHeader("Incidentes", onBack = onBack)
@@ -46,17 +50,22 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { showFilters = !showFilters }) { Text(if (showFilters) "Ocultar filtros" else "Filtrar") }
-            TextButton(onClick = model::refresh, enabled = state != IncidentsUiState.Loading && !isRefreshing) { Text("Actualizar") }
+            TextButton(
+                onClick = model::refresh,
+                enabled = state != IncidentsUiState.Loading && !isRefreshing
+            ) { Text("Actualizar") }
             TextButton(onClick = onCreateReportClick) { Text("+ Nuevo reporte") }
         }
         if (showFilters) {
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Box(Modifier.weight(1f)) {
                     OutlinedButton(onClick = { categoryMenu = true }) { Text(category?.name ?: "Categorías") }
                     DropdownMenu(categoryMenu, { categoryMenu = false }) {
                         (listOf<Category?>(null) + categories).forEach { item ->
                             DropdownMenuItem(text = { Text(item?.name ?: "Todas las categorías") }, onClick = {
-                                categoryId = item?.id; categoryMenu = false; model.filterIncidents(item, date)
+                                categoryId = item?.id
+                                categoryMenu = false
+                                model.filterIncidents(categoryId, date)
                             })
                         }
                     }
@@ -66,27 +75,46 @@ fun ReportsScreen(onBack: () -> Unit = {}, onCreateReportClick: () -> Unit = {},
                     DropdownMenu(dateMenu, { dateMenu = false }) {
                         DateFilter.entries.forEach { item ->
                             DropdownMenuItem(text = { Text(dateLabel(item)) }, onClick = {
-                                date = item; dateMenu = false; model.filterIncidents(category, item)
+                                date = item
+                                dateMenu = false
+                                model.filterIncidents(categoryId, date)
                             })
                         }
                     }
                 }
             }
         }
-        PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = model::refresh,
-            modifier = Modifier.weight(1f).fillMaxWidth().testTag("reports_refresh")) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = model::refresh,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("reports_refresh")
+        ) {
             if (state == IncidentsUiState.Loading) {
                 LoadingContent(message = "Cargando incidentes…", modifier = Modifier.fillMaxSize())
-            } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                item { Text(if (scope == IncidentScope.MINE) "Reportes de tu cuenta" else "Reportes disponibles para tu sesión",
-                    style = MaterialTheme.typography.bodyMedium) }
-                if (state != IncidentsUiState.Success) {
-                    item { IncidentLoadState(state, model::loadIncidents) }
-                }
-                if (state == IncidentsUiState.Success && incidents.isEmpty()) {
-                    item { CitizenMessage("No hay resultados para estos filtros.") }
-                } else items(incidents, key = { it.id }) { incident ->
-                    IncidentCard(incident) { onIncidentClick(incident.id) }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    item {
+                        Text(
+                            text = if (scope == IncidentScope.MINE) {
+                                "Reportes de tu cuenta"
+                            } else {
+                                "Reportes disponibles para tu sesión"
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (state != IncidentsUiState.Success) {
+                        item { IncidentLoadState(state, model::loadIncidents) }
+                    } else if (incidents.isEmpty()) {
+                        item { CitizenMessage("No hay resultados para estos filtros.") }
+                    }
+                    items(incidents, key = { it.id }) { incident ->
+                        IncidentCard(incident) { onIncidentClick(incident.id) }
+                    }
                 }
             }
         }

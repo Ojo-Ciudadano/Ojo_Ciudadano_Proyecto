@@ -12,5 +12,12 @@ class OjoCiudadanoApplication : Application(), SingletonImageLoader.Factory {
         AppContainer(this)
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        // El ciclo se mantiene inactivo mientras no haya sesión o la app esté en
+        // segundo plano; ver NotificationSyncScheduler.
+        container.notificationSyncScheduler.start()
+    }
+
     override fun newImageLoader(context: PlatformContext): ImageLoader = container.imageLoader
 }

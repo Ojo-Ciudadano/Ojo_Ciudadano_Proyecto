@@ -7,8 +7,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  coordenadasDentroDeAraucania,
   comunaPerteneceACiudad,
   comunasDeCiudad,
+  esComunaDeAraucania,
+  esRegionAraucania,
+  LIMITES_ARAUCANIA,
 } from '../../domain/ubicacion/ciudades-araucania.constants';
 import { toIncidenteDetalleResponse } from '../mappers/incidente-detalle.mapper';
 import { isUUID } from 'class-validator';
@@ -140,9 +144,58 @@ export class IncidentesService {
 
     return historial.map(toHistorialEstadoResponse);
   }
+  /**
+   * Valida la coherencia de la ubicacion antes de cualquier escritura (#336).
+   * Aplica tanto a ubicaciones seleccionadas en el mapa como a las obtenidas
+   * por GPS: ambas deben caer dentro de La Araucanía y describir una comuna
+   * y una direccion reales del catalogo existente.
+   */
+  private validarUbicacion(dto: CreateIncidenteDto): void {
+    const ubicacion = dto?.ubicacion;
+    if (!ubicacion)
+      throw new BadRequestException('La ubicacion es obligatoria');
+
+    const { latitud, longitud, direccionReferencia, comuna, region, sector } =
+      ubicacion;
+
+    if (typeof latitud !== 'number' || !Number.isFinite(latitud))
+      throw new BadRequestException(
+        'La latitud debe ser un valor numerico finito',
+      );
+    if (typeof longitud !== 'number' || !Number.isFinite(longitud))
+      throw new BadRequestException(
+        'La longitud debe ser un valor numerico finito',
+      );
+
+    if (!coordenadasDentroDeAraucania(latitud, longitud))
+      throw new BadRequestException(
+        `Las coordenadas (${latitud}, ${longitud}) estan fuera de los limites de La Araucania ` +
+          `(latitud ${LIMITES_ARAUCANIA.latitudMinima} a ${LIMITES_ARAUCANIA.latitudMaxima}, ` +
+          `longitud ${LIMITES_ARAUCANIA.longitudMinima} a ${LIMITES_ARAUCANIA.longitudMaxima})`,
+      );
+
+    if (typeof region !== 'string' || !esRegionAraucania(region))
+      throw new BadRequestException('La region debe ser La Araucania');
+
+    // El contrato actual no expone un campo `ciudad`; la coherencia se resuelve
+    // contra el catalogo oficial de comunas de La Araucanía.
+    if (typeof comuna !== 'string' || !esComunaDeAraucania(comuna))
+      throw new BadRequestException(
+        `La comuna "${comuna}" no pertenece a La Araucania`,
+      );
+
+    if (typeof direccionReferencia !== 'string' || !direccionReferencia.trim())
+      throw new BadRequestException('La direccion de referencia es obligatoria');
+
+    if (typeof sector !== 'string' || !sector.trim())
+      throw new BadRequestException('El sector es obligatorio');
+  }
+
   async create(dto: CreateIncidenteDto) {
     if (!dto.titulo?.trim() || !dto.descripcion?.trim() || !dto.ubicacion)
       throw new BadRequestException('titulo, descripcion y ubicacion son obligatorios');
+
+    this.validarUbicacion(dto);
 
     const categoria = await this.prisma.categoria.findUnique({ where: { id: dto.categoriaId } });
     if (!categoria) throw new BadRequestException('La categoria indicada no existe');

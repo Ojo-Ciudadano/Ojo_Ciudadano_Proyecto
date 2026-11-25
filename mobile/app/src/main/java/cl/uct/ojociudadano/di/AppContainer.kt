@@ -1,6 +1,7 @@
 package cl.uct.ojociudadano.di
 
 import android.content.Context
+import androidx.lifecycle.ProcessLifecycleOwner
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
@@ -10,8 +11,11 @@ import cl.uct.ojociudadano.data.media.AndroidEvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
+import cl.uct.ojociudadano.data.notifications.AppForegroundState
+import cl.uct.ojociudadano.data.notifications.NotificationSyncScheduler
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
+import cl.uct.ojociudadano.data.repository.UserRepository
 import cl.uct.ojociudadano.data.repository.AuthRepository
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
@@ -31,6 +35,9 @@ import cl.uct.ojociudadano.domain.repository.ReverseGeocodingClient
 import coil3.ImageLoader
 import com.google.android.gms.location.LocationServices
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(
     context: Context,
@@ -53,6 +60,14 @@ class AppContainer(
 
     val sessionManager: SessionManager by lazy {
         DefaultSessionManager(sessionStorage)
+    }
+
+    /**
+     * Alcance del proceso para trabajo que debe sobrevivir a una pantalla
+     * (estado reactivo de notificaciones y su ciclo de sincronización).
+     */
+    val applicationScope: CoroutineScope by lazy {
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     val evidencePhotoStore: EvidencePhotoFileStore by lazy {
@@ -83,8 +98,7 @@ class AppContainer(
     val apiService: ApiService by lazy {
         RetrofitClient.createApiService(
             baseUrl = baseUrl,
-            tokenProvider = sessionManager,
-            onUnauthorized = sessionManager::invalidateIfCurrent
+            tokenProvider = sessionManager
         )
     }
 
@@ -103,7 +117,7 @@ class AppContainer(
         )
     }
 
-    val incidentRepository: IncidentRepository by lazy {
+    private val remoteIncidentRepository by lazy {
         RemoteIncidentRepository(
             apiService = apiService,
             sessionManager = sessionManager,
@@ -111,8 +125,25 @@ class AppContainer(
         )
     }
 
+    val incidentRepository: IncidentRepository get() = remoteIncidentRepository
+
+    val userRepository: UserRepository get() = remoteIncidentRepository
+
     val notificationRepository: NotificationRepository by lazy {
-        RemoteNotificationRepository(apiService, sessionManager)
+        RemoteNotificationRepository(apiService, sessionManager, applicationScope)
+    }
+
+    val appForegroundState: AppForegroundState by lazy {
+        AppForegroundState(ProcessLifecycleOwner.get().lifecycle)
+    }
+
+    val notificationSyncScheduler: NotificationSyncScheduler by lazy {
+        NotificationSyncScheduler(
+            repository = notificationRepository,
+            sessionManager = sessionManager,
+            foreground = appForegroundState.isForeground,
+            scope = applicationScope
+        )
     }
 
     val profileRepository: ProfileRepository by lazy {

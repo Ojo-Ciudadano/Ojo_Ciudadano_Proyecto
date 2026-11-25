@@ -44,6 +44,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import java.util.Locale
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 internal object ManualLocationPickerTestTags {
     const val DIALOG = "manual_location_picker"
@@ -164,7 +165,7 @@ fun ManualLocationPickerDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp),
+                            .padding(Spacing.page),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(

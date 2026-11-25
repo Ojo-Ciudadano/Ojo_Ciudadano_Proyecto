@@ -29,17 +29,19 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -75,6 +77,7 @@ import cl.uct.ojociudadano.ui.report.photo.rememberGalleryPhotoPickerLauncher
 import cl.uct.ojociudadano.ui.report.photo.rememberPhotoCaptureLauncher
 import cl.uct.ojociudadano.ui.theme.OjoCiudadanoTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
+import cl.uct.ojociudadano.ui.theme.Spacing
 
 /**
  * Formulario visual desacoplado de la navegación y de la capa de datos.
@@ -124,7 +127,7 @@ fun CreateReportScreen(
             .animateContentSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(Spacing.medium)
     ) {
         CitizenHeader("Crear reporte", onBack = onBack)
 
@@ -260,7 +263,7 @@ fun CreateReportScreen(
         }
 
         when (submissionState) {
-            is CreateReportSubmissionState.Success -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            is CreateReportSubmissionState.Success -> Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
                 Text(successMessage(submissionState.uploadedEvidenceCount, submissionState.discardedEvidenceCount))
                 OutlinedButton(onClick = { onViewReport(submissionState.incidentId) }, modifier = Modifier.fillMaxWidth()) {
                     Text("Ver reporte creado")
@@ -268,7 +271,7 @@ fun CreateReportScreen(
             }
 
             is CreateReportSubmissionState.EvidenceUploadFailed -> Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(Spacing.small)
             ) {
                 Text(
                     text = submissionState.message,
@@ -361,12 +364,41 @@ private fun ReportLocationSection(
     onChooseLocationOnMap: () -> Unit,
     canEditForm: Boolean
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
         Text(
             text = "Ubicación",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
+        Text(
+            text = "Elige cómo fijar la ubicación del reporte.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = state.locationSource == LocationSelectionSource.DEVICE,
+                onClick = onRefreshLocation,
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                enabled = canEditForm && !state.isLoadingLocation,
+                icon = {
+                    Icon(Icons.Filled.MyLocation, contentDescription = null)
+                },
+                label = { Text("Usar mi GPS actual") }
+            )
+            SegmentedButton(
+                selected = state.locationSource == LocationSelectionSource.MANUAL,
+                onClick = onChooseLocationOnMap,
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                enabled = canEditForm,
+                icon = {
+                    Icon(Icons.Filled.Map, contentDescription = null)
+                },
+                label = { Text("Elegir en el mapa") }
+            )
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -374,7 +406,7 @@ private fun ReportLocationSection(
             )
         ) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(Spacing.medium),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -399,9 +431,9 @@ private fun ReportLocationSection(
                                 text = if (state.locationSource ==
                                     LocationSelectionSource.MANUAL
                                 ) {
-                                    "Ubicación seleccionada en el mapa"
+                                    "Seleccionada en el mapa"
                                 } else {
-                                    "Ubicación GPS obtenida"
+                                    "Obtenida por GPS"
                                 },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -443,16 +475,6 @@ private fun ReportLocationSection(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
-        }
-
-        OutlinedButton(
-            onClick = onChooseLocationOnMap,
-            enabled = canEditForm,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Filled.Map, contentDescription = null)
-            Spacer(modifier = Modifier.size(8.dp))
-            Text("Elegir ubicación en el mapa")
         }
     }
 }
@@ -692,6 +714,14 @@ fun CreateReportScreen(
         }
     }
 
+    val refreshLocation = {
+        if (locationPermissionLauncher.isGranted()) {
+            viewModel.refreshLocation()
+        } else {
+            locationPermissionLauncher.request()
+        }
+    }
+
     val currentOnExitRiskChanged by rememberUpdatedState(onExitRiskChanged)
     val exitRisk = CreateReportExitPolicy.riskOf(
         state = viewModel.submissionState,
@@ -741,7 +771,7 @@ fun CreateReportScreen(
         onFinishWithoutPendingEvidence = viewModel::finishWithoutPendingEvidence,
         modifier = modifier,
         onBack = onBack,
-        onRefreshLocation = viewModel::refreshLocation,
+        onRefreshLocation = refreshLocation,
         onRequestLocationPermission = locationPermissionLauncher::request,
         onOpenLocationSettings = locationPermissionLauncher::openLocationSettings,
         onChooseLocationOnMap = viewModel::openManualLocationPicker,

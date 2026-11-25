@@ -93,7 +93,7 @@ class AdminIncidentsViewModel(
         // Selecting a filter before the first unfiltered response arrives cancels the only
         // query that populates the selectors, so the catalog is rebuilt by a separate job
         // that filter changes never cancel.
-        if (!filters.isEmpty) ensureOptions()
+        if (!refresh && !filters.isEmpty) ensureOptions()
     }
 
     fun applyFilters(filters: IncidentFilters) {
@@ -135,6 +135,7 @@ class AdminIncidentsViewModel(
         optionsJob = viewModelScope.launch {
             try {
                 val incidents = incidentRepository.getIncidents(IncidentFilters())
+                if (optionsInitialized) return@launch
                 optionsInitialized = true
                 _state.update { current ->
                     current.copy(
