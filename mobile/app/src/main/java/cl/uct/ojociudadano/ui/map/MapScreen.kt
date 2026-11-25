@@ -19,7 +19,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +66,11 @@ internal object MapTestTags {
     const val FILTER_STATUS_PREFIX = "map_filter_status_"
     const val FILTERED_EMPTY = "map_state_filtered_empty"
     const val FILTERED_EMPTY_RESET = "map_state_filtered_empty_reset"
+    const val LEGEND_TOGGLE = "map_legend_toggle"
+    const val LEGEND_PANEL = "map_legend_panel"
+    const val LEGEND_CLOSE = "map_legend_close"
+    const val LEGEND_STATUS_PREFIX = "map_legend_status_"
+    const val LEGEND_PRIORITY_PREFIX = "map_legend_priority_"
 }
 
 @Composable
@@ -79,6 +87,7 @@ fun MapScreen(
     val success = state as? MapUiState.Success
     val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
+    var legendExpanded by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier.fillMaxSize()) {
         IncidentMap(
@@ -88,33 +97,52 @@ fun MapScreen(
             onMapClick = model::clearSelection,
             modifier = Modifier.fillMaxSize()
         )
-        if (success != null &&
-            (success.categoryOptions.isNotEmpty() || success.statusOptions.isNotEmpty())
-        ) {
-            if (success.filtersVisible) {
-                MapIncidentFilterBar(
-                    filters = success.filters,
-                    categoryOptions = success.categoryOptions,
-                    statusOptions = success.statusOptions,
-                    visibleCount = success.visibleMarkers.size,
-                    totalCount = success.markers.size,
-                    onCategorySelected = model::selectCategory,
-                    onStatusSelected = model::selectStatus,
-                    onReset = model::clearFilters,
-                    onHide = { model.setFiltersVisible(false) },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 480.dp)
-                        .padding(Spacing.medium)
-                )
-            } else {
-                MapFilterToggle(
-                    activeFilterCount = success.filters.activeCount,
-                    onClick = { model.setFiltersVisible(true) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(Spacing.medium)
-                )
+        if (success != null) {
+            val hasFilters =
+                success.categoryOptions.isNotEmpty() || success.statusOptions.isNotEmpty()
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = 480.dp)
+                    .padding(Spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(Spacing.small)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MapLegendToggle(
+                        expanded = legendExpanded,
+                        onClick = { legendExpanded = !legendExpanded }
+                    )
+                    if (hasFilters && !success.filtersVisible) {
+                        MapFilterToggle(
+                            activeFilterCount = success.filters.activeCount,
+                            onClick = { model.setFiltersVisible(true) }
+                        )
+                    }
+                }
+                if (legendExpanded) {
+                    MapLegendPanel(
+                        onClose = { legendExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (hasFilters && success.filtersVisible) {
+                    MapIncidentFilterBar(
+                        filters = success.filters,
+                        categoryOptions = success.categoryOptions,
+                        statusOptions = success.statusOptions,
+                        visibleCount = success.visibleMarkers.size,
+                        totalCount = success.markers.size,
+                        onCategorySelected = model::selectCategory,
+                        onStatusSelected = model::selectStatus,
+                        onReset = model::clearFilters,
+                        onHide = { model.setFiltersVisible(false) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
         MapStatusOverlay(
