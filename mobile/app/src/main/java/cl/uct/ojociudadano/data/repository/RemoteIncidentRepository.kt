@@ -24,6 +24,7 @@ import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
 import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdateUserRoleRequestDto
 import cl.uct.ojociudadano.data.remote.error.executeApiCall
 import cl.uct.ojociudadano.data.session.SessionIdentity
 import cl.uct.ojociudadano.data.session.SessionManager
@@ -209,6 +210,16 @@ class RemoteIncidentRepository(
             total = response.meta.total,
             totalPages = response.meta.totalPages
         )
+    }
+
+    override suspend fun updateUserRole(userId: String, role: UserRole): List<String> {
+        val request = UpdateUserRoleRequestDto(rol = role.backendValue)
+        val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
+            apiService.updateUserRole(userId, request, identity.token)
+        }
+        val roles = response.roles
+        check(response.id == userId && !roles.isNullOrEmpty())
+        return roles
     }
 
     override suspend fun getCandidates(page: Int?, limit: Int?): Paginated<CandidateUser> {

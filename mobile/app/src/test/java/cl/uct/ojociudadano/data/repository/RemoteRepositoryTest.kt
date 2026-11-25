@@ -652,6 +652,12 @@ class RemoteRepositoryTest {
             throw NotImplementedError()
         }
 
+        override suspend fun updateUserRole(
+            userId: String,
+            request: UpdateUserRoleRequestDto,
+            expectedSession: TokenSnapshot?
+        ): UpdateUserRoleResponseDto = error("Unused")
+
         override suspend fun getIncidentHistory(
             incidentId: String,
             expectedSession: TokenSnapshot?
