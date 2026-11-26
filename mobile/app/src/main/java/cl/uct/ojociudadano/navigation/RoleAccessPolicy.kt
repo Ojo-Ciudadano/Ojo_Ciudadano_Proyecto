@@ -21,7 +21,7 @@ object RoleAccessPolicy {
         AppRoutes.CREATE_REPORT to setOf(InitialDestination.CITIZEN),
         AppRoutes.NOTIFICATIONS to setOf(InitialDestination.CITIZEN),
         AppRoutes.MAP to setOf(InitialDestination.CITIZEN),
-        AppRoutes.PROFILE to setOf(InitialDestination.CITIZEN)
+        AppRoutes.PROFILE to setOf(InitialDestination.CITIZEN, InitialDestination.ADMINISTRATOR)
     )
 
     /** Accept registered patterns and concrete incident routes; unclassified routes are denied. */

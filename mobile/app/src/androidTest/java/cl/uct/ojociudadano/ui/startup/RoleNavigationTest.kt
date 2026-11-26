@@ -160,7 +160,7 @@ class RoleNavigationTest {
         }
         compose.onNodeWithText("Administrador").assertIsDisplayed()
         for (route in listOf(AppRoutes.HOME, AppRoutes.CREATE_REPORT, AppRoutes.REPORTS,
-            AppRoutes.PROFILE, AppRoutes.MAP, AppRoutes.NOTIFICATIONS, "incident/test-id")) {
+            AppRoutes.MAP, AppRoutes.NOTIFICATIONS, "incident/test-id")) {
             compose.runOnIdle {
                 assertFalse(controller.navigateIfAllowed(manager, route))
                 assertEquals(AppRoutes.ADMIN, controller.currentDestination?.route)
@@ -184,6 +184,10 @@ class RoleNavigationTest {
         compose.waitUntil(5_000) { manager.state.value is SessionState.Authenticated }
         compose.onNodeWithText("Panel de administración").assertIsDisplayed()
         compose.onNodeWithText("test@example.invalid").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Mi perfil").performClick()
+        compose.onNodeWithText("Tema de la aplicación").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Reportar").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Volver").performClick()
         compose.onNodeWithText("Gestión de incidentes").performClick()
         compose.onNodeWithText("Listado de incidentes").assertIsDisplayed()
         compose.onNodeWithContentDescription("Volver").performClick()

@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +36,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
+import cl.uct.ojociudadano.ui.map.applyMapAppearance
+import cl.uct.ojociudadano.ui.theme.LocalDarkTheme
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.events.MapListener
@@ -70,6 +73,8 @@ fun ManualLocationPickerDialog(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val darkTheme = LocalDarkTheme.current
+    val mapBackground = MaterialTheme.colorScheme.surfaceVariant.toArgb()
     var selectedCoordinate by remember { mutableStateOf(initialCoordinate) }
 
     val mapView = remember {
@@ -143,19 +148,25 @@ fun ManualLocationPickerDialog(
                 ) {
                     AndroidView(
                         factory = { mapView },
+                        update = { it.applyMapAppearance(darkTheme, mapBackground) },
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag(ManualLocationPickerTestTags.MAP)
                     )
-                    Icon(
-                        imageVector = Icons.Filled.LocationOn,
-                        contentDescription = "Mira de ubicación",
-                        tint = MaterialTheme.colorScheme.error,
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shadowElevation = 4.dp,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(48.dp)
-                            .offset(y = (-24).dp)
-                    )
+                            .size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MyLocation,
+                            contentDescription = "Mira de ubicación",
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
                 }
 
                 Surface(

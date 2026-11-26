@@ -1,10 +1,13 @@
 package cl.uct.ojociudadano.ui.map
 
+import android.graphics.drawable.BitmapDrawable
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
+import cl.uct.ojociudadano.ui.theme.IncidentTones
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +19,7 @@ import org.osmdroid.views.overlay.Marker
 class IncidentMarkerSyncTest {
 
     private lateinit var mapView: MapView
+    private lateinit var lightIcons: IncidentMarkerIcons
 
     @Before
     fun setUp() {
@@ -26,6 +30,7 @@ class IncidentMarkerSyncTest {
                 context.getSharedPreferences("osmdroid-test", 0)
             )
             mapView = MapView(context)
+            lightIcons = IncidentMarkerIcons(context.resources, IncidentTones.Light)
         }
     }
 
@@ -51,6 +56,22 @@ class IncidentMarkerSyncTest {
         repeat(3) { sync(markers) }
 
         assertEquals(1, incidentMarkers().size)
+    }
+
+    @Test
+    fun changingThemeRecolorsExistingMarkerInPlace() {
+        val data = IncidentMapMarker("first", -38.7359, -72.5904,
+            IncidentMapSummary(statusName = "En revisión", priorityLevel = 3))
+        sync(listOf(data))
+        val marker = incidentMarkers().single()
+        val lightBitmap = (marker.icon as BitmapDrawable).bitmap
+        onMainThread {
+            val darkIcons = IncidentMarkerIcons(mapView.resources, IncidentTones.Dark)
+            syncIncidentMarkers(mapView, listOf(data), darkIcons)
+        }
+        assertSame(marker, incidentMarkers().single())
+        val darkBitmap = (marker.icon as BitmapDrawable).bitmap
+        org.junit.Assert.assertFalse(lightBitmap.sameAs(darkBitmap))
     }
 
     @Test
@@ -120,14 +141,15 @@ class IncidentMarkerSyncTest {
             syncUserLocationMarker(mapView, userLocation(-38.7359, -72.5904))
             syncIncidentMarkers(
                 mapView,
-                listOf(IncidentMapMarker("first", -38.7359, -72.5904))
+                listOf(IncidentMapMarker("first", -38.7359, -72.5904)),
+                lightIcons
             )
         }
 
         assertEquals(1, incidentMarkers().size)
         assertEquals(1, markerList().count { it.title == "Tu ubicación actual" })
 
-        onMainThread { syncIncidentMarkers(mapView, emptyList()) }
+        onMainThread { syncIncidentMarkers(mapView, emptyList(), lightIcons) }
 
         assertEquals(0, incidentMarkers().size)
         assertEquals(1, markerList().count { it.title == "Tu ubicación actual" })
@@ -156,7 +178,7 @@ class IncidentMarkerSyncTest {
         markerList().filter { it.relatedObject is String }
 
     private fun sync(markers: List<IncidentMapMarker>) {
-        onMainThread { syncIncidentMarkers(mapView, markers) }
+        onMainThread { syncIncidentMarkers(mapView, markers, lightIcons) }
     }
 
     private fun onMainThread(block: () -> Unit) {

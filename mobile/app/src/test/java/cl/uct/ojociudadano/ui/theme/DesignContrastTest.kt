@@ -8,19 +8,28 @@ import org.junit.Test
 /** Guards readability when institutional or semantic tokens change. */
 class DesignContrastTest {
     @Test fun textAndSemanticLabelsMeetNormalTextContrast() {
-        val scheme = LightColorScheme
+        checkTextContrast(LightColorScheme, IncidentTones.Light)
+        checkTextContrast(DarkColorScheme, IncidentTones.Dark)
+    }
+
+    private fun checkTextContrast(scheme: androidx.compose.material3.ColorScheme, tones: IncidentTones) {
         val pairs = listOf(
             scheme.primary to scheme.onPrimary,
             scheme.secondary to scheme.onSecondary,
+            scheme.error to scheme.onError,
             scheme.background to scheme.onBackground,
             scheme.surface to scheme.onSurface,
+            scheme.surfaceVariant to scheme.onSurfaceVariant,
             scheme.surfaceContainerHighest to scheme.onSurfaceVariant,
             scheme.primaryContainer to scheme.onPrimaryContainer,
             scheme.secondaryContainer to scheme.onSecondaryContainer,
+            scheme.tertiaryContainer to scheme.onTertiaryContainer,
+            scheme.inverseSurface to scheme.inverseOnSurface,
+            scheme.inverseSurface to scheme.inversePrimary,
             scheme.errorContainer to scheme.onErrorContainer
-        ) + listOf("Nuevo", "En revisión", "En atención", "Resuelto", "Cerrado", "Desconocido")
-            .map { incidentStatusTone(it).let { tone -> tone.container to tone.content } } +
-            (0..6).map { incidentPriorityTone(it).let { tone -> tone.container to tone.content } }
+        ) + listOf("Nuevo", "En revisión", "En atención", "Resuelto", "Cerrado", "Desconocido", null)
+            .map(tones::status).map { it.container to it.content } +
+            ((0..6).toList() + null).map(tones::priority).map { it.container to it.content }
         pairs.forEach { (background, foreground) ->
             assertTrue("Insufficient text contrast: $background / $foreground", contrast(background, foreground) >= 4.5f)
         }
@@ -28,6 +37,7 @@ class DesignContrastTest {
 
     @Test fun fieldOutlinesMeetNonTextContrast() {
         assertTrue(contrast(LightColorScheme.outline, LightColorScheme.surface) >= 3f)
+        assertTrue(contrast(DarkColorScheme.outline, DarkColorScheme.surface) >= 3f)
     }
 
     private fun contrast(first: Color, second: Color): Float {

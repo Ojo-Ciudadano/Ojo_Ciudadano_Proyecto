@@ -1,13 +1,17 @@
 package cl.uct.ojociudadano.ui.map
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
@@ -27,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.ui.theme.Spacing
+import cl.uct.ojociudadano.ui.theme.incidentStatusTone
 
 /**
  * Controles de filtrado de la pantalla de mapa.
@@ -116,9 +121,19 @@ internal fun MapIncidentFilterBar(
                     options = statusOptions,
                     selectedValue = filters.statusId,
                     testTagPrefix = MapTestTags.FILTER_STATUS_PREFIX,
-                    onValueSelected = onStatusSelected
+                    onValueSelected = onStatusSelected,
+                    optionIcon = { option ->
+                        val tone = incidentStatusTone(option.label)
+                        Box(Modifier.size(14.dp).background(tone.container, CircleShape)
+                            .border(1.dp, tone.content, CircleShape))
+                    }
                 )
             }
+            Text(
+                "El color del marcador indica el estado y el número, la prioridad.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -138,6 +153,7 @@ internal fun MapFilterToggle(
     FilterChip(
         selected = activeFilterCount > 0,
         onClick = onClick,
+        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
         label = {
             Text(
                 if (activeFilterCount > 0) {
@@ -165,7 +181,8 @@ private fun MapFilterChipRow(
     options: List<MapFilterOption>,
     selectedValue: String?,
     testTagPrefix: String,
-    onValueSelected: (String?) -> Unit
+    onValueSelected: (String?) -> Unit,
+    optionIcon: (@Composable (MapFilterOption) -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -193,6 +210,7 @@ private fun MapFilterChipRow(
                         onValueSelected(if (selected) null else option.value)
                     },
                     label = { Text(option.label) },
+                    leadingIcon = optionIcon?.let { icon -> { icon(option) } },
                     modifier = Modifier.testTag(testTagPrefix + option.value)
                 )
             }

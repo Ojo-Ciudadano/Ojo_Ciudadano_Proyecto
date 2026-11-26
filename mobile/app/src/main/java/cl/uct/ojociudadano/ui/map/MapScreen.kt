@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.map
 
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +47,8 @@ import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
 import cl.uct.ojociudadano.ui.components.IncidentStatusBadge
+import cl.uct.ojociudadano.ui.theme.IncidentTones
+import cl.uct.ojociudadano.ui.theme.LocalDarkTheme
 import cl.uct.ojociudadano.ui.theme.Spacing
 
 /** Centro inicial: plaza de Temuco, Región de La Araucanía. */
@@ -200,6 +204,10 @@ private fun IncidentMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val darkTheme = LocalDarkTheme.current
+    val mapBackground = MaterialTheme.colorScheme.surfaceVariant.toArgb()
+    val tones = IncidentTones.current()
+    val markerIcons = remember(context, tones) { IncidentMarkerIcons(context.resources, tones) }
     val currentOnMapClick by rememberUpdatedState(onMapClick)
     val mapView = remember(context) {
         Configuration.getInstance().load(
@@ -228,6 +236,10 @@ private fun IncidentMap(
         onDispose { mapView.onDetach() }
     }
 
+    LaunchedEffect(mapView, darkTheme, mapBackground) {
+        mapView.applyMapAppearance(darkTheme, mapBackground)
+    }
+
     LaunchedEffect(mapView, userLocation?.focusRequestId) {
         val target = userLocation ?: return@LaunchedEffect
         mapView.post {
@@ -239,7 +251,7 @@ private fun IncidentMap(
         modifier = modifier,
         factory = { mapView },
         update = { currentMap ->
-            syncIncidentMarkers(currentMap, markers, onMarkerClick)
+            syncIncidentMarkers(currentMap, markers, markerIcons, onMarkerClick)
             syncUserLocationMarker(currentMap, userLocation)
         }
     )
@@ -256,6 +268,7 @@ private fun IncidentMap(
 internal fun syncIncidentMarkers(
     mapView: MapView,
     desiredMarkers: List<IncidentMapMarker>,
+    markerIcons: IncidentMarkerIcons,
     onMarkerClick: (String) -> Unit = {}
 ) {
     val desiredById = desiredMarkers.associateBy { it.incidentId }
@@ -286,38 +299,30 @@ internal fun syncIncidentMarkers(
 
     desiredById.forEach { (incidentId, data) ->
         val previous = currentById[incidentId]
-        if (previous == null) {
-            mapView.overlays.add(createIncidentMarker(mapView, data, onMarkerClick))
+        val marker = previous ?: Marker(mapView).apply {
+            position = GeoPoint(data.latitude, data.longitude)
+            relatedObject = incidentId
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            mapView.overlays.add(this)
             changed = true
-        } else {
-            previous.setOnMarkerClickListener { _, _ ->
-                onMarkerClick(incidentId)
-                true
-            }
-            val position = previous.position
-            if (position.latitude != data.latitude || position.longitude != data.longitude) {
-                previous.position = GeoPoint(data.latitude, data.longitude)
-                changed = true
-            }
+        }
+        marker.setOnMarkerClickListener { _, _ ->
+            onMarkerClick(incidentId)
+            true
+        }
+        if (marker.position.latitude != data.latitude || marker.position.longitude != data.longitude) {
+            marker.position = GeoPoint(data.latitude, data.longitude)
+            changed = true
+        }
+        val bitmap = markerIcons.bitmap(data.summary)
+        if ((marker.icon as? BitmapDrawable)?.bitmap !== bitmap) {
+            marker.icon = markerIcons.drawable(bitmap)
+            changed = true
         }
     }
 
     if (changed) {
         mapView.invalidate()
-    }
-}
-
-private fun createIncidentMarker(
-    mapView: MapView,
-    data: IncidentMapMarker,
-    onMarkerClick: (String) -> Unit
-): Marker = Marker(mapView).apply {
-    position = GeoPoint(data.latitude, data.longitude)
-    relatedObject = data.incidentId
-    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-    setOnMarkerClickListener { _, _ ->
-        onMarkerClick(data.incidentId)
-        true
     }
 }
 
