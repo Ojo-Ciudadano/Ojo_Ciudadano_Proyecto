@@ -2562,6 +2562,8 @@ private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {
     }
 
     override fun cleanupExpired(maxAgeMillis: Long): Int = 0
+
+    override fun deleteAll(): Int = 0
 }
 
 private class FakeEvidencePhotoFileStore(
@@ -2599,6 +2601,8 @@ private class FakeEvidencePhotoFileStore(
         cleanupMaxAges += maxAgeMillis
         return 0
     }
+
+    override fun deleteAll(): Int = 0
 }
 
 private class FakeCategoryRepository(

@@ -422,6 +422,8 @@ class EvidenceUploadFlowTest {
         }
 
         override fun cleanupExpired(maxAgeMillis: Long): Int = 0
+
+        override fun deleteAll(): Int = 0
     }
 
     private companion object {
