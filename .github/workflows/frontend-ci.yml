@@ -16,7 +16,7 @@ on:
 
 concurrency:
   group: frontend-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
@@ -159,9 +159,6 @@ jobs:
 
           kubectl set image deployment/web-frontend \
             web-frontend="$IMAGEN" \
-            --namespace="${{ env.NAMESPACE }}"
-
-          kubectl rollout restart deployment/web-frontend \
             --namespace="${{ env.NAMESPACE }}"
 
           kubectl rollout status deployment/web-frontend \
