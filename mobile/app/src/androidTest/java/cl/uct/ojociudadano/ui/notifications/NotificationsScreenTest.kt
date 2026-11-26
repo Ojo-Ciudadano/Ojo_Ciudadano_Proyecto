@@ -3,7 +3,11 @@ package cl.uct.ojociudadano.ui.notifications
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
 import cl.uct.ojociudadano.data.model.Notification
 import cl.uct.ojociudadano.ui.reports.incidentDate
@@ -43,7 +49,10 @@ class NotificationsScreenTest {
 
     @Test fun successRendersMessageDateIncidentReferenceAndUnreadMarker() {
         val unread = notification(id = "unread", isRead = false)
-        val read = notification(id = "read", message = "Tu incidente fue cerrado.", isRead = true)
+        val read = notification(
+            id = "read", message = "Tu incidente fue cerrado.", isRead = true,
+            createdAt = "2026-11-02T08:30:00Z", incidentId = "another-incident"
+        )
         compose.setContent {
             OjoCiudadanoTheme {
                 NotificationsContent(
@@ -208,6 +217,57 @@ class NotificationsScreenTest {
         compose.onNodeWithText("Incidente: ${long.incidentId}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Volver").performClick()
         assertEquals(1, backs)
+    }
+
+    @Test fun pullRefreshFromEmptyShowsIndicatorAndKeepsRowsOnLaterError() {
+        val state = mutableStateOf<NotificationsUiState>(NotificationsUiState.Empty)
+        val rows = mutableStateOf(emptyList<Notification>())
+        val refreshing = mutableStateOf(false)
+        val indicator = compose.onNode(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo,
+                ProgressBarRangeInfo.Indeterminate
+            )
+        )
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = state.value,
+                    notifications = rows.value,
+                    onBack = {},
+                    onRetry = {},
+                    isRefreshing = refreshing.value,
+                    onRefresh = { refreshing.value = true }
+                )
+            }
+        }
+        val list = compose.onNodeWithTag("notifications_refresh")
+        list.performTouchInput { swipeDown() }
+        indicator.assertIsDisplayed()
+        compose.runOnIdle {
+            rows.value = listOf(notification)
+            state.value = NotificationsUiState.Success
+            refreshing.value = false
+        }
+        compose.onNodeWithText(notification.message).assertIsDisplayed()
+        indicator.assertDoesNotExist()
+
+        list.performTouchInput { swipeDown() }
+        indicator.assertIsDisplayed()
+        compose.onNodeWithText(notification.message).assertIsDisplayed()
+        compose.runOnIdle {
+            state.value = NotificationsUiState.Error(
+                "Revisa tu conexión.",
+                canRetry = true,
+                duringRefresh = true
+            )
+            refreshing.value = false
+        }
+        compose.onNodeWithText("Revisa tu conexión.").assertIsDisplayed()
+        compose.onNodeWithText(notification.message).assertIsDisplayed()
+        indicator.assertDoesNotExist()
+        list.performTouchInput { swipeDown() }
+        indicator.assertIsDisplayed()
     }
 
     private val notification = Notification(

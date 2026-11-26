@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 data class AdminIncidentsState(
@@ -25,7 +27,8 @@ data class AdminIncidentsState(
     val availableStates: List<IncidentStatus> = emptyList(),
     val availableCommunes: List<String> = emptyList(),
     val categories: List<Category> = emptyList(),
-    val categoriesFailed: Boolean = false
+    val categoriesFailed: Boolean = false,
+    val isRefreshing: Boolean = false
 )
 
 class AdminIncidentsViewModel(
@@ -48,14 +51,22 @@ class AdminIncidentsViewModel(
         loadIncidents()
     }
 
-    fun loadIncidents(filters: IncidentFilters = _state.value.filters) {
+    fun refresh() = queryIncidents(_state.value.filters, refresh = true)
+
+    fun loadIncidents(filters: IncidentFilters = _state.value.filters) = queryIncidents(filters, refresh = false)
+
+    private fun queryIncidents(filters: IncidentFilters, refresh: Boolean) {
         // Deduplicate an in-flight identical request; a filter change cancels and supersedes it.
         if (loadJob?.isActive == true) return
+        _state.update {
+            if (refresh) it.copy(isRefreshing = true)
+            else it.copy(status = IncidentsUiState.Loading, incidents = emptyList(), filters = filters, isRefreshing = false)
+        }
         loadJob = viewModelScope.launch {
-            _state.update { it.copy(status = IncidentsUiState.Loading, incidents = emptyList(), filters = filters) }
             try {
                 // General authenticated query; filters are only forwarded for the admin listing.
                 val incidents = incidentRepository.getIncidents(filters)
+                coroutineContext.ensureActive()
                 if (filters.isEmpty) optionsInitialized = true
                 _state.update { current ->
                     current.copy(
@@ -70,19 +81,26 @@ class AdminIncidentsViewModel(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _state.update { it.copy(status = IncidentsUiState.Error(exception.incidentMessage()), incidents = emptyList()) }
+                coroutineContext.ensureActive()
+                _state.update { it.copy(status = IncidentsUiState.Error(exception.incidentMessage()),
+                    incidents = if (refresh) it.incidents else emptyList()) }
+            } finally {
+                if (coroutineContext[Job]?.isActive == true) {
+                    _state.update { it.copy(isRefreshing = false) }
+                }
             }
         }
         // Selecting a filter before the first unfiltered response arrives cancels the only
         // query that populates the selectors, so the catalog is rebuilt by a separate job
         // that filter changes never cancel.
-        if (!filters.isEmpty) ensureOptions()
+        if (!refresh && !filters.isEmpty) ensureOptions()
     }
 
     fun applyFilters(filters: IncidentFilters) {
         if (filters == _state.value.filters) return
         // A late response must never overwrite the result of a newer filter selection.
         loadJob?.cancel()
+        loadJob = null
         loadIncidents(filters)
     }
 
@@ -117,6 +135,7 @@ class AdminIncidentsViewModel(
         optionsJob = viewModelScope.launch {
             try {
                 val incidents = incidentRepository.getIncidents(IncidentFilters())
+                if (optionsInitialized) return@launch
                 optionsInitialized = true
                 _state.update { current ->
                     current.copy(

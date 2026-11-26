@@ -29,6 +29,9 @@ class NotificationsViewModel(
 
     private var loadJob: Job? = null
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         load()
         // El ciclo periódico publica en el repositorio sin pasar por load(); el
@@ -48,12 +51,17 @@ class NotificationsViewModel(
         }
     }
 
-    fun load() {
+    fun refresh() = queryNotifications(refresh = true)
+
+    fun load() = queryNotifications(refresh = false)
+
+    private fun queryNotifications(refresh: Boolean) {
         // Una consulta en curso no se duplica: la pantalla puede pedir recarga al
         // reanudarse sin provocar dos peticiones simultáneas.
         if (loadJob?.isActive == true) return
+        _isRefreshing.value = refresh
         loadJob = viewModelScope.launch {
-            _state.value = NotificationsUiState.Loading
+            if (!refresh) _state.value = NotificationsUiState.Loading
             try {
                 val rows = repository.refresh()
                 _state.value = if (rows.isEmpty()) {
@@ -66,8 +74,11 @@ class NotificationsViewModel(
             } catch (exception: Exception) {
                 _state.value = NotificationsUiState.Error(
                     message = exception.notificationMessage(),
-                    canRetry = exception.isNotificationRetryable()
+                    canRetry = exception.isNotificationRetryable(),
+                    duringRefresh = refresh
                 )
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
