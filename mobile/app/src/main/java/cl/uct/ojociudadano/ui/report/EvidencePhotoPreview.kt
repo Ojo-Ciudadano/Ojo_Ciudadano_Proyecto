@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
@@ -58,7 +59,8 @@ internal fun EvidencePhotoThumbnail(
     onRemove: () -> Unit,
     onOpenPreview: () -> Unit,
     onPreviewError: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    uploadStatus: EvidenceUploadStatus? = null
 ) {
     var loaded by remember(photo.localUri) { mutableStateOf(false) }
     var loadFailed by remember(photo.localUri) { mutableStateOf(false) }
@@ -136,9 +138,17 @@ internal fun EvidencePhotoThumbnail(
                     )
             )
 
+            EvidenceUploadBadge(
+                status = uploadStatus,
+                fileName = photo.fileName,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+            )
+
             IconButton(
                 onClick = onRemove,
-                enabled = enabled,
+                enabled = enabled && (uploadStatus?.canRemove ?: true),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp)
@@ -155,6 +165,52 @@ internal fun EvidencePhotoThumbnail(
         }
     }
 }
+
+/**
+ * Insignia con el estado de subida de una evidencia.
+ *
+ * Se dibuja encima de la miniatura para que el resultado parcial de la subida
+ * sea legible sin abrir el detalle de cada fotografía.
+ */
+@Composable
+private fun EvidenceUploadBadge(
+    status: EvidenceUploadStatus?,
+    fileName: String,
+    modifier: Modifier = Modifier
+) {
+    if (status == null) return
+
+    val containerColor = when (status) {
+        EvidenceUploadStatus.COMPLETED -> MaterialTheme.colorScheme.primary
+        EvidenceUploadStatus.ERROR -> MaterialTheme.colorScheme.error
+        EvidenceUploadStatus.UPLOADING,
+        EvidenceUploadStatus.PENDING -> EvidenceScrim
+    }
+    val contentColor = when (status) {
+        EvidenceUploadStatus.COMPLETED -> MaterialTheme.colorScheme.onPrimary
+        EvidenceUploadStatus.ERROR -> MaterialTheme.colorScheme.onError
+        EvidenceUploadStatus.UPLOADING,
+        EvidenceUploadStatus.PENDING -> OnEvidenceCanvas
+    }
+
+    Text(
+        text = status.label,
+        modifier = modifier
+            .background(containerColor, RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .testTag(ReportPhotoTestTags.uploadStatus(fileName)),
+        color = contentColor,
+        style = MaterialTheme.typography.labelSmall
+    )
+}
+
+private val EvidenceUploadStatus.label: String
+    get() = when (this) {
+        EvidenceUploadStatus.PENDING -> "Pendiente"
+        EvidenceUploadStatus.UPLOADING -> "Subiendo…"
+        EvidenceUploadStatus.COMPLETED -> "Subida"
+        EvidenceUploadStatus.ERROR -> "Error"
+    }
 
 /**
  * Vista previa a pantalla completa de una fotografía.

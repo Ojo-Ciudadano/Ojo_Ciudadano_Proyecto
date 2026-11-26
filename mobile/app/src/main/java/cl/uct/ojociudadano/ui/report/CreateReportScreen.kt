@@ -102,6 +102,7 @@ fun CreateReportScreen(
     onConfirmRetry: () -> Unit,
     onFinishWithoutPendingEvidence: () -> Unit,
     modifier: Modifier = Modifier,
+    photoUploadStatuses: Map<String, EvidenceUploadStatus> = emptyMap(),
     onBack: () -> Unit = {},
     onRefreshLocation: () -> Unit = {},
     onRequestLocationPermission: () -> Unit = {},
@@ -198,7 +199,8 @@ fun CreateReportScreen(
             onTakePhotoClick = onTakePhotoClick,
             onPickPhotoClick = onPickPhotoClick,
             onRemovePhoto = onRemovePhoto,
-            onPhotoPreviewError = onPhotoPreviewError
+            onPhotoPreviewError = onPhotoPreviewError,
+            photoUploadStatuses = photoUploadStatuses
         )
 
         ReportLocationSection(
@@ -759,6 +761,7 @@ fun CreateReportScreen(
         isLoadingCategories = viewModel.categoryUiState.isLoading,
         categoryLoadError = viewModel.categoryUiState.errorMessage,
         submissionState = viewModel.submissionState,
+        photoUploadStatuses = viewModel.photoUploadStatuses,
         onTitleChange = viewModel::onTitleChange,
         onDescriptionChange = viewModel::onDescriptionChange,
         onCategorySelected = viewModel::onCategorySelected,
