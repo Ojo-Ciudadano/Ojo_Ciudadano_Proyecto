@@ -31,6 +31,7 @@ export interface Incidente {
 }
 
 export interface FiltrosIncidentes {
+  ciudad: string
   estadoId: string
   comuna: string
   categoriaId: string
