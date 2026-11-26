@@ -79,6 +79,17 @@ interface EvidencePhotoFileStore {
     fun cleanupExpired(
         maxAgeMillis: Long = TEMP_EVIDENCE_MAX_AGE_MILLIS
     ): Int
+
+    /**
+     * Elimina todas las evidencias temporales del formulario.
+     *
+     * Se usa al descartar o completar el formulario para garantizar que no
+     * queden fotografías de cámara o galería en la caché, incluso si alguna
+     * perdió su referencia antes de poder borrarla individualmente.
+     *
+     * @return la cantidad de archivos eliminados.
+     */
+    fun deleteAll(): Int
 }
 
 /**

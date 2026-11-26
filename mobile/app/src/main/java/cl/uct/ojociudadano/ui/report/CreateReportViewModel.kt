@@ -801,6 +801,14 @@ class CreateReportViewModel(
             .forEach { evidence ->
                 deleteEvidenceFile(evidence.fileName)
             }
+        runCatching { photoFileStore.deleteAll() }
+            .onFailure { exception ->
+                Log.w(
+                    "CreateReportViewModel",
+                    "No fue posible limpiar la caché de evidencias: " +
+                        "type=${exception::class.java.name}, message=${exception.message}"
+                )
+            }
         formState = formState.copy(
             evidencePhotos = emptyList(),
             activePhotoOperation = null,

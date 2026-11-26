@@ -191,6 +191,20 @@ class CacheEvidencePhotoFileStore(
             ?: 0
     }
 
+    override fun deleteAll(): Int {
+        val directory = evidenceDirectory
+
+        if (!directory.isDirectory) {
+            return 0
+        }
+
+        return directory.listFiles()
+            ?.count { file ->
+                file.isFile && runCatching { file.delete() }.getOrDefault(false)
+            }
+            ?: 0
+    }
+
     /**
      * Devuelve el tamaño informado por el proveedor, o `null` cuando no está
      * disponible. El límite real se sigue aplicando durante la copia.

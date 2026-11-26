@@ -5,12 +5,14 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import cl.uct.ojociudadano.BuildConfig
 import cl.uct.ojociudadano.data.evidence.EvidenceImageFetcher
 import cl.uct.ojociudadano.data.evidence.EvidenceImageKeyer
+import cl.uct.ojociudadano.data.evidence.SessionImageCacheInvalidator
 import cl.uct.ojociudadano.data.location.AndroidGeocoderReverseGeocodingClient
 import cl.uct.ojociudadano.data.location.DefaultLocationClient
 import cl.uct.ojociudadano.data.media.AndroidEvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.CacheEvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidenceImageCompressor
 import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
+import cl.uct.ojociudadano.data.media.EvidenceTempCleaner
 import cl.uct.ojociudadano.data.notifications.AppForegroundState
 import cl.uct.ojociudadano.data.notifications.NotificationSyncScheduler
 import cl.uct.ojociudadano.data.remote.ApiService
@@ -33,11 +35,14 @@ import cl.uct.ojociudadano.data.session.SessionStorage
 import cl.uct.ojociudadano.domain.repository.LocationClient
 import cl.uct.ojociudadano.domain.repository.ReverseGeocodingClient
 import coil3.ImageLoader
+import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
 import com.google.android.gms.location.LocationServices
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okio.Path.Companion.toOkioPath
 
 class AppContainer(
     context: Context,
@@ -113,7 +118,39 @@ class AppContainer(
      */
     val evidenceImageCompressor: EvidenceImageCompressor by lazy {
         AndroidEvidenceImageCompressor(
-            outputDirectory = File(context.applicationContext.cacheDir, "evidence-upload")
+            outputDirectory = File(
+                context.applicationContext.cacheDir,
+                EvidenceTempCleaner.UPLOADS_DIRECTORY_NAME
+            )
+        )
+    }
+
+    /**
+     * Barre los temporales de evidencias al arrancar la app (#280): fotos de
+     * cámara o galería del formulario y copias de compresión que quedaron tras
+     * un cierre abrupto o la muerte del proceso.
+     */
+    val evidenceTempCleaner: EvidenceTempCleaner by lazy {
+        EvidenceTempCleaner(
+            evidencesDirectory = File(
+                context.applicationContext.cacheDir,
+                CacheEvidencePhotoFileStore.EVIDENCE_DIRECTORY_NAME
+            ),
+            uploadsDirectory = File(
+                context.applicationContext.cacheDir,
+                EvidenceTempCleaner.UPLOADS_DIRECTORY_NAME
+            )
+        )
+    }
+
+    /**
+     * Vacía la caché de imágenes cuando cambia la cuenta autenticada (#280),
+     * para no reutilizar evidencias decodificadas de otra sesión.
+     */
+    val imageCacheInvalidator: SessionImageCacheInvalidator by lazy {
+        SessionImageCacheInvalidator(
+            clearMemoryCache = { imageLoader.memoryCache?.clear() },
+            clearDiskCache = { imageLoader.diskCache?.clear() }
         )
     }
 
@@ -151,17 +188,46 @@ class AppContainer(
     }
 
     /**
-     * Coil descarga las evidencias mediante el repositorio y mantiene los
-     * resultados solo en memoria. El disco se desactiva para no persistir
-     * fotografías autenticadas fuera de la sesión.
+     * Coil descarga las evidencias mediante el repositorio y las mantiene en
+     * memoria y en un caché de disco acotado (#280). La caché se invalida al
+     * cambiar de cuenta y la clave incluye el alcance de la sesión, de modo que
+     * las fotografías autenticadas no se mezclan entre usuarios.
      */
     val imageLoader: ImageLoader by lazy {
-        ImageLoader.Builder(context.applicationContext)
+        val appContext = context.applicationContext
+
+        ImageLoader.Builder(appContext)
             .components {
                 add(EvidenceImageFetcher.Factory(incidentRepository))
-                add(EvidenceImageKeyer())
+                add(
+                    EvidenceImageKeyer {
+                        SessionImageCacheInvalidator.scopeOf(sessionManager.state.value).orEmpty()
+                    }
+                )
             }
-            .diskCache(null)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(appContext, MEMORY_CACHE_PERCENT)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(
+                        File(appContext.cacheDir, IMAGE_CACHE_DIRECTORY_NAME).toOkioPath()
+                    )
+                    .maxSizeBytes(IMAGE_CACHE_MAX_BYTES)
+                    .build()
+            }
             .build()
+    }
+
+    private companion object {
+        /** Porcentaje de la memoria de la app reservado para miniaturas decodificadas. */
+        const val MEMORY_CACHE_PERCENT = 0.2
+
+        const val IMAGE_CACHE_DIRECTORY_NAME = "image-cache"
+
+        /** Tamaño máximo del caché de disco de imágenes. */
+        const val IMAGE_CACHE_MAX_BYTES = 25L * 1024L * 1024L
     }
 }
