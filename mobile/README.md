@@ -160,8 +160,9 @@ El mapa de incidentes reemplaza los pines genéricos de OSMDroid por marcadores
 que combinan el estado y la prioridad reales del reporte:
 
 - El color del pin identifica el estado (`Nuevo`, `En revisión`, `En atención`,
-  `Resuelto` o `Cerrado`) mediante los mismos tonos semánticos de los badges.
-  Un estado ausente o desconocido usa el tono neutro.
+  `Resuelto` o `Cerrado`) con el mismo par claro/oscuro de los badges: relleno
+  del tono contenedor y borde, glifo y numeral del tono de contenido. Un estado
+  ausente o desconocido usa el tono neutro.
 - El número central identifica la prioridad (`1` mínima … `5` crítica). Los
   incidentes sin prioridad registrada muestran un guion.
 - El chip «Leyenda» abre una referencia compacta con ambos grupos. La leyenda

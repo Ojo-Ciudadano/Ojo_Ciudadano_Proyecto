@@ -25,7 +25,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -164,11 +163,12 @@ private fun LegendStatusItem(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val tone = incidentStatusTone(status.backendName)
         Box(
             modifier = Modifier
                 .size(12.dp)
-                .background(incidentStatusTone(status.backendName).content, CircleShape)
-                .border(1.dp, Color.White, CircleShape)
+                .background(tone.container, CircleShape)
+                .border(1.dp, tone.content, CircleShape)
         )
         Text(
             status.legendLabel,

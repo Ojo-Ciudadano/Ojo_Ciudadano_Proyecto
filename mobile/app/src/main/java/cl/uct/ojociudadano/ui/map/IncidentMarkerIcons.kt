@@ -52,11 +52,11 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
 
         val canvas = Canvas(bitmap)
         val padding = (if (visual.selected) SELECTED_PADDING_DP else NORMAL_PADDING_DP) * density
-        val outline = (if (visual.selected) SELECTED_OUTLINE_DP else NORMAL_OUTLINE_DP) * density
+        val maxRing = (if (visual.selected) SELECTED_OUTER_RING_DP else NORMAL_HALO_DP) * density
         val bodyWidth = bitmap.width - 2f * padding
-        val radius = bodyWidth / 2f - outline
+        val radius = bodyWidth / 2f - maxRing / 2f
         val centerX = bitmap.width / 2f
-        val circleCenterY = padding + outline + radius
+        val circleCenterY = padding + maxRing / 2f + radius
         val tipY = bitmap.height - padding
         val pinPath = pinPath(centerX, circleCenterY, radius, tipY)
 
@@ -66,20 +66,41 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
         canvas.drawPath(pinPath, fillPaint(Color.argb(45, 0, 0, 0)))
         canvas.restore()
 
-        val fillColor = incidentStatusTone(visual.status.backendName).content.toArgb()
+        // Se usan los mismos pares container/content que los badges de estado:
+        // el relleno claro identifica el estado y el borde/glifo oscuro garantiza
+        // legibilidad sobre el mapa.
+        val tone = incidentStatusTone(visual.status.backendName)
+        val fillColor = tone.container.toArgb()
+        val contentColor = tone.content.toArgb()
 
         if (visual.selected) {
             // El pin seleccionado suma un contorno azul institucional y se dibuja
             // más grande para destacar sobre el resto de marcadores.
-            canvas.drawPath(pinPath, strokePaint(CitizenBlue.toArgb(), 7f * density))
+            canvas.drawPath(
+                pinPath,
+                strokePaint(CitizenBlue.toArgb(), SELECTED_OUTER_RING_DP * density)
+            )
         }
-        canvas.drawPath(pinPath, strokePaint(Color.WHITE, outline))
+        canvas.drawPath(
+            pinPath,
+            strokePaint(
+                Color.WHITE,
+                (if (visual.selected) SELECTED_HALO_DP else NORMAL_HALO_DP) * density
+            )
+        )
+        canvas.drawPath(
+            pinPath,
+            strokePaint(
+                contentColor,
+                (if (visual.selected) SELECTED_OUTLINE_DP else NORMAL_OUTLINE_DP) * density
+            )
+        )
         canvas.drawPath(pinPath, fillPaint(fillColor))
 
         // Círculo central neutro: deja el glifo de prioridad legible sin alterar
         // el color que identifica el estado.
         canvas.drawCircle(centerX, circleCenterY, radius * 0.55f, fillPaint(Color.WHITE))
-        val textPaint = fillPaint(fillColor).apply {
+        val textPaint = fillPaint(contentColor).apply {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
             textSize = radius * 0.85f
@@ -94,15 +115,21 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
         return bitmap
     }
 
-    private fun pinPath(centerX: Float, circleCenterY: Float, radius: Float, tipY: Float): Path =
-        Path().apply {
+    private fun pinPath(centerX: Float, circleCenterY: Float, radius: Float, tipY: Float): Path {
+        val circle = Path().apply {
             addCircle(centerX, circleCenterY, radius, Path.Direction.CW)
+        }
+        val tip = Path().apply {
             val baseHalfWidth = radius * 0.62f
             moveTo(centerX - baseHalfWidth, circleCenterY + radius * 0.72f)
             lineTo(centerX, tipY)
             lineTo(centerX + baseHalfWidth, circleCenterY + radius * 0.72f)
             close()
         }
+        return Path().apply {
+            op(circle, tip, Path.Op.UNION)
+        }
+    }
 
     private fun fillPaint(color: Int): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = color
@@ -121,11 +148,14 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
         const val NORMAL_WIDTH_DP = 32f
         const val NORMAL_HEIGHT_DP = 42f
         const val NORMAL_PADDING_DP = 2f
+        const val NORMAL_HALO_DP = 4f
         const val NORMAL_OUTLINE_DP = 2f
         const val SELECTED_WIDTH_DP = 42f
         const val SELECTED_HEIGHT_DP = 54f
-        const val SELECTED_PADDING_DP = 3f
-        const val SELECTED_OUTLINE_DP = 3f
+        const val SELECTED_PADDING_DP = 2.5f
+        const val SELECTED_OUTER_RING_DP = 10f
+        const val SELECTED_HALO_DP = 7f
+        const val SELECTED_OUTLINE_DP = 2.5f
         const val DEFAULT_DENSITY_DPI = 160
     }
 }
