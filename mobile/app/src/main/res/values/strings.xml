@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">ojoCiudadano</string>
+    <string name="session_expired_notice">Tu sesión expiró. Vuelve a iniciar sesión</string>
+    <string name="dismiss_notice">Cerrar aviso</string>
 </resources>

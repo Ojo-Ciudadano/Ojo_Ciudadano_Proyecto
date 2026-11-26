@@ -15,7 +15,7 @@ enum class InitialDestination(val route: String?) {
 
 fun resolveInitialDestination(state: SessionState): InitialDestination = when (state) {
     SessionState.Restoring -> InitialDestination.LOADING
-    SessionState.Unauthenticated -> InitialDestination.AUTHENTICATION
+    SessionState.Unauthenticated, is SessionState.Expired -> InitialDestination.AUTHENTICATION
     is SessionState.Authenticated -> {
         val roles = state.session.roleState
         when {

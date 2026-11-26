@@ -9,9 +9,12 @@ import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.repository.CategoryRepository
 import cl.uct.ojociudadano.data.repository.IncidentRepository
 
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 import java.time.Instant
@@ -27,13 +30,15 @@ class ReportsViewModel(
 
     private val _scope = MutableStateFlow(IncidentScope.MINE)
     val scope = _scope.asStateFlow()
-    private var loadJob: kotlinx.coroutines.Job? = null
-    private var selectedCategory: Category? = null
+    private var loadJob: Job? = null
+    private var selectedCategoryId: String? = null
     private var selectedDate = DateFilter.RECENT
 
     fun selectScope(scope: IncidentScope) {
         if (_scope.value == scope) return
         _scope.value = scope
+        loadJob?.cancel()
+        loadJob = null
         loadIncidents()
     }
 
@@ -55,28 +60,38 @@ class ReportsViewModel(
 
     val categories = _categories.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     init {
         loadIncidents()
         loadCategories()
     }
 
-    fun loadIncidents() {
-        loadJob?.cancel()
+    fun refresh() = queryIncidents(refresh = true)
+
+    fun loadIncidents() = queryIncidents(refresh = false)
+
+    private fun queryIncidents(refresh: Boolean) {
+        if (loadJob?.isActive == true) return
+        val requestedScope = _scope.value
+        _isRefreshing.value = refresh
         loadJob = viewModelScope.launch {
-            _allIncidents.value = emptyList()
-            _incidents.value = emptyList()
-            // Estado de carga
-            _uiState.value = IncidentsUiState.Loading
+            if (!refresh) {
+                _allIncidents.value = emptyList()
+                _incidents.value = emptyList()
+                _uiState.value = IncidentsUiState.Loading
+            }
 
             try {
-                val resultI = when (_scope.value) {
+                val resultI = when (requestedScope) {
                     IncidentScope.ALL -> incidentRepository.getIncidents()
                     IncidentScope.MINE -> incidentRepository.getCurrentUserIncidents()
                 }
 
+                coroutineContext.ensureActive()
                 _allIncidents.value = resultI
-                _incidents.value = resultI
-                filterIncidents(selectedCategory, selectedDate)
+                filterIncidents(selectedCategoryId, selectedDate)
 
                 // Estado vacío o exitoso
                 _uiState.value = if (resultI.isEmpty()) {
@@ -101,13 +116,20 @@ class ReportsViewModel(
                     )
                 }
 
-                _allIncidents.value = emptyList()
-                _incidents.value = emptyList()
+                coroutineContext.ensureActive()
+                if (!refresh) {
+                    _allIncidents.value = emptyList()
+                    _incidents.value = emptyList()
+                }
 
                 // Estado de error
                 _uiState.value = IncidentsUiState.Error(
                     message = exception.incidentMessage()
                 )
+            } finally {
+                if (coroutineContext[Job]?.isActive == true) {
+                    _isRefreshing.value = false
+                }
             }
         }
     }
@@ -196,17 +218,17 @@ class ReportsViewModel(
     }
 
     fun filterIncidents(
-        category: Category?,
+        categoryId: String?,
         dateFilter: DateFilter
     ) {
-        selectedCategory = category
+        selectedCategoryId = categoryId
         selectedDate = dateFilter
         var filtered = _allIncidents.value
 
         // Filtrar por categoría
-        if (category != null) {
+        if (categoryId != null) {
             filtered = filtered.filter { incident ->
-                incident.category.id == category.id
+                incident.category.id == categoryId
             }
         }
 

@@ -228,6 +228,32 @@ class NotificationsViewModelTest {
         assertTrue(error.message.isNotBlank())
     }
 
+    @Test fun `refresh deduplicates retains content on error and allows another gesture`() = runTest {
+        val repository = Repository().apply { rows = listOf(notification("before")) }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+        val pending = CompletableDeferred<Unit>()
+        repository.pending = pending
+        repeat(4) { model.refresh() }
+        runCurrent()
+        assertEquals(2, repository.calls)
+        assertTrue(model.isRefreshing.value)
+        assertEquals(listOf("before"), model.notifications.value.map { it.id })
+        repository.failure = IOException("offline")
+        pending.complete(Unit)
+        runCurrent()
+        assertFalse(model.isRefreshing.value)
+        assertTrue(model.state.value is NotificationsUiState.Error)
+        assertEquals(listOf("before"), model.notifications.value.map { it.id })
+        repository.pending = null
+        repository.failure = null
+        repository.rows = emptyList()
+        model.refresh()
+        runCurrent()
+        assertEquals(NotificationsUiState.Empty, model.state.value)
+        assertFalse(model.isRefreshing.value)
+    }
+
     private class Repository : NotificationRepository {
         var rows: List<Notification> = emptyList()
         var failure: Throwable? = null

@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import cl.uct.ojociudadano.data.model.IncidentFilters
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -98,6 +102,26 @@ class AdminIncidentsScreenTest {
         }
         compose.onNodeWithText("Fecha no disponible").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("ID: ${row.id}").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun pullRefreshKeepsActiveAdminFiltersAndRows() {
+        val filters = IncidentFilters("status", "category", "Temuco")
+        val state = mutableStateOf(AdminIncidentsState(IncidentsUiState.Success, listOf(incident), filters))
+        var refreshes = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                AdminIncidentsContent(state.value, {}, {}, onRefresh = {
+                    refreshes++
+                    state.value = state.value.copy(incidents = listOf(incident.copy(title = "Actualizado")))
+                })
+            }
+        }
+        compose.onNodeWithTag("admin_refresh").performTouchInput { swipeDown() }
+        compose.onNodeWithText("Actualizado").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(1, refreshes)
+            assertEquals(filters, state.value.filters)
+        }
     }
 
     private val incident = Incident(

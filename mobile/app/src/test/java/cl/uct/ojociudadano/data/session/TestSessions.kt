@@ -5,11 +5,14 @@ import kotlinx.coroutines.Dispatchers
 
 class TestSessionStorage(var session: AuthenticatedSession? = null) : SessionStorage {
     var failClear = false
+    var clearCalls = 0
+        private set
     override fun currentToken() = session?.accessToken
     override fun currentSession() = session
     override fun save(session: AuthenticatedSession) { this.session = session }
     override fun clear() {
         check(!failClear) { "Storage unavailable" }
+        clearCalls++
         session = null
     }
 }

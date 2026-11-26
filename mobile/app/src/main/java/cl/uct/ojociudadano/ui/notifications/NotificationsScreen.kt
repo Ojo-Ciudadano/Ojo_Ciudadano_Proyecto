@@ -14,11 +14,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -70,12 +72,15 @@ fun NotificationsScreen(
     }
     val state by model.state.collectAsState()
     val notifications by model.notifications.collectAsState()
+    val isRefreshing by model.isRefreshing.collectAsState()
     var invalidIncidentMessage by remember { mutableStateOf<String?>(null) }
     NotificationsContent(
         state = state,
         notifications = notifications,
         onBack = onBack,
         onRetry = model::retry,
+        isRefreshing = isRefreshing,
+        onRefresh = model::refresh,
         onNotificationClick = { notification ->
             // El marcado es best-effort; la navegación no espera al backend.
             model.openNotification(notification)
@@ -91,6 +96,7 @@ fun NotificationsScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsContent(
     state: NotificationsUiState,
@@ -101,66 +107,82 @@ fun NotificationsContent(
     onInvalidIncident: (Notification) -> Unit = {},
     invalidIncidentMessage: String? = null,
     onDismissInvalidIncident: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = onRetry
 ) {
+    val showNotifications = when (state) {
+        NotificationsUiState.Success -> true
+        is NotificationsUiState.Error -> state.duringRefresh
+        else -> false
+    }
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Notificaciones", subtitle = "Ciudadano", onBack = onBack)
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(Spacing.medium)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("notifications_refresh")
         ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
-                    Text(
-                        "Tus notificaciones",
-                        modifier = Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Novedades de los reportes asociados a tu cuenta.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (invalidIncidentMessage != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.medium)
+            ) {
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CitizenMessage(invalidIncidentMessage, isError = true)
-                        TextButton(onClick = onDismissInvalidIncident) { Text("Entendido") }
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
+                        Text(
+                            "Tus notificaciones",
+                            modifier = Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Novedades de los reportes asociados a tu cuenta.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-            }
-            when (state) {
-                NotificationsUiState.Loading -> item { NotificationsLoading() }
-                NotificationsUiState.Empty -> item {
-                    CitizenMessage("Aún no tienes notificaciones. Te avisaremos cuando haya novedades de tus reportes.")
-                }
-                is NotificationsUiState.Error -> item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CitizenMessage(state.message, isError = true)
-                        if (state.canRetry) {
-                            OutlinedButton(onClick = onRetry) { Text("Reintentar") }
+                if (invalidIncidentMessage != null) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CitizenMessage(invalidIncidentMessage, isError = true)
+                            TextButton(onClick = onDismissInvalidIncident) { Text("Entendido") }
                         }
                     }
                 }
-                NotificationsUiState.Success -> items(notifications, key = { it.id }) { notification ->
-                    val outcome = notificationClickOutcome(notification.incidentId)
-                    NotificationCard(
-                        notification = notification,
-                        onClick = when (outcome) {
-                            is NotificationClickOutcome.Open -> {
-                                { onNotificationClick(notification) }
+                when (state) {
+                    NotificationsUiState.Loading -> item { NotificationsLoading() }
+                    NotificationsUiState.Empty -> item {
+                        CitizenMessage("Aún no tienes notificaciones. Te avisaremos cuando haya novedades de tus reportes.")
+                    }
+                    is NotificationsUiState.Error -> item {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CitizenMessage(state.message, isError = true)
+                            if (state.canRetry) {
+                                OutlinedButton(onClick = onRetry) { Text("Reintentar") }
                             }
-                            NotificationClickOutcome.InvalidIncident -> {
-                                // No se marca como leída ni se navega a una ruta inválida.
-                                { onInvalidIncident(notification) }
-                            }
-                            NotificationClickOutcome.NoIncident -> null
                         }
-                    )
+                    }
+                    NotificationsUiState.Success -> Unit
+                }
+                if (showNotifications) {
+                    items(notifications, key = { it.id }) { notification ->
+                        val outcome = notificationClickOutcome(notification.incidentId)
+                        NotificationCard(
+                            notification = notification,
+                            onClick = when (outcome) {
+                                is NotificationClickOutcome.Open -> {
+                                    { onNotificationClick(notification) }
+                                }
+                                NotificationClickOutcome.InvalidIncident -> {
+                                    // No se marca como leída ni se navega a una ruta inválida.
+                                    { onInvalidIncident(notification) }
+                                }
+                                NotificationClickOutcome.NoIncident -> null
+                            }
+                        )
+                    }
                 }
             }
         }

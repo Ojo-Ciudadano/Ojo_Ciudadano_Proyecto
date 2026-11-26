@@ -3,6 +3,7 @@ package cl.uct.ojociudadano.ui.admin
 import androidx.lifecycle.ViewModelStore
 import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.model.UserProfile
+import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.UserRepository
 import cl.uct.ojociudadano.data.session.UserRole
 import java.io.IOException
@@ -77,7 +78,7 @@ class AdminUsersViewModelTest {
     }
 
     @Test fun `empty results preserve metadata and disable unavailable pages`() = runTest {
-        val model = AdminUsersViewModel(UserRepository { page, limit, _ -> Paginated(emptyList(), page, limit, 0, 0) })
+        val model = AdminUsersViewModel(Repository { page, limit, _ -> Paginated(emptyList(), page, limit, 0, 0) })
         runCurrent()
         assertEquals(UsersLoadState.Ready, model.state.value.status)
         assertTrue(model.state.value.result!!.items.isEmpty())
@@ -87,7 +88,7 @@ class AdminUsersViewModelTest {
 
     @Test fun `late uncancellable response cannot overwrite latest filter`() = runTest {
         val old = CompletableDeferred<Paginated<UserProfile>>()
-        val model = AdminUsersViewModel(UserRepository { page, limit, role ->
+        val model = AdminUsersViewModel(Repository { page, limit, role ->
             if (role == null) withContext(NonCancellable) { old.await() }
             else Paginated(listOf(user.copy(id = "latest")), page, limit, 1, 1)
         })
@@ -105,7 +106,7 @@ class AdminUsersViewModelTest {
 
     @Test fun `clearing viewmodel cancels work without publishing error`() = runTest {
         val pending = CompletableDeferred<Paginated<UserProfile>>()
-        val model = AdminUsersViewModel(UserRepository { _, _, _ -> pending.await() })
+        val model = AdminUsersViewModel(Repository { _, _, _ -> pending.await() })
         val store = ViewModelStore().apply { put("users", model) }
         runCurrent()
         store.clear()
@@ -114,13 +115,151 @@ class AdminUsersViewModelTest {
         assertEquals(UsersLoadState.Loading, model.state.value.status)
     }
 
-    private class Repository : UserRepository {
+    @Test fun `dismissing confirmation preserves the displayed role without sending a change`() = runTest {
+        val repository = Repository()
+        val model = AdminUsersViewModel(repository)
+        runCurrent()
+
+        model.requestRoleChange(user.id)
+        assertEquals(RoleChangeConfirmation(user.id, user.name, UserRole.CIUDADANO), model.state.value.roleChange)
+        assertTrue(repository.roleCalls.isEmpty())
+        model.dismissRoleChange()
+        model.confirmRoleChange()
+        runCurrent()
+
+        assertNull(model.state.value.roleChange)
+        assertTrue(repository.roleCalls.isEmpty())
+        assertEquals(user.roles, model.state.value.result!!.items.single().roles)
+    }
+
+    @Test fun `rapid confirmations send one change and only apply roles returned by the server`() = runTest {
+        val pending = CompletableDeferred<List<String>>()
+        val repository = Repository().apply { update = { pending.await() } }
+        val model = AdminUsersViewModel(repository)
+        runCurrent()
+
+        model.requestRoleChange(user.id)
+        model.confirmRoleChange()
+        model.confirmRoleChange()
+        model.requestRoleChange(user.id)
+        runCurrent()
+        assertEquals(listOf(user.id to UserRole.CIUDADANO), repository.roleCalls)
+        assertNull(model.state.value.roleChange)
+        assertEquals(setOf(user.id), model.state.value.changingRoleIds)
+        assertEquals(UsersLoadState.Ready, model.state.value.status)
+        assertEquals(user.roles, model.state.value.result!!.items.single().roles)
+
+        pending.complete(listOf("CIUDADANO"))
+        runCurrent()
+        assertTrue(model.state.value.changingRoleIds.isEmpty())
+        assertEquals(listOf("CIUDADANO"), model.state.value.result!!.items.single().roles)
+    }
+
+    @Test fun `a failed change keeps the role and requires a new confirmation to retry`() = runTest {
+        val message = "No puedes quitarte tu propio rol de administrador."
+        val repository = Repository().apply {
+            update = { throw ApiException.InsufficientPermissions(listOf(message)) }
+        }
+        val model = AdminUsersViewModel(repository)
+        runCurrent()
+        model.requestRoleChange(user.id)
+        model.confirmRoleChange()
+        runCurrent()
+        assertEquals(user.roles, model.state.value.result!!.items.single().roles)
+        assertEquals(message, model.state.value.roleChangeError)
+        assertTrue(model.state.value.changingRoleIds.isEmpty())
+
+        repository.update = { listOf("CIUDADANO") }
+        model.confirmRoleChange()
+        model.requestRoleChange(user.id)
+        runCurrent()
+        assertEquals(1, repository.roleCalls.size)
+        model.confirmRoleChange()
+        runCurrent()
+        assertEquals(2, repository.roleCalls.size)
+        assertEquals(listOf("CIUDADANO"), model.state.value.result!!.items.single().roles)
+        assertNull(model.state.value.roleChangeError)
+    }
+
+    @Test fun `a change under a role filter reloads the page and recovers an empty last page`() = runTest {
+        val otherUsers = List(10) { user.copy(id = "other-$it") }
+        var hasRole = true
+        val repository = Repository { page, limit, _ ->
+            val rows = if (page == 1) otherUsers else listOf(user).filter { hasRole }
+            Paginated(rows, page, limit, if (hasRole) 11 else 10, if (hasRole) 2 else 1)
+        }.apply {
+            update = {
+                hasRole = false
+                listOf("CIUDADANO")
+            }
+        }
+        val model = AdminUsersViewModel(repository)
+        runCurrent()
+        model.selectFilter(UserRoleFilter.ADMIN)
+        runCurrent()
+        model.nextPage()
+        runCurrent()
+        assertEquals(user, model.state.value.result!!.items.single())
+
+        model.requestRoleChange(user.id)
+        model.confirmRoleChange()
+        runCurrent()
+        assertEquals(
+            listOf(Triple(2, 10, UserRole.ADMIN), Triple(1, 10, UserRole.ADMIN)),
+            repository.calls.takeLast(2)
+        )
+        val state = model.state.value
+        assertEquals(UserRoleFilter.ADMIN, state.filter)
+        assertEquals(Paginated(otherUsers, 1, 10, 10, 1), state.result)
+        assertEquals(1, state.page)
+        assertFalse(state.canGoForward)
+    }
+
+    @Test fun `a refresh after a role change discards an in-flight read for the selected filter`() = runTest {
+        val pendingUpdate = CompletableDeferred<List<String>>()
+        val stalePage = CompletableDeferred<Paginated<UserProfile>>()
+        val updatedUser = user.copy(roles = listOf("CIUDADANO"))
+        var readCount = 0
+        val repository = Repository { page, limit, filter ->
+            when {
+                filter == null -> Paginated(listOf(user), page, limit, 1, 1)
+                readCount++ == 0 -> withContext(NonCancellable) { stalePage.await() }
+                else -> Paginated(listOf(updatedUser), page, limit, 1, 1)
+            }
+        }.apply { update = { pendingUpdate.await() } }
+        val model = AdminUsersViewModel(repository)
+        runCurrent()
+        model.requestRoleChange(user.id)
+        model.confirmRoleChange()
+        model.selectFilter(UserRoleFilter.CITIZEN)
+        runCurrent()
+
+        pendingUpdate.complete(updatedUser.roles)
+        runCurrent()
+        stalePage.complete(Paginated(emptyList(), 1, 10, 0, 0))
+        runCurrent()
+        assertEquals(UserRoleFilter.CITIZEN, model.state.value.filter)
+        assertEquals(updatedUser, model.state.value.result!!.items.single())
+    }
+
+    private class Repository(
+        private val list: suspend (Int, Int, UserRole?) -> Paginated<UserProfile> =
+            { page, limit, _ -> Paginated(listOf(user), page, limit, 21, 3) }
+    ) : UserRepository {
         val calls = mutableListOf<Triple<Int, Int, UserRole?>>()
+        val roleCalls = mutableListOf<Pair<String, UserRole>>()
         var failure: Exception? = null
+        var update: suspend (UserRole) -> List<String> = { error("Unexpected role change") }
+
         override suspend fun getUsers(page: Int, limit: Int, role: UserRole?): Paginated<UserProfile> {
             calls += Triple(page, limit, role)
             failure?.let { throw it }
-            return Paginated(listOf(user), page, limit, 21, 3)
+            return list(page, limit, role)
+        }
+
+        override suspend fun updateUserRole(userId: String, role: UserRole): List<String> {
+            roleCalls += userId to role
+            return update(role)
         }
     }
     private companion object {

@@ -184,19 +184,26 @@ data class CreateReportFormState(
      * Conserva el resultado del GPS en el formulario hasta que el incidente se
      * cree. Un resultado sin coordenadas deja un mensaje accionable para el
      * usuario y nunca se reemplaza por una ubicación inventada.
+     *
+     * Si el GPS falla después de una selección manual, la coordenada elegida en
+     * el mapa se conserva: solo una lectura exitosa reemplaza su origen.
      */
-    fun updateLocation(location: LocationResult): CreateReportFormState =
-        copy(
-            location = location,
-            locationSource = if (location is LocationResult.Success) {
-                LocationSelectionSource.DEVICE
-            } else {
-                LocationSelectionSource.NONE
+    fun updateLocation(location: LocationResult): CreateReportFormState {
+        val keepsManualSelection = locationSource == LocationSelectionSource.MANUAL &&
+            location !is LocationResult.Success
+
+        return copy(
+            location = if (keepsManualSelection) this.location else location,
+            locationSource = when {
+                keepsManualSelection -> LocationSelectionSource.MANUAL
+                location is LocationResult.Success -> LocationSelectionSource.DEVICE
+                else -> LocationSelectionSource.NONE
             },
             isLoadingLocation = false,
             locationError = CreateReportLocationErrors.messageFor(location),
             isAutocompletingAddress = false
         )
+    }
 
     /**
      * Conserva una coordenada confirmada manualmente en el mapa.

@@ -17,7 +17,8 @@ sealed interface NotificationsUiState {
     /** Mensaje apto para el ciudadano; [canRetry] solo es cierto para fallos recuperables. */
     data class Error(
         val message: String,
-        val canRetry: Boolean
+        val canRetry: Boolean,
+        val duringRefresh: Boolean = false
     ) : NotificationsUiState
 }
 

@@ -12,7 +12,7 @@ interface SessionManager : TokenProvider {
 
     val state: StateFlow<SessionState>
 
-    /** Restores a locally valid persisted session, if one exists. */
+    /** Restores a locally valid persisted session on process startup. */
     suspend fun restore(): SessionState
 
     /** Persists a successful login before exposing it as authenticated. */
@@ -23,6 +23,9 @@ interface SessionManager : TokenProvider {
 
     /** Invalidates only the session that issued a request rejected with HTTP 401. */
     fun invalidateIfCurrent(rejectedToken: TokenSnapshot)
+
+    /** Dismisses the notice for the expiration currently shown on the login screen. */
+    fun dismissExpiration(expired: SessionState.Expired)
 }
 
 class DefaultSessionManager(
@@ -52,19 +55,18 @@ class DefaultSessionManager(
                     sessionGeneration = sessionGeneration
                 )
             } else {
-                runCatching { sessionStorage.clear() }
-                sessionGeneration += 1
-                _state.value = SessionState.Unauthenticated
+                runCatching { clearSession() }
                 null
             }
         }
     }
 
     override suspend fun restore(): SessionState {
-        _state.value = SessionState.Restoring
-
         return withContext(ioDispatcher) {
             synchronized(stateLock) {
+                val currentState = _state.value
+                if (currentState != SessionState.Restoring) return@synchronized currentState
+
                 val storedSession = runCatching { sessionStorage.currentSession() }.getOrNull()
                 val nextState = storedSession
                     ?.takeIf { it.isLocallyValid(nowEpochSeconds()) }
@@ -103,12 +105,7 @@ class DefaultSessionManager(
     override suspend fun logout() {
         withContext(ioDispatcher) {
             synchronized(stateLock) {
-                try {
-                    sessionStorage.clear()
-                } finally {
-                    sessionGeneration += 1
-                    _state.value = SessionState.Unauthenticated
-                }
+                if (_state.value !is SessionState.Expired) clearSession()
             }
         }
     }
@@ -128,9 +125,23 @@ class DefaultSessionManager(
                 return@synchronized
             }
 
-            runCatching { sessionStorage.clear() }
+            runCatching { clearSession(SessionState.Expired(sessionGeneration)) }
+        }
+    }
+
+    override fun dismissExpiration(expired: SessionState.Expired) {
+        synchronized(stateLock) {
+            _state.compareAndSet(expired, SessionState.Unauthenticated)
+        }
+    }
+
+    // Caller holds stateLock to serialize storage cleanup and the session state update.
+    private fun clearSession(nextState: SessionState = SessionState.Unauthenticated) {
+        try {
+            sessionStorage.clear()
+        } finally {
             sessionGeneration += 1
-            _state.value = SessionState.Unauthenticated
+            _state.value = nextState
         }
     }
 }
@@ -144,4 +155,6 @@ sealed interface SessionState {
     ) : SessionState
 
     data object Unauthenticated : SessionState
+
+    data class Expired(val sessionGeneration: Long) : SessionState
 }

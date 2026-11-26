@@ -71,7 +71,8 @@ fun SessionStartupGate(
         }
         InitialDestination.AUTHENTICATION -> LoginNavigation(
             sessionManager = sessionManager,
-            authRepository = authRepository
+            authRepository = authRepository,
+            expiredSession = state as? SessionState.Expired
         )
     }
 }
@@ -79,7 +80,8 @@ fun SessionStartupGate(
 @Composable
 private fun LoginNavigation(
     sessionManager: SessionManager,
-    authRepository: AuthRepository
+    authRepository: AuthRepository,
+    expiredSession: SessionState.Expired?
 ) {
     val authViewModel: AuthViewModel = viewModel(
         factory = remember(authRepository, sessionManager) {
@@ -91,6 +93,9 @@ private fun LoginNavigation(
     var registrationSucceeded by rememberSaveable {
         mutableStateOf(false)
     }
+    val dismissExpiration = expiredSession?.let { expired ->
+        { sessionManager.dismissExpiration(expired) }
+    }
     AppNavigation(
         sessionManager = sessionManager,
         navController = navController,
@@ -100,9 +105,12 @@ private fun LoginNavigation(
                 viewModel = authViewModel,
                 onRegister = {
                     registrationSucceeded = false
-                    navController.navigateIfAllowed(sessionManager, AppRoutes.REGISTER)
+                    if (navController.navigateIfAllowed(sessionManager, AppRoutes.REGISTER)) {
+                        dismissExpiration?.invoke()
+                    }
                 },
-                registrationSucceeded = registrationSucceeded
+                registrationSucceeded = registrationSucceeded,
+                onDismissExpiration = dismissExpiration
             )
         },
         registrationContent = { onBack ->

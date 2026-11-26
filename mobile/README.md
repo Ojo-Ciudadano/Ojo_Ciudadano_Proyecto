@@ -143,8 +143,23 @@ OSMDroid, la misma biblioteca cartográfica del mapa de incidentes:
   usan al crear el reporte.
 - Cancelar o volver atrás cierra el selector sin modificar la ubicación previa.
 - Una respuesta tardía del GPS no reemplaza una coordenada confirmada
-  manualmente. La tarjeta de ubicación distingue «Ubicación GPS obtenida» de
-  «Ubicación seleccionada en el mapa».
+  manualmente. La tarjeta de ubicación distingue «Obtenida por GPS» de
+  «Seleccionada en el mapa».
+
+## Alternancia entre GPS y mapa (#300)
+
+La sección de ubicación del formulario ofrece un control segmentado con dos
+acciones explícitas:
+
+- «Usar mi GPS actual» solicita la ubicación del dispositivo. Si el permiso de
+  ubicación no está concedido, primero muestra la solicitud del sistema.
+- «Elegir en el mapa» abre el selector manual de #299.
+
+La opción seleccionada y la tarjeta de ubicación indican el origen de las
+coordenadas vigentes. Una coordenada manual se conserva aunque falle una
+consulta posterior del GPS o llegue una lectura tardía; solo una lectura GPS
+exitosa solicitada explícitamente la reemplaza. Con el permiso de ubicación
+denegado, el usuario puede completar el reporte eligiendo el punto en el mapa.
 
 Validación local:
 
@@ -152,6 +167,29 @@ Validación local:
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin
 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.report.CreateReportLocationPickerTest
+```
+
+## Centrar el mapa en la ubicación actual (#303)
+
+El mapa principal incorpora un botón flotante «Mi ubicación». Al pulsarlo se
+reutiliza el flujo de permisos de ubicación existente:
+
+- Con permisos concedidos y GPS disponible, se solicita una única lectura, se
+  dibuja la posición del usuario y la cámara se desplaza suavemente hacia ella
+  con un nivel de acercamiento cercano.
+- Si el usuario deniega el permiso, el GPS está desactivado o la lectura falla,
+  se muestra un `Snackbar` con un mensaje controlado sin cerrar el mapa.
+- Mientras la lectura está en curso, el botón muestra un indicador y no inicia
+  solicitudes adicionales.
+- No se realiza rastreo continuo de la posición ni se consultan nuevamente los
+  incidentes.
+
+Validación local:
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin :app:lintDebug
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.map.MapScreenTest,cl.uct.ojociudadano.ui.map.MapCenterLocationFabTest,cl.uct.ojociudadano.ui.map.IncidentMarkerSyncTest
 ```
 
 ## Marcadores personalizados del mapa (#304)
@@ -184,5 +222,5 @@ Validación local:
 ```sh
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin :app:lintDebug
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.map.IncidentMarkerIconCacheTest,cl.uct.ojociudadano.ui.map.IncidentMarkerSyncTest,cl.uct.ojociudadano.ui.map.MapLegendTest
+  -Pandroid.testInstrumentationRunnerArguments.class=cl.uct.ojociudadano.ui.map.IncidentMarkerIconCacheTest,cl.uct.ojociudadano.ui.map.IncidentMarkerSyncTest,cl.uct.ojociudadano.ui.map.MapLegendTest,cl.uct.ojociudadano.ui.map.MapScreenTest,cl.uct.ojociudadano.ui.map.MapCenterLocationFabTest
 ```
