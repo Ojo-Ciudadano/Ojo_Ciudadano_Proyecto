@@ -4,6 +4,8 @@ import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
@@ -14,17 +16,28 @@ import androidx.core.graphics.drawable.toDrawable
 import cl.uct.ojociudadano.ui.theme.IncidentTone
 import cl.uct.ojociudadano.ui.theme.IncidentTones
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.TilesOverlay
 import kotlin.math.roundToInt
 
 internal fun MapView.applyMapAppearance(darkTheme: Boolean, background: Int) {
     setBackgroundColor(background)
+    clipToOutline = true
     overlayManager.tilesOverlay.apply {
         loadingBackgroundColor = Color.TRANSPARENT
-        setColorFilter(if (darkTheme) TilesOverlay.INVERT_COLORS else null)
+        setColorFilter(if (darkTheme) darkTileFilter else null)
     }
     invalidate()
 }
+
+// Invierte la luminancia de las teselas raster y atenúa los colores del mapa base.
+private val darkTileFilter = ColorMatrixColorFilter(ColorMatrix().apply {
+    setSaturation(0.35f)
+    postConcat(ColorMatrix(floatArrayOf(
+        -0.83f, 0f, 0f, 0f, 226f,
+        0f, -0.83f, 0f, 0f, 234f,
+        0f, 0f, -0.83f, 0f, 246f,
+        0f, 0f, 0f, 1f, 0f
+    )))
+})
 
 /** Reutiliza el bitmap por estado y prioridad dentro de la vista del mapa. */
 internal class IncidentMarkerIcons(
