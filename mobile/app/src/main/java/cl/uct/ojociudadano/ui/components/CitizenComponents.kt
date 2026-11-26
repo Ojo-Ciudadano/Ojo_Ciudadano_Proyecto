@@ -3,11 +3,15 @@ package cl.uct.ojociudadano.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import cl.uct.ojociudadano.R
 import cl.uct.ojociudadano.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,11 +42,23 @@ fun CitizenHeader(title: String, subtitle: String = "Ojo Ciudadano", onBack: (()
 }
 
 @Composable
-fun CitizenMessage(message: String, modifier: Modifier = Modifier, isError: Boolean = false) {
+fun CitizenMessage(
+    message: String,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    onDismiss: (() -> Unit)? = null
+) {
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
         color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer) {
-        Text(message, Modifier.padding(Spacing.medium),
-            color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-            style = MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(message, Modifier.weight(1f).padding(Spacing.medium),
+                color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.bodyMedium)
+            onDismiss?.let { dismiss ->
+                IconButton(onClick = dismiss) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.dismiss_notice))
+                }
+            }
+        }
     }
 }

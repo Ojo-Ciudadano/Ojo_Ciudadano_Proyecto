@@ -135,9 +135,16 @@ class SessionManagerTest {
 
         manager.invalidateIfCurrent(rejectedToken)
 
-        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        val expired = SessionState.Expired(requireNotNull(rejectedToken.sessionGeneration))
+        assertEquals(expired, manager.state.value)
+        assertEquals(expired, manager.restore())
         assertNull(manager.currentToken())
         assertNull(storage.currentSession())
+        assertEquals(1, storage.clearCalls)
+
+        manager.dismissExpiration(expired)
+        manager.invalidateIfCurrent(rejectedToken)
+        assertEquals(SessionState.Unauthenticated, manager.state.value)
         assertEquals(1, storage.clearCalls)
     }
 

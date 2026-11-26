@@ -128,7 +128,7 @@ class AuthenticatedCategoriesFlowTest {
                 "Bearer ${session.accessToken}",
                 server.takeRequest().getHeader("Authorization")
             )
-            assertEquals(SessionState.Unauthenticated, sessionManager.state.value)
+            assertTrue(sessionManager.state.value is SessionState.Expired)
             assertNull(storage.currentSession())
         } finally {
             server.shutdown()

@@ -23,15 +23,14 @@ class BearerTokenInterceptor(
             throw SessionRequiredException()
         }
         val sessionTokenToAttach = currentToken
-            ?.let { it.copy(value = it.value.trim()) }
-            ?.takeIf { it.value.isNotEmpty() }
+            ?.takeIf { it.value.isNotBlank() }
             ?.takeIf {
                 request.header(AUTHORIZATION_HEADER) == null
             }
 
         val authenticatedRequest = if (sessionTokenToAttach != null) {
             request.newBuilder()
-                .header(AUTHORIZATION_HEADER, "$BEARER_PREFIX${sessionTokenToAttach.value}")
+                .header(AUTHORIZATION_HEADER, "$BEARER_PREFIX${sessionTokenToAttach.value.trim()}")
                 .build()
         } else {
             request

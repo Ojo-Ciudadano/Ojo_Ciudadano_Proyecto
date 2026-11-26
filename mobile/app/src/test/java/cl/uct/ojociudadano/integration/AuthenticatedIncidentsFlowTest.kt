@@ -219,7 +219,7 @@ class AuthenticatedIncidentsFlowTest {
         assertTrue(failure is ApiException.Http)
         assertEquals(401, (failure as ApiException.Http).statusCode)
         assertEquals("Bearer ${userA.accessToken}", takeRequest().getHeader("Authorization"))
-        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertTrue(manager.state.value is SessionState.Expired)
         assertAllOperationsBlocked(repository())
         assertEquals(1, server.requestCount)
     }
@@ -287,7 +287,11 @@ class AuthenticatedIncidentsFlowTest {
             }.exceptionOrNull()
             assertEquals(code, (failure as ApiException.Http).statusCode)
             assertEquals("Bearer ${admin.accessToken}", takeRequest().getHeader("Authorization"))
-            assertEquals(if (code == 401) SessionState.Unauthenticated else SessionState.Authenticated(admin), manager.state.value)
+            if (code == 401) {
+                assertTrue(manager.state.value is SessionState.Expired)
+            } else {
+                assertEquals(SessionState.Authenticated(admin), manager.state.value)
+            }
         }
     }
 
@@ -395,7 +399,7 @@ class AuthenticatedIncidentsFlowTest {
         val failure = runCatching { repository().updateStatus("incident-id", "En revisión", "Valid") }.exceptionOrNull()
         assertEquals(401, (failure as ApiException.Http).statusCode)
         takeRequest()
-        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertTrue(manager.state.value is SessionState.Expired)
         assertSessionFailure { repository().updateStatus("incident-id", "En revisión", "Valid") }
         assertEquals(7, server.requestCount)
     }

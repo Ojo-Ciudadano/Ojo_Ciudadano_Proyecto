@@ -15,6 +15,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -93,7 +94,7 @@ class AuthenticatedRolesFlowTest {
         manager.invalidateIfCurrent(oldToken)
         assertRoleSurvivesRestart(SessionRoles.Known(setOf(UserRole.CIUDADANO)), "citizen")
         manager.invalidateIfCurrent(requireNotNull(manager.currentTokenSnapshot()))
-        assertEquals(SessionState.Unauthenticated, manager.state.value)
+        assertTrue(manager.state.value is SessionState.Expired)
         assertNull(storage.currentSession())
     }
 
