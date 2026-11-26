@@ -30,6 +30,8 @@ import cl.uct.ojociudadano.data.remote.dto.HistorialEstadoDto
 import cl.uct.ojociudadano.data.remote.dto.AsignacionDto
 import cl.uct.ojociudadano.data.remote.dto.AssignResponsibleRequestDto
 import cl.uct.ojociudadano.data.remote.dto.UpdatePriorityRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdateUserRoleRequestDto
+import cl.uct.ojociudadano.data.remote.dto.UpdateUserRoleResponseDto
 
 interface ApiService {
 
@@ -125,6 +127,13 @@ interface ApiService {
         @Query("rol") rol: String? = null,
         @Tag expectedSession: TokenSnapshot? = null
     ): PaginatedResponseDto<UsuarioDto>
+
+    @PATCH("api/v1/usuarios/{id}/rol")
+    suspend fun updateUserRole(
+        @Path("id") userId: String,
+        @Body request: UpdateUserRoleRequestDto,
+        @Tag expectedSession: TokenSnapshot? = null
+    ): UpdateUserRoleResponseDto
 
     @GET("api/v1/usuarios/me")
     suspend fun getMyProfile(

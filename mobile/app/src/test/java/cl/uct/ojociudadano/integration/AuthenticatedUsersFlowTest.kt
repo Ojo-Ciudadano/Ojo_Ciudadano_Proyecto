@@ -7,6 +7,7 @@ import cl.uct.ojociudadano.data.session.DefaultSessionManager
 import cl.uct.ojociudadano.data.session.TestSessionStorage
 import cl.uct.ojociudadano.data.session.UserRole
 import cl.uct.ojociudadano.data.session.testSession
+import com.google.gson.JsonParser
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -14,6 +15,52 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AuthenticatedUsersFlowTest {
+    @Test fun `changing roles sends an authenticated patch with the backend role and reads the confirmed roles`() = runTest {
+        val server = MockWebServer()
+        server.start()
+        try {
+            val session = testSession().copy(roles = listOf("ADMIN"))
+            val manager = DefaultSessionManager(TestSessionStorage(session)).also { it.restore() }
+            val api = RetrofitClient.createApiService(
+                server.url("/").toString(),
+                tokenProvider = manager,
+                onUnauthorized = manager::invalidateIfCurrent
+            )
+            val repository = RemoteIncidentRepository(api, manager)
+            val userId = "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"
+            for (role in UserRole.entries) {
+                server.enqueue(MockResponse().setBody("""{"id":"$userId","roles":["${role.backendValue}"]}"""))
+                assertEquals(listOf(role.backendValue), repository.updateUserRole(userId, role))
+                val request = server.takeRequest()
+                assertEquals("PATCH", request.method)
+                assertEquals("/api/v1/usuarios/$userId/rol", request.path)
+                assertEquals("Bearer ${session.accessToken}", request.getHeader("Authorization"))
+                val body = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+                assertEquals(setOf("rol"), body.keySet())
+                assertEquals(role.backendValue, body.get("rol").asString)
+            }
+
+            val message = "No puedes quitarte tu propio rol de administrador."
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"message":"$message"}"""))
+            try {
+                repository.updateUserRole(userId, UserRole.CIUDADANO)
+                fail("The server rejection must propagate")
+            } catch (error: ApiException.InsufficientPermissions) {
+                assertEquals(listOf(message), error.serverMessages)
+            }
+            manager.establish(testSession())
+            try {
+                repository.updateUserRole(userId, UserRole.ADMIN)
+                fail("Citizen mutation must fail before networking")
+            } catch (error: ApiException.Http) {
+                assertEquals(403, error.statusCode)
+            }
+            assertEquals(3, server.requestCount)
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test fun `users reuse bearer auth omit all role and map server metadata and current roles`() = runTest {
         val server = MockWebServer()
         server.start()
