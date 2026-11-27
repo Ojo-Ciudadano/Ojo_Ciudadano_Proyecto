@@ -23,8 +23,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +72,11 @@ internal object MapTestTags {
     const val FILTER_STATUS_PREFIX = "map_filter_status_"
     const val FILTERED_EMPTY = "map_state_filtered_empty"
     const val FILTERED_EMPTY_RESET = "map_state_filtered_empty_reset"
+    const val LEGEND_TOGGLE = "map_legend_toggle"
+    const val LEGEND_PANEL = "map_legend_panel"
+    const val LEGEND_CLOSE = "map_legend_close"
+    const val LEGEND_STATUS_PREFIX = "map_legend_status_"
+    const val LEGEND_PRIORITY_PREFIX = "map_legend_priority_"
     const val CENTER_LOCATION_FAB = "map_center_location_fab"
     const val LOCATION_SNACKBAR = "map_location_snackbar"
 }
@@ -92,6 +100,7 @@ fun MapScreen(
     val success = state as? MapUiState.Success
     val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
+    var legendExpanded by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val locationPermissionLauncher = rememberLocationPermissionLauncher(
@@ -114,38 +123,58 @@ fun MapScreen(
     Box(modifier.fillMaxSize()) {
         IncidentMap(
             markers = markers,
+            selectedIncidentId = selectedMarker?.incidentId,
             userLocation = userLocation,
             onMarkerClick = model::selectIncident,
             onMapClick = model::clearSelection,
             modifier = Modifier.fillMaxSize()
         )
-        if (success != null &&
-            (success.categoryOptions.isNotEmpty() || success.statusOptions.isNotEmpty())
-        ) {
-            if (success.filtersVisible) {
-                MapIncidentFilterBar(
-                    filters = success.filters,
-                    categoryOptions = success.categoryOptions,
-                    statusOptions = success.statusOptions,
-                    visibleCount = success.visibleMarkers.size,
-                    totalCount = success.markers.size,
-                    onCategorySelected = model::selectCategory,
-                    onStatusSelected = model::selectStatus,
-                    onReset = model::clearFilters,
-                    onHide = { model.setFiltersVisible(false) },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .widthIn(max = 480.dp)
-                        .padding(Spacing.medium)
-                )
-            } else {
-                MapFilterToggle(
-                    activeFilterCount = success.filters.activeCount,
-                    onClick = { model.setFiltersVisible(true) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(Spacing.medium)
-                )
+        if (success != null) {
+            val hasFilters =
+                success.categoryOptions.isNotEmpty() || success.statusOptions.isNotEmpty()
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = 480.dp)
+                    .padding(Spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(Spacing.small)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MapLegendToggle(
+                        expanded = legendExpanded,
+                        onClick = { legendExpanded = !legendExpanded }
+                    )
+                    if (hasFilters && !success.filtersVisible) {
+                        MapFilterToggle(
+                            activeFilterCount = success.filters.activeCount,
+                            onClick = { model.setFiltersVisible(true) }
+                        )
+                    }
+                }
+                if (legendExpanded) {
+                    MapLegendPanel(
+                        onClose = { legendExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (hasFilters && success.filtersVisible) {
+                    MapIncidentFilterBar(
+                        filters = success.filters,
+                        categoryOptions = success.categoryOptions,
+                        statusOptions = success.statusOptions,
+                        visibleCount = success.visibleMarkers.size,
+                        totalCount = success.markers.size,
+                        onCategorySelected = model::selectCategory,
+                        onStatusSelected = model::selectStatus,
+                        onReset = model::clearFilters,
+                        onHide = { model.setFiltersVisible(false) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
         MapStatusOverlay(
@@ -194,6 +223,7 @@ fun MapScreen(
 @Composable
 private fun IncidentMap(
     markers: List<IncidentMapMarker>,
+    selectedIncidentId: String?,
     userLocation: MapUserLocation?,
     onMarkerClick: (String) -> Unit,
     onMapClick: () -> Unit,
@@ -239,7 +269,12 @@ private fun IncidentMap(
         modifier = modifier,
         factory = { mapView },
         update = { currentMap ->
-            syncIncidentMarkers(currentMap, markers, onMarkerClick)
+            syncIncidentMarkers(
+                mapView = currentMap,
+                desiredMarkers = markers,
+                onMarkerClick = onMarkerClick,
+                selectedIncidentId = selectedIncidentId
+            )
             syncUserLocationMarker(currentMap, userLocation)
         }
     )
@@ -252,13 +287,20 @@ private fun IncidentMap(
  * clave: los marcadores existentes se reutilizan, los que ya no corresponden se
  * eliminan y cualquier duplicado previo se descarta. Así las actualizaciones
  * normales del estado no acumulan marcadores.
+ *
+ * Los íconos se obtienen del [iconCache], por lo que solo se renderiza un pin
+ * nuevo cuando cambia el estado, la prioridad o la selección del incidente. El
+ * marcador seleccionado se dibuja al final para quedar por encima del resto.
  */
 internal fun syncIncidentMarkers(
     mapView: MapView,
     desiredMarkers: List<IncidentMapMarker>,
-    onMarkerClick: (String) -> Unit = {}
+    onMarkerClick: (String) -> Unit = {},
+    selectedIncidentId: String? = null,
+    iconCache: IncidentMarkerIconCache = IncidentMarkerIconProvider.cacheFor(mapView.context)
 ) {
     val desiredById = desiredMarkers.associateBy { it.incidentId }
+    val selectedId = selectedIncidentId?.takeIf { it in desiredById }
 
     val currentById = HashMap<String, Marker>()
     val duplicateMarkers = ArrayList<Marker>()
@@ -285,20 +327,53 @@ internal fun syncIncidentMarkers(
     }
 
     desiredById.forEach { (incidentId, data) ->
+        val visual = data.visual(selected = incidentId == selectedId)
         val previous = currentById[incidentId]
-        if (previous == null) {
-            mapView.overlays.add(createIncidentMarker(mapView, data, onMarkerClick))
-            changed = true
-        } else {
-            previous.setOnMarkerClickListener { _, _ ->
-                onMarkerClick(incidentId)
-                true
-            }
-            val position = previous.position
-            if (position.latitude != data.latitude || position.longitude != data.longitude) {
-                previous.position = GeoPoint(data.latitude, data.longitude)
+        when {
+            previous == null -> {
+                mapView.overlays.add(
+                    createIncidentMarker(mapView, data, visual, iconCache, onMarkerClick)
+                )
                 changed = true
             }
+
+            previous !is IncidentMarker -> {
+                // Reemplaza marcadores creados por versiones anteriores para que
+                // también adopten el ícono personalizado y el estado de selección.
+                mapView.overlays.remove(previous)
+                mapView.overlays.add(
+                    createIncidentMarker(mapView, data, visual, iconCache, onMarkerClick)
+                )
+                changed = true
+            }
+
+            else -> {
+                previous.setOnMarkerClickListener { _, _ ->
+                    onMarkerClick(incidentId)
+                    true
+                }
+                val position = previous.position
+                if (position.latitude != data.latitude || position.longitude != data.longitude) {
+                    previous.position = GeoPoint(data.latitude, data.longitude)
+                    changed = true
+                }
+                if (previous.visual != visual) {
+                    previous.setIcon(iconCache.iconFor(visual))
+                    previous.visual = visual
+                    changed = true
+                }
+            }
+        }
+    }
+
+    selectedId?.let { id ->
+        val selectedOverlay = mapView.overlays.firstOrNull { overlay ->
+            overlay is Marker && overlay.relatedObject == id
+        }
+        if (selectedOverlay != null && mapView.overlays.lastOrNull() !== selectedOverlay) {
+            mapView.overlays.remove(selectedOverlay)
+            mapView.overlays.add(selectedOverlay)
+            changed = true
         }
     }
 
@@ -307,13 +382,22 @@ internal fun syncIncidentMarkers(
     }
 }
 
+/** Marcador que recuerda la apariencia aplicada para evitar re-renderizarla. */
+private class IncidentMarker(mapView: MapView) : Marker(mapView) {
+    var visual: IncidentMarkerVisual? = null
+}
+
 private fun createIncidentMarker(
     mapView: MapView,
     data: IncidentMapMarker,
+    visual: IncidentMarkerVisual,
+    iconCache: IncidentMarkerIconCache,
     onMarkerClick: (String) -> Unit
-): Marker = Marker(mapView).apply {
+): Marker = IncidentMarker(mapView).apply {
     position = GeoPoint(data.latitude, data.longitude)
     relatedObject = data.incidentId
+    this.visual = visual
+    setIcon(iconCache.iconFor(visual))
     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
     setOnMarkerClickListener { _, _ ->
         onMarkerClick(data.incidentId)
