@@ -15,6 +15,7 @@ internal data class LocationPreviewContent(
     val coordinate: GeoCoordinate,
     val coordinatesLabel: String,
     val addressLabel: String,
+    val source: LocationSelectionSource,
     val sourceLabel: String
 )
 
@@ -34,6 +35,7 @@ internal fun CreateReportFormState.locationPreviewContent(): LocationPreviewCont
         coordinate = coordinate,
         coordinatesLabel = locationCoordinatesLabel(coordinate),
         addressLabel = locationAddressLabel(referenceAddress, commune, region),
+        source = locationSource,
         sourceLabel = locationSourceLabel(locationSource)
     )
 }

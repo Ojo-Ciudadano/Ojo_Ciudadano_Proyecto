@@ -32,6 +32,7 @@ class LocationPreviewContentTest {
             preview.addressLabel
         )
         assertEquals("Obtenida por GPS", preview.sourceLabel)
+        assertEquals(LocationSelectionSource.DEVICE, preview.source)
     }
 
     @Test
