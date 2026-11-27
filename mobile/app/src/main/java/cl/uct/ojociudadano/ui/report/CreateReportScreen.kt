@@ -4,7 +4,6 @@ import cl.uct.ojociudadano.ui.components.CitizenHeader
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,8 +17,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -39,7 +36,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -69,7 +65,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import cl.uct.ojociudadano.data.model.Category
 import cl.uct.ojociudadano.data.model.IncidentPhotoEvidence
 import cl.uct.ojociudadano.OjoCiudadanoApplication
-import cl.uct.ojociudadano.domain.model.LocationResult
 import cl.uct.ojociudadano.ui.map.picker.ManualLocationPickerDefaults
 import cl.uct.ojociudadano.ui.map.picker.ManualLocationPickerDialog
 import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
@@ -401,75 +396,14 @@ private fun ReportLocationSection(
             )
         }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Row(
-                modifier = Modifier.padding(Spacing.medium),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    Icons.Filled.LocationOn,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    when {
-                        state.isLoadingLocation -> Text(
-                            text = "Obteniendo ubicación GPS...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        state.location is LocationResult.Success -> {
-                            val location = state.location
-                            Text(
-                                text = if (state.locationSource ==
-                                    LocationSelectionSource.MANUAL
-                                ) {
-                                    "Seleccionada en el mapa"
-                                } else {
-                                    "Obtenida por GPS"
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "Lat: ${location.latitude}, Lng: ${location.longitude}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        else -> Text(
-                            text = state.locationError ?: "Ubicación no disponible",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-
-                if (!state.isLoadingLocation && !state.hasValidLocation) {
-                    val action = when (state.location) {
-                        LocationResult.MissingPermissions ->
-                            "Dar permiso" to onRequestLocationPermission
-
-                        LocationResult.NotAvailable ->
-                            "Activar ubicación" to onOpenLocationSettings
-
-                        else -> "Reintentar" to onRefreshLocation
-                    }
-
-                    TextButton(onClick = action.second) {
-                        Text(action.first)
-                    }
-                }
-            }
-        }
+        LocationPreviewCard(
+            state = state,
+            canEditForm = canEditForm,
+            onOpenPicker = onChooseLocationOnMap,
+            onRefreshLocation = onRefreshLocation,
+            onRequestLocationPermission = onRequestLocationPermission,
+            onOpenLocationSettings = onOpenLocationSettings
+        )
 
         if (state.locationError != null && state.hasValidLocation) {
             Text(
