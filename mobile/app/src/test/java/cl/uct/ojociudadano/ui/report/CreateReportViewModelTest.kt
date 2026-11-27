@@ -1685,13 +1685,90 @@ class CreateReportViewModelTest {
         assertEquals(3, incidentRepository.uploadAttempts.size)
         assertEquals(1, incidentRepository.createInputs.size)
         assertEquals(
-            listOf(secondSamplePhoto),
+            listOf(samplePhoto, secondSamplePhoto, thirdSamplePhoto),
             viewModel.formState.evidencePhotos
         )
         assertEquals(
-            listOf(samplePhoto.fileName, thirdSamplePhoto.fileName),
-            photoFileStore.deletedFileNames
+            mapOf(
+                samplePhoto.fileName to EvidenceUploadStatus.COMPLETED,
+                secondSamplePhoto.fileName to EvidenceUploadStatus.ERROR,
+                thirdSamplePhoto.fileName to EvidenceUploadStatus.COMPLETED
+            ),
+            viewModel.photoUploadStatuses
         )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+    }
+
+    @Test
+    fun `a confirmed photo cannot be removed while the rest of the evidence is pending`() = runTest {
+        val photoFileStore = FakeEvidencePhotoFileStore()
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { file, _ ->
+                if (file.name == secondSamplePhoto.fileName) {
+                    throw confirmedUploadFailure()
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository,
+            photoFileStore = photoFileStore
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        viewModel.createReport()
+
+        viewModel.onRemovePhoto(samplePhoto)
+
+        assertEquals(
+            listOf(samplePhoto, secondSamplePhoto),
+            viewModel.formState.evidencePhotos
+        )
+        assertTrue(photoFileStore.deletedFileNames.isEmpty())
+
+        viewModel.onRemovePhoto(secondSamplePhoto)
+
+        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+        assertFalse(viewModel.photoUploadStatuses.containsKey(secondSamplePhoto.fileName))
+    }
+
+    @Test
+    fun `retrying the failed evidence clears every photo status after success`() = runTest {
+        var failOnce = true
+        val incidentRepository = FakeIncidentRepository(
+            onUpload = { file, _ ->
+                if (failOnce && file.name == secondSamplePhoto.fileName) {
+                    failOnce = false
+                    throw confirmedUploadFailure()
+                }
+            }
+        )
+        val viewModel = createViewModel(
+            categoryRepository = FakeCategoryRepository(),
+            incidentRepository = incidentRepository
+        )
+
+        viewModel.fillValidForm()
+        viewModel.seedPhotos(samplePhoto, secondSamplePhoto)
+        viewModel.createReport()
+
+        assertEquals(
+            EvidenceUploadStatus.ERROR,
+            viewModel.photoUploadStatuses[secondSamplePhoto.fileName]
+        )
+
+        viewModel.createReport()
+
+        assertEquals(
+            CreateReportSubmissionState.Success(
+                incidentId = "incident-id",
+                uploadedEvidenceCount = 2
+            ),
+            viewModel.submissionState
+        )
+        assertTrue(viewModel.formState.evidencePhotos.isEmpty())
+        assertTrue(viewModel.photoUploadStatuses.isEmpty())
     }
 
     @Test
@@ -1793,7 +1870,7 @@ class CreateReportViewModelTest {
         )
         assertTrue(viewModel.formState.evidencePhotos.isEmpty())
         assertEquals(
-            listOf(secondSamplePhoto.fileName, samplePhoto.fileName),
+            listOf(samplePhoto.fileName, secondSamplePhoto.fileName),
             photoFileStore.deletedFileNames
         )
     }
@@ -1941,7 +2018,7 @@ class CreateReportViewModelTest {
     }
 
     @Test
-    fun `reports upload progress and clears photos only after the last evidence`() = runTest {
+    fun `reports upload progress and keeps the photos marked until the last evidence`() = runTest {
         val firstUploadStarted = CompletableDeferred<Unit>()
         val releaseFirstUpload = CompletableDeferred<Unit>()
         val secondUploadStarted = CompletableDeferred<Unit>()
@@ -1993,7 +2070,7 @@ class CreateReportViewModelTest {
             viewModel.submissionState
         )
         assertEquals(
-            listOf(secondSamplePhoto),
+            listOf(samplePhoto, secondSamplePhoto),
             viewModel.formState.evidencePhotos
         )
 
@@ -2091,7 +2168,7 @@ class CreateReportViewModelTest {
             UploadedEvidence("incident-id", secondSamplePhoto.fileName, secondSamplePhoto.mimeType),
             incidentRepository.uploadAttempts.single()
         )
-        assertEquals(listOf(samplePhoto), viewModel.formState.evidencePhotos)
+        assertEquals(listOf(samplePhoto, secondSamplePhoto), viewModel.formState.evidencePhotos)
     }
 
     @Test
@@ -2276,7 +2353,7 @@ class CreateReportViewModelTest {
             viewModel.onPhotoPreviewError(samplePhoto)
 
             assertEquals(
-                listOf(samplePhoto),
+                listOf(samplePhoto, secondSamplePhoto),
                 viewModel.formState.evidencePhotos
             )
             assertEquals(PhotoPreviewErrors.UNAVAILABLE, viewModel.formState.photoError)
@@ -2362,7 +2439,7 @@ class CreateReportViewModelTest {
         assertEquals(2, incidentRepository.uploadAttempts.size)
         assertTrue(viewModel.formState.evidencePhotos.isEmpty())
         assertEquals(
-            listOf(secondSamplePhoto.fileName, samplePhoto.fileName),
+            listOf(samplePhoto.fileName, secondSamplePhoto.fileName),
             photoFileStore.deletedFileNames
         )
     }
@@ -2485,6 +2562,8 @@ private class ControllableEvidencePhotoFileStore : EvidencePhotoFileStore {
     }
 
     override fun cleanupExpired(maxAgeMillis: Long): Int = 0
+
+    override fun deleteAll(): Int = 0
 }
 
 private class FakeEvidencePhotoFileStore(
@@ -2522,6 +2601,8 @@ private class FakeEvidencePhotoFileStore(
         cleanupMaxAges += maxAgeMillis
         return 0
     }
+
+    override fun deleteAll(): Int = 0
 }
 
 private class FakeCategoryRepository(

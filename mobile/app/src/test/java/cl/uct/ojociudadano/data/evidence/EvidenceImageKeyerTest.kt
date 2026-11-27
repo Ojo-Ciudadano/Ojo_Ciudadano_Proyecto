@@ -20,6 +20,26 @@ class EvidenceImageKeyerTest {
         )
     }
 
+    @Test
+    fun `ignores a blank session scope`() {
+        assertEquals(
+            "evidence:evidencia-1",
+            EvidenceImageKeyer.cacheKey(sampleEvidence(), scope = "  ")
+        )
+    }
+
+    @Test
+    fun `different sessions do not share the same cache key`() {
+        assertEquals(
+            "user:a:evidence:evidencia-1",
+            EvidenceImageKeyer.cacheKey(sampleEvidence(), scope = "user:a")
+        )
+        assertNotEquals(
+            EvidenceImageKeyer.cacheKey(sampleEvidence(), scope = "user:a"),
+            EvidenceImageKeyer.cacheKey(sampleEvidence(), scope = "user:b")
+        )
+    }
+
     private fun sampleEvidence() = Evidence(
         id = "evidencia-1",
         incidentId = "incidente-1",

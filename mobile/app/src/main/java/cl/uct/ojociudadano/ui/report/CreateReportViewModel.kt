@@ -56,6 +56,16 @@ class CreateReportViewModel(
         private set
 
     /**
+     * Estado de subida de cada fotografía, indexado por `fileName`.
+     *
+     * La rejilla lo usa para distinguir qué evidencias ya se confirmaron y
+     * cuáles fallaron. Las fotografías confirmadas permanecen visibles hasta
+     * que el flujo termina, para que el resultado parcial sea explícito.
+     */
+    var photoUploadStatuses by mutableStateOf<Map<String, EvidenceUploadStatus>>(emptyMap())
+        private set
+
+    /**
      * Controla la visibilidad del selector manual de ubicación.
      *
      * El selector solo puede abrirse mientras el formulario siga editable; al
@@ -307,7 +317,12 @@ class CreateReportViewModel(
             it.fileName == photo.fileName
         } ?: return
 
+        // Una evidencia en curso o ya confirmada no se puede quitar: la primera
+        // dejaría una petición huérfana y la segunda ya existe en el backend.
+        if (photoUploadStatuses[current.fileName]?.canRemove == false) return
+
         formState = formState.removeEvidencePhoto(current.fileName)
+        removePhotoUploadStatus(current.fileName)
         deleteEvidenceFile(current.fileName)
     }
 
@@ -588,14 +603,19 @@ class CreateReportViewModel(
         val pendingEvidence = mutableListOf<PendingEvidenceUpload>()
 
         photos.forEachIndexed { index, photo ->
+            updatePhotoUploadStatus(photo, EvidenceUploadStatus.UPLOADING)
+
             when (val result = uploadEvidence(incidentId, photo)) {
                 EvidenceUploadResult.Uploaded -> {
+                    // La evidencia confirmada se conserva visible para que el
+                    // usuario distinga qué subió y qué falló; su archivo se
+                    // elimina al limpiar el formulario.
                     uploadedNow++
-                    formState = formState.removeEvidencePhoto(photo.fileName)
-                    deleteEvidenceFile(photo.fileName)
+                    updatePhotoUploadStatus(photo, EvidenceUploadStatus.COMPLETED)
                 }
 
                 is EvidenceUploadResult.Failed -> {
+                    updatePhotoUploadStatus(photo, EvidenceUploadStatus.ERROR)
                     pendingEvidence += PendingEvidenceUpload(
                         photo = photo,
                         failureKind = result.failureKind,
@@ -781,11 +801,20 @@ class CreateReportViewModel(
             .forEach { evidence ->
                 deleteEvidenceFile(evidence.fileName)
             }
+        runCatching { photoFileStore.deleteAll() }
+            .onFailure { exception ->
+                Log.w(
+                    "CreateReportViewModel",
+                    "No fue posible limpiar la caché de evidencias: " +
+                        "type=${exception::class.java.name}, message=${exception.message}"
+                )
+            }
         formState = formState.copy(
             evidencePhotos = emptyList(),
             activePhotoOperation = null,
             photoError = null
         )
+        photoUploadStatuses = emptyMap()
     }
 
     fun loadCategories() {
@@ -914,6 +943,8 @@ class CreateReportViewModel(
 
         if (formState.evidencePhotos.none { it.fileName == evidence.fileName }) {
             discardEvidencePhoto(evidence)
+        } else {
+            updatePhotoUploadStatus(evidence, EvidenceUploadStatus.PENDING)
         }
     }
 
@@ -951,7 +982,21 @@ class CreateReportViewModel(
      */
     private fun discardEvidencePhoto(evidence: IncidentPhotoEvidence) {
         if (formState.evidencePhotos.none { it.fileName == evidence.fileName }) {
+            removePhotoUploadStatus(evidence.fileName)
             deleteEvidenceFile(evidence.fileName)
+        }
+    }
+
+    private fun updatePhotoUploadStatus(
+        photo: IncidentPhotoEvidence,
+        status: EvidenceUploadStatus
+    ) {
+        photoUploadStatuses = photoUploadStatuses + (photo.fileName to status)
+    }
+
+    private fun removePhotoUploadStatus(fileName: String) {
+        if (photoUploadStatuses.containsKey(fileName)) {
+            photoUploadStatuses = photoUploadStatuses - fileName
         }
     }
 

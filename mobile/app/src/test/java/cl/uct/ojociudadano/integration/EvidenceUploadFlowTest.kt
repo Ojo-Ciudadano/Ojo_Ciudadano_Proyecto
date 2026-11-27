@@ -227,7 +227,10 @@ class EvidenceUploadFlowTest {
         )
         assertTrue(failed.hasUncertainEvidence)
         assertEquals(3, server.requestCount)
-        assertEquals(listOf(firstFile.name), viewModel.formState.evidencePhotos.map { it.fileName })
+        assertEquals(
+            listOf(firstFile.name, secondFile.name),
+            viewModel.formState.evidencePhotos.map { it.fileName }
+        )
 
         viewModel.createReport()
 
@@ -419,6 +422,8 @@ class EvidenceUploadFlowTest {
         }
 
         override fun cleanupExpired(maxAgeMillis: Long): Int = 0
+
+        override fun deleteAll(): Int = 0
     }
 
     private companion object {
