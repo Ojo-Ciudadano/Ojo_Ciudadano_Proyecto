@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
             val darkTheme = mode.isDark(isSystemInDarkTheme())
             LaunchedEffect(darkTheme) { updateSystemBars() }
 
+
             OjoCiudadanoTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     SessionStartupGate(
