@@ -150,6 +150,13 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "32k"
     external-dns.alpha.kubernetes.io/target: "proxy.inf.uct.cl"
 spec:
   ingressClassName: nginx
@@ -188,6 +195,46 @@ spec:
 #### Datos Institucionales y Tratamiento de TLS
 * **Configuración vigente:** Terminación TLS en el Ingress con el Secret `uct-ingress-tls` aprovisionado en el namespace `student-daalvarez` para `ojociudadano.dev.censei.cl`.
 * **Dato institucional pendiente (si aplica):** Si la administración de TI de la UCT provee en el futuro un certificado firmado por una CA pública o un `ClusterIssuer` institucional, únicamente se actualizará el contenido del Secret `uct-ingress-tls` sin modificar la arquitectura de rutas ni la imagen del frontend.
+
+### 5.4 Tuning de Transferencia de Imágenes en el `Ingress` (#286)
+Las evidencias pesan hasta 10 MB y los avatares hasta 5 MB, y la app Android espera hasta 120 s para escribir el cuerpo (`POST /api/v1/incidentes/{id}/evidencias`). Con los valores por defecto del controlador NGINX (60 s de lectura, buffering de request activo) el Ingress cortaba subidas concurrentes antes que el backend. Ambos Ingress (`backend-ingress.yaml` para `api-ojociudadano.dev.censei.cl` y `api-gateway-ingress.yaml` para `ojociudadano.dev.censei.cl`) declaran el mismo conjunto de anotaciones:
+
+| Anotación | Valor | Motivo |
+| :--- | :--- | :--- |
+| `proxy-body-size` | `12m` | 10 MB de evidencia (10.485.760 B) + overhead multipart < 12.582.912 B. Subirlo solo traslada el `413` al gateway, que acota el cuerpo a 12 MB. |
+| `proxy-connect-timeout` | `10` | Margen ante reinicios del pod destino sin colgar la conexión. |
+| `proxy-send-timeout` | `180` | Cubre la escritura de 120 s de Android con 60 s de margen para TLS y saltos internos. |
+| `proxy-read-timeout` | `180` | Cubre la respuesta tras procesar y subir a Supabase Storage. |
+| `proxy-request-buffering` | `off` | Reenvía el multipart en streaming en lugar de escribir 10 MB en disco antes de proxificar. |
+| `proxy-buffer-size` | `16k` | Evita el spool a disco por cabeceras grandes (CORS + autorización). |
+| `proxy-buffers-number` | `8` | Valor explícito para no depender del default del controlador. |
+| `proxy-busy-buffers-size` | `32k` | Margen para clientes móviles lentos sin spool a disco. |
+
+**ResourceQuota.** El namespace `student-daalvarez` tiene `requests.memory=1G` y `limits.memory=2G` (`student-provisioner-quota`), con `LimitRange` por contenedor de 25m/64Mi a 500m/512Mi. Los workloads consumen:
+
+| Recurso | Usado | Hard (`1G` / `2G`) | Margen |
+| :--- | ---: | ---: | ---: |
+| `requests.memory` | 832 Mi | 953,7 MiB | ≈121,7 MiB |
+| `limits.memory` | 1856 Mi | 1907 MiB | ≈51,2 MiB (2,7 %) |
+| `requests.cpu` / `limits.cpu` | 200m / 1050m | sin cuota documentada | — |
+
+Por ese margen **no se aumenta RAM en este ajuste**: subir `api-gateway` de 192Mi a 256Mi (+64 MiB) supera el margen y el `apply` fallaría con `Forbidden: exceeded quota`. Si aparece `OOMKilled`, el único camino viable sería rebalancear los tres `postgres` (de 256Mi a 224Mi) antes de subir el gateway, decisión que requiere su propia issue.
+
+**Limitación conocida (fuera de alcance de #286).** El API Gateway aborta cualquier petición proxificada a los **30 s** (`PROXY_TIMEOUT_MS = 30_000` en `web/backend/apps/api-gateway/src/application/services/proxy.service.ts`) y el Nginx del frontend también (`proxy_read_timeout 30s`). Ambos viven dentro del Ingress, de modo que una subida más lenta que 30 s seguirá fallando aunque el Ingress espere 180 s; se documenta como candidata a issue de seguimiento.
+
+**Aplicación y verificación** (el Ingress no lo aplica CI; se hace manualmente):
+
+```bash
+kubectl -n student-daalvarez apply -f infrastructure/k8s/services/backend-ingress.yaml \
+                                   -f infrastructure/k8s/services/api-gateway-ingress.yaml
+kubectl -n student-daalvarez describe ingress api-ojociudadano-ingress | sed -n '/Annotations/,/Events/p'
+kubectl -n student-daalvarez describe resourcequota student-provisioner-quota
+kubectl -n student-daalvarez get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.containerStatuses[*].restartCount}{" "}{.status.containerStatuses[*].lastState.terminated.reason}{"\n"}{end}'
+kubectl -n student-daalvarez rollout status deployment/api-gateway --timeout=120s
+```
+
+Checklist: anotaciones presentes en ambos Ingress, `used` de cuota sin cambios, cero `OOMKilled`, y una subida real de evidencia que supere los 60 s sin `504` del Ingress.
+
 
 ---
 
