@@ -30,6 +30,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
+import retrofit2.HttpException
 import cl.uct.ojociudadano.data.remote.dto.*
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import org.junit.Assert.assertEquals
@@ -319,19 +320,32 @@ class RemoteRepositoryTest {
     }
 
     @Test
-    fun `markAllAsRead marks pending rows and tolerates a failing row`() = runTest {
-        val failing = sampleNotificationDto().copy(id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
-        val apiService = FakeApiService(
-            notifications = listOf(sampleNotificationDto(), failing)
-        ).apply { failMarkReadIds = setOf(failing.id) }
+    fun `markAllAsRead uses the bulk endpoint and publishes every row as read`() = runTest {
+        val second = sampleNotificationDto().copy(id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto(), second))
         val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
         repository.refresh()
 
         val marked = repository.markAllAsRead()
 
-        assertEquals(1, marked)
-        assertTrue(repository.notifications.value.first { it.id != failing.id }.isRead)
-        assertFalse(repository.notifications.value.first { it.id == failing.id }.isRead)
+        assertEquals(1, apiService.markAllCalls)
+        assertEquals(testSession().accessToken, apiService.lastMarkAllSession?.value)
+        assertEquals(2, marked)
+        assertTrue(repository.notifications.value.all { it.isRead })
+        assertEquals(0, repository.unreadCount.value)
+    }
+
+    @Test
+    fun `markAllAsRead does not mutate the list when the backend rejects the bulk call`() = runTest {
+        val apiService = FakeApiService(notifications = listOf(sampleNotificationDto()))
+            .apply { markAllStatus = 500 }
+        val repository = RemoteNotificationRepository(apiService, testSessionManager(), backgroundScope)
+        repository.refresh()
+
+        val failure = runCatching { repository.markAllAsRead() }.exceptionOrNull()
+
+        assertTrue(failure is ApiException.Http)
+        assertFalse(repository.notifications.value.single().isRead)
         assertEquals(1, repository.unreadCount.value)
     }
 
@@ -623,6 +637,15 @@ class RemoteRepositoryTest {
         var markReadStatus: Int? = null
         var failMarkReadIds: Set<String> = emptySet()
 
+        var lastMarkAllSession: TokenSnapshot? = null
+            private set
+        var markAllCalls: Int = 0
+            private set
+        var markAllStatus: Int? = null
+        var markAllResponse: MarcarTodasLeidasDto = MarcarTodasLeidasDto(
+            marcadas = notifications.count { !it.leido }
+        )
+
         override suspend fun markNotificationAsRead(
             id: String,
             expectedSession: TokenSnapshot?
@@ -641,6 +664,22 @@ class RemoteRepositoryTest {
                 )
                 else -> Response.success(Unit)
             }
+        }
+
+        override suspend fun markAllNotificationsAsRead(
+            expectedSession: TokenSnapshot?
+        ): MarcarTodasLeidasDto {
+            lastMarkAllSession = expectedSession
+            markAllCalls++
+            markAllStatus?.let { status ->
+                throw HttpException(
+                    Response.error<MarcarTodasLeidasDto>(
+                        status,
+                        "".toResponseBody("application/json".toMediaType())
+                    )
+                )
+            }
+            return markAllResponse
         }
 
         override suspend fun getUsuarios(
