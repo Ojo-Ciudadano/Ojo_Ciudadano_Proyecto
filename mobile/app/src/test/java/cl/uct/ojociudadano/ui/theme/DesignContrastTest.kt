@@ -16,6 +16,7 @@ class DesignContrastTest {
         val pairs = listOf(
             scheme.primary to scheme.onPrimary,
             scheme.secondary to scheme.onSecondary,
+            scheme.tertiary to scheme.onTertiary,
             scheme.error to scheme.onError,
             scheme.background to scheme.onBackground,
             scheme.surface to scheme.onSurface,
@@ -24,6 +25,12 @@ class DesignContrastTest {
             scheme.primaryContainer to scheme.onPrimaryContainer,
             scheme.secondaryContainer to scheme.onSecondaryContainer,
             scheme.tertiaryContainer to scheme.onTertiaryContainer,
+            scheme.primaryFixed to scheme.onPrimaryFixed,
+            scheme.primaryFixedDim to scheme.onPrimaryFixedVariant,
+            scheme.secondaryFixed to scheme.onSecondaryFixed,
+            scheme.secondaryFixedDim to scheme.onSecondaryFixedVariant,
+            scheme.tertiaryFixed to scheme.onTertiaryFixed,
+            scheme.tertiaryFixedDim to scheme.onTertiaryFixedVariant,
             scheme.inverseSurface to scheme.inverseOnSurface,
             scheme.inverseSurface to scheme.inversePrimary,
             scheme.errorContainer to scheme.onErrorContainer
