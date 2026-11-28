@@ -214,9 +214,9 @@ El cliente HTTP (`web/frontend/src/services/api.ts`) lee `import.meta.env.VITE_A
 | :--- | :--- | :--- | :--- |
 | `web-frontend-config` | `ConfigMap` | `VITE_API_URL: "https://ojociudadano.dev.censei.cl"` | Configuración pública no sensible de la Web. |
 | `backend-config` | `ConfigMap` | `PUBLIC_API_URL`, `CORS_ORIGINS`, `AUTH_SERVICE_URL`, `INCIDENTES_SERVICE_URL`, `NOTIFICACIONES_SERVICE_URL`, `DB_HOST_*`, `DB_PORT_*`, `DB_NAME_*` | Configuración no sensible del backend y API Gateway (#78, #127). |
-| `supabase-config` | `ConfigMap` | `SUPABASE_URL`, `SUPABASE_BUCKET_EVIDENCES` | URL base y nombre del bucket de evidencias (#84). |
+| `supabase-config` | `ConfigMap` | `SUPABASE_URL`, `SUPABASE_BUCKET_EVIDENCES`, `SUPABASE_BUCKET_AVATARS` | URL base y nombre de los buckets de evidencias (#84) y avatares (#275). |
 | `backend-secrets` | `Secret` (`Opaque`) | `postgres-auth`, `postgres-incidentes`, `postgres-notificaciones`, `jwt-secret` | Credenciales privadas de PostgreSQL y firma JWT (exclusivo de pods backend). |
-| `supabase-credentials` | `Secret` (`Opaque`) | `SUPABASE_SERVICE_ROLE_KEY` | Llave administrativa de Supabase Storage (exclusivo del microservicio `incidentes`, #84). |
+| `supabase-credentials` | `Secret` (`Opaque`) | `SUPABASE_SERVICE_ROLE_KEY` | Llave administrativa de Supabase Storage (exclusivo de `incidentes` y `auth-usuarios`, #84 / #275). |
 | `uct-ingress-tls` | `Secret` (`kubernetes.io/tls`) | `tls.crt`, `tls.key` | Certificado y llave privada TLS para el Ingress en `ojociudadano.dev.censei.cl`. |
 
 > [!CAUTION]

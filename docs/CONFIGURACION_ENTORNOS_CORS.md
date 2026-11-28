@@ -32,7 +32,8 @@ Establecer una configuración centralizada por entorno para:
 | `JWT_SECRET` | Clave simétrica para firma y validación de tokens Bearer JWT. | Definida en `.env` local | `Secret`: `backend-secrets` (`key: jwt-secret`) | **Sí** |
 | `SUPABASE_URL` | Endpoint REST/Storage de Supabase para evidencias (#84). | Definida en `.env` local | `ConfigMap`: `supabase-config` | No |
 | `SUPABASE_BUCKET_EVIDENCES` | Nombre del bucket de almacenamiento de fotografías (#84). | `incident-evidences` | `ConfigMap`: `supabase-config` | No |
-| `SUPABASE_SERVICE_ROLE_KEY` | Llave administrativa de Supabase Storage (#84). | Definida en `.env` local | `Secret`: `supabase-credentials` | **Sí** |
+| `SUPABASE_BUCKET_AVATARS` | Nombre del bucket privado de avatares de usuario (#275). | `user-avatars` | `ConfigMap`: `supabase-config` | No |
+| `SUPABASE_SERVICE_ROLE_KEY` | Llave administrativa de Supabase Storage (#84, reutilizada por #275). | Definida en `.env` local | `Secret`: `supabase-credentials` | **Sí** |
 
 ### 2.2 Frontend Web (`web/frontend`)
 
