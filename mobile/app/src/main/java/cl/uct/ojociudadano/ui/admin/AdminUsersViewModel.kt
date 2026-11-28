@@ -8,7 +8,9 @@ import cl.uct.ojociudadano.data.model.Paginated
 import cl.uct.ojociudadano.data.model.UserProfile
 import cl.uct.ojociudadano.data.remote.error.ApiException
 import cl.uct.ojociudadano.data.repository.UserRepository
+import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionRequiredException
+import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.data.session.UserRole
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -36,10 +38,15 @@ data class AdminUsersState(
     val status: UsersLoadState = UsersLoadState.Loading,
     val roleChange: RoleChangeConfirmation? = null,
     val changingRoleIds: Set<String> = emptySet(),
-    val roleChangeError: String? = null
+    val roleChangeError: String? = null,
+    val authenticatedUserId: String? = null
 ) {
     val canGoBack: Boolean get() = status == UsersLoadState.Ready && page > 1
     val canGoForward: Boolean get() = status == UsersLoadState.Ready && page < (result?.totalPages ?: 0)
+
+    fun isCurrentUser(userId: String): Boolean = authenticatedUserId.equals(userId, ignoreCase = true)
+
+    fun canChangeRole(userId: String): Boolean = authenticatedUserId != null && !isCurrentUser(userId)
 }
 
 internal fun UserProfile.alternativeRole(): UserRole? =
@@ -50,13 +57,26 @@ internal fun UserProfile.alternativeRole(): UserRole? =
     }
 
 @MainThread
-class AdminUsersViewModel(private val repository: UserRepository) : ViewModel() {
-    private val _state = MutableStateFlow(AdminUsersState())
+class AdminUsersViewModel(
+    private val repository: UserRepository,
+    private val sessionManager: SessionManager
+) : ViewModel() {
+    private val _state = MutableStateFlow(AdminUsersState(authenticatedUserId = sessionManager.state.value.userId))
     val state = _state.asStateFlow()
     private var job: Job? = null
     private var requestId = 0L
 
-    init { load(1, UserRoleFilter.ALL) }
+    init {
+        viewModelScope.launch {
+            sessionManager.state.collect { session ->
+                val current = _state.value
+                if (session.userId != current.authenticatedUserId) {
+                    _state.value = current.copy(authenticatedUserId = session.userId, roleChange = null)
+                }
+            }
+        }
+        load(1, UserRoleFilter.ALL)
+    }
 
     fun selectFilter(filter: UserRoleFilter) {
         if (filter != _state.value.filter) load(1, filter)
@@ -79,6 +99,7 @@ class AdminUsersViewModel(private val repository: UserRepository) : ViewModel() 
 
     fun requestRoleChange(userId: String) {
         val current = _state.value
+        if (!current.canSubmitRoleChange(userId)) return
         if (current.roleChange != null || userId in current.changingRoleIds) return
         val user = current.result?.items?.find { it.id == userId } ?: return
         val newRole = user.alternativeRole() ?: return
@@ -92,6 +113,10 @@ class AdminUsersViewModel(private val repository: UserRepository) : ViewModel() 
     fun confirmRoleChange() {
         val current = _state.value
         val change = current.roleChange ?: return
+        if (!current.canSubmitRoleChange(change.userId)) {
+            dismissRoleChange()
+            return
+        }
         if (change.userId in current.changingRoleIds) return
         _state.value = current.copy(
             roleChange = null,
@@ -100,6 +125,7 @@ class AdminUsersViewModel(private val repository: UserRepository) : ViewModel() 
         )
         viewModelScope.launch {
             try {
+                if (!current.canSubmitRoleChange(change.userId)) return@launch
                 val roles = repository.updateUserRole(change.userId, change.newRole)
                 ensureActive()
                 applyConfirmedRoles(change.userId, roles)
@@ -114,6 +140,9 @@ class AdminUsersViewModel(private val repository: UserRepository) : ViewModel() 
             }
         }
     }
+
+    private fun AdminUsersState.canSubmitRoleChange(userId: String): Boolean =
+        canChangeRole(userId) && authenticatedUserId == sessionManager.state.value.userId
 
     private fun applyConfirmedRoles(userId: String, roles: List<String>) {
         val current = _state.value
@@ -176,6 +205,9 @@ class AdminUsersViewModel(private val repository: UserRepository) : ViewModel() 
     private companion object { const val PAGE_SIZE = 10 }
 }
 
+private val SessionState.userId: String?
+    get() = (this as? SessionState.Authenticated)?.session?.userId
+
 private fun Throwable.roleChangeMessage(): String = when (this) {
     is SessionRequiredException -> message.orEmpty()
     is ApiException.Network, is java.io.IOException ->
@@ -184,8 +216,11 @@ private fun Throwable.roleChangeMessage(): String = when (this) {
         401 -> "Tu sesión expiró. Inicia sesión nuevamente."
         in 500..599 -> "El servicio de usuarios no está disponible. Intenta más tarde."
         else -> serverMessages.filter { it.isNotBlank() }.joinToString("\n").ifBlank {
-            if (statusCode == 403) "No tienes autorización para cambiar el rol de esta cuenta."
-            else "No se pudo cambiar el rol (HTTP $statusCode)."
+            when (statusCode) {
+                400 -> "El servidor rechazó el cambio de rol de esta cuenta."
+                403 -> "No tienes autorización para cambiar el rol de esta cuenta."
+                else -> "No se pudo cambiar el rol (HTTP $statusCode)."
+            }
         }
     }
     else -> "No se pudo cambiar el rol. Intenta nuevamente."
@@ -203,10 +238,13 @@ private fun Throwable.userListMessage(): String = when (this) {
     else -> "No se pudo interpretar la respuesta de usuarios. Intenta nuevamente."
 }
 
-class AdminUsersViewModelFactory(private val repository: UserRepository) : ViewModelProvider.Factory {
+class AdminUsersViewModelFactory(
+    private val repository: UserRepository,
+    private val sessionManager: SessionManager
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(AdminUsersViewModel::class.java))
-        return AdminUsersViewModel(repository) as T
+        return AdminUsersViewModel(repository, sessionManager) as T
     }
 }

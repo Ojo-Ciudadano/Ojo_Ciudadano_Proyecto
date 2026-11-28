@@ -32,15 +32,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.UserRole
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.LoadingContent
 
 @Composable
-fun AdminUsersScreen(onBack: () -> Unit) {
+fun AdminUsersScreen(sessionManager: SessionManager, onBack: () -> Unit) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
-    val model: AdminUsersViewModel = viewModel(factory = remember(application) {
-        AdminUsersViewModelFactory(application.container.userRepository)
+    val model: AdminUsersViewModel = viewModel(factory = remember(application, sessionManager) {
+        AdminUsersViewModelFactory(application.container.userRepository, sessionManager)
     })
     val state by model.state.collectAsStateWithLifecycle()
     AdminUsersContent(
@@ -120,9 +121,17 @@ fun AdminUsersContent(
                 }
             }
             items(state.result?.items.orEmpty(), key = { it.id }) { user ->
+                val isCurrentUser = state.isCurrentUser(user.id)
                 OutlinedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(user.name, style = MaterialTheme.typography.titleMedium)
+                        if (isCurrentUser) {
+                            Text(
+                                "Tú",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
                         Text(user.email, style = MaterialTheme.typography.bodyMedium)
                         val roles = user.roles.map { role ->
                             UserRole.fromBackend(role)?.label ?: "Rol no reconocido"
@@ -132,7 +141,7 @@ fun AdminUsersContent(
                             color = MaterialTheme.colorScheme.primary,
                             style = MaterialTheme.typography.labelLarge
                         )
-                        if (user.id in state.changingRoleIds) {
+                        if (!isCurrentUser && user.id in state.changingRoleIds) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -143,7 +152,7 @@ fun AdminUsersContent(
                         } else {
                             TextButton(
                                 onClick = { onRequestRoleChange(user.id) },
-                                enabled = user.alternativeRole() != null
+                                enabled = state.canChangeRole(user.id) && user.alternativeRole() != null
                             ) { Text("Cambiar rol") }
                         }
                     }

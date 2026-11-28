@@ -215,6 +215,9 @@ class RemoteIncidentRepository(
     override suspend fun updateUserRole(userId: String, role: UserRole): List<String> {
         val request = UpdateUserRoleRequestDto(rol = role.backendValue)
         val response = withCurrentIdentity(requiredRole = UserRole.ADMIN) { identity ->
+            if (identity.userId.equals(userId, ignoreCase = true)) {
+                throw ApiException.InsufficientPermissions(listOf("No puedes cambiar el rol de tu propia cuenta."))
+            }
             apiService.updateUserRole(userId, request, identity.token)
         }
         val roles = response.roles
