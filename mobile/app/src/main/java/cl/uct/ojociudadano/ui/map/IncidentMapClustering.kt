@@ -14,6 +14,16 @@ internal const val CLUSTER_RADIUS_DP = 56.0
 /** Niveles de zoom que se acercan al tocar un clúster. */
 internal const val CLUSTER_ZOOM_STEP = 2.0
 
+/**
+ * Cantidad máxima de acercamientos que se intentan antes de ofrecer el listado
+ * de incidentes del clúster.
+ *
+ * Los incidentes que comparten exactamente la misma coordenada nunca se separan
+ * por mucho que se acerque la cámara, por lo que este límite evita un ciclo
+ * indefinido de zoom.
+ */
+internal const val MAX_CLUSTER_ZOOM_JUMPS = 3
+
 /** Duración de la animación al enfocar un clúster. */
 internal const val CLUSTER_ZOOM_DURATION_MILLIS = 500L
 
@@ -152,6 +162,29 @@ fun clusterZoomTarget(
     }
     return max(minimumTarget, currentZoom + requiredDelta).coerceAtMost(maxZoom)
 }
+
+/** Acción que corresponde al siguiente toque sobre un clúster. */
+internal enum class ClusterTapDecision {
+    ZOOM,
+    SHOW_INCIDENTS
+}
+
+/**
+ * Decide si el siguiente toque debe acercar la cámara o abrir el listado.
+ *
+ * Se permiten hasta [MAX_CLUSTER_ZOOM_JUMPS] acercamientos. Si la cámara ya no
+ * puede acercarse más, se muestra el listado de inmediato para no dejar al
+ * usuario atrapado en un clúster que nunca se separará.
+ */
+internal fun clusterTapDecision(
+    previousZoomJumps: Int,
+    canZoomFurther: Boolean
+): ClusterTapDecision =
+    if (!canZoomFurther || previousZoomJumps >= MAX_CLUSTER_ZOOM_JUMPS) {
+        ClusterTapDecision.SHOW_INCIDENTS
+    } else {
+        ClusterTapDecision.ZOOM
+    }
 
 private data class CellKey(val x: Long, val y: Long)
 

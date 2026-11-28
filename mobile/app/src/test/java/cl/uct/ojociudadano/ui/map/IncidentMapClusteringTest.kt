@@ -119,6 +119,24 @@ class IncidentMapClusteringTest {
     }
 
     @Test
+    fun `cluster tap allows three zoom jumps before showing incidents`() {
+        assertEquals(ClusterTapDecision.ZOOM, clusterTapDecision(0, canZoomFurther = true))
+        assertEquals(ClusterTapDecision.ZOOM, clusterTapDecision(2, canZoomFurther = true))
+        assertEquals(
+            ClusterTapDecision.SHOW_INCIDENTS,
+            clusterTapDecision(MAX_CLUSTER_ZOOM_JUMPS, canZoomFurther = true)
+        )
+    }
+
+    @Test
+    fun `cluster shows incidents immediately when no further zoom is possible`() {
+        assertEquals(
+            ClusterTapDecision.SHOW_INCIDENTS,
+            clusterTapDecision(0, canZoomFurther = false)
+        )
+    }
+
+    @Test
     fun `cluster zoom target never exceeds the maximum zoom`() {
         val cluster = clusterIncidentMarkers(
             markers = listOf(

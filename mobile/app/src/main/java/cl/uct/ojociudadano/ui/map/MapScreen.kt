@@ -1,14 +1,18 @@
 package cl.uct.ojociudadano.ui.map
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +62,7 @@ import cl.uct.ojociudadano.ui.theme.Spacing
 private const val DEFAULT_LATITUDE = -38.7359
 private const val DEFAULT_LONGITUDE = -72.5904
 private const val DEFAULT_ZOOM = 10.0
+private const val CLUSTER_ZOOM_EPSILON = 0.01
 
 internal object MapTestTags {
     const val LOADING = "map_state_loading"
@@ -66,6 +72,9 @@ internal object MapTestTags {
     const val SUMMARY = "map_marker_summary"
     const val SUMMARY_CLOSE = "map_marker_summary_close"
     const val SUMMARY_DETAIL = "map_marker_summary_detail"
+    const val CLUSTER_LIST = "map_cluster_list"
+    const val CLUSTER_LIST_CLOSE = "map_cluster_list_close"
+    const val CLUSTER_LIST_ITEM_PREFIX = "map_cluster_list_item_"
     const val FILTERS = "map_filters"
     const val FILTER_RESET = "map_filters_reset"
     const val FILTERS_HIDE = "map_filters_hide"
@@ -104,6 +113,23 @@ fun MapScreen(
     val markers = success?.visibleMarkers.orEmpty()
     val selectedMarker = success?.selectedMarker
     var legendExpanded by rememberSaveable { mutableStateOf(false) }
+    var clusterListIncidentIds by remember {
+        mutableStateOf<List<String>>(emptyList())
+    }
+    val clusterListMarkers = remember(markers, clusterListIncidentIds) {
+        val visibleById = markers.associateBy { it.incidentId }
+        clusterListIncidentIds.mapNotNull { visibleById[it] }
+    }
+
+    LaunchedEffect(markers) {
+        if (clusterListIncidentIds.isNotEmpty()) {
+            val visibleIds = markers.mapTo(HashSet()) { it.incidentId }
+            val retained = clusterListIncidentIds.filter { it in visibleIds }
+            if (retained != clusterListIncidentIds) {
+                clusterListIncidentIds = retained
+            }
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val locationPermissionLauncher = rememberLocationPermissionLauncher(
@@ -129,7 +155,15 @@ fun MapScreen(
             selectedIncidentId = selectedMarker?.incidentId,
             userLocation = userLocation,
             onMarkerClick = model::selectIncident,
-            onMapClick = model::clearSelection,
+            onMapClick = {
+                model.clearSelection()
+                clusterListIncidentIds = emptyList()
+            },
+            onClusterIncidentsRequested = { cluster ->
+                clusterListIncidentIds = cluster.markers
+                    .map { it.incidentId }
+                    .distinct()
+            },
             modifier = Modifier.fillMaxSize()
         )
         if (success != null) {
@@ -188,17 +222,32 @@ fun MapScreen(
                 .fillMaxSize()
                 .padding(Spacing.medium)
         )
-        selectedMarker?.let { marker ->
-            IncidentSummaryCard(
-                marker = marker,
-                onClose = model::clearSelection,
-                onOpenDetail = { requestedIncidentId ->
-                    success?.selectedDetailIncidentId(requestedIncidentId)?.let(onIncidentDetail)
+        if (clusterListMarkers.isNotEmpty()) {
+            ClusterIncidentListCard(
+                markers = clusterListMarkers,
+                onClose = { clusterListIncidentIds = emptyList() },
+                onIncidentClick = { incidentId ->
+                    model.selectIncident(incidentId)
+                    clusterListIncidentIds = emptyList()
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(Spacing.medium)
             )
+        } else {
+            selectedMarker?.let { marker ->
+                IncidentSummaryCard(
+                    marker = marker,
+                    onClose = model::clearSelection,
+                    onOpenDetail = { requestedIncidentId ->
+                        success?.selectedDetailIncidentId(requestedIncidentId)
+                            ?.let(onIncidentDetail)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(Spacing.medium)
+                )
+            }
         }
         MapCenterLocationFab(
             isLoading = isLocatingUser,
@@ -230,11 +279,15 @@ private fun IncidentMap(
     userLocation: MapUserLocation?,
     onMarkerClick: (String) -> Unit,
     onMapClick: () -> Unit,
+    onClusterIncidentsRequested: (IncidentCluster) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val currentOnMapClick by rememberUpdatedState(onMapClick)
     val currentOnMarkerClick by rememberUpdatedState(onMarkerClick)
+    val currentOnClusterIncidentsRequested by rememberUpdatedState(
+        onClusterIncidentsRequested
+    )
     val currentMarkers by rememberUpdatedState(markers)
     val currentSelectedIncidentId by rememberUpdatedState(selectedIncidentId)
     val incidentIconCache = remember(context) {
@@ -284,7 +337,8 @@ private fun IncidentMap(
                     selectedIncidentId = currentSelectedIncidentId,
                     iconCache = incidentIconCache,
                     clusterIconCache = clusterIconCache,
-                    clusterRadiusPx = clusterRadiusPx
+                    clusterRadiusPx = clusterRadiusPx,
+                    onClusterIncidentsRequested = currentOnClusterIncidentsRequested
                 )
                 return false
             }
@@ -315,7 +369,8 @@ private fun IncidentMap(
                 selectedIncidentId = selectedIncidentId,
                 iconCache = incidentIconCache,
                 clusterIconCache = clusterIconCache,
-                clusterRadiusPx = clusterRadiusPx
+                clusterRadiusPx = clusterRadiusPx,
+                onClusterIncidentsRequested = onClusterIncidentsRequested
             )
             syncUserLocationMarker(currentMap, userLocation)
         }
@@ -338,7 +393,8 @@ private fun IncidentMap(
  *
  * Los íconos se obtienen de [iconCache] y [clusterIconCache], por lo que solo se
  * renderiza un pin nuevo cuando cambia el estado, la prioridad, la selección o
- * la cantidad de incidentes agrupados.
+ * la cantidad de incidentes agrupados. [onClusterIncidentsRequested] recibe los
+ * clústeres que agotaron sus acercamientos y deben mostrarse como listado.
  */
 internal fun syncIncidentMarkers(
     mapView: MapView,
@@ -348,7 +404,8 @@ internal fun syncIncidentMarkers(
     iconCache: IncidentMarkerIconCache = IncidentMarkerIconProvider.cacheFor(mapView.context),
     clusterIconCache: IncidentClusterIconCache =
         IncidentMarkerIconProvider.clusterCacheFor(mapView.context),
-    clusterRadiusPx: Double = 0.0
+    clusterRadiusPx: Double = 0.0,
+    onClusterIncidentsRequested: (IncidentCluster) -> Unit = {}
 ) {
     val desiredById = desiredMarkers.associateBy { it.incidentId }
     val selectedId = selectedIncidentId?.takeIf { it in desiredById }
@@ -452,13 +509,20 @@ internal fun syncIncidentMarkers(
                     mapView = mapView,
                     cluster = cluster,
                     iconCache = clusterIconCache,
-                    clusterRadiusPx = clusterRadiusPx
+                    clusterRadiusPx = clusterRadiusPx,
+                    onClusterIncidentsRequested = onClusterIncidentsRequested
                 )
             )
             changed = true
         } else {
             previous.setOnMarkerClickListener { _, _ ->
-                zoomIntoIncidentCluster(mapView, cluster, clusterRadiusPx)
+                handleClusterMarkerClick(
+                    marker = previous,
+                    cluster = cluster,
+                    mapView = mapView,
+                    clusterRadiusPx = clusterRadiusPx,
+                    onClusterIncidentsRequested = onClusterIncidentsRequested
+                )
                 true
             }
             val position = previous.position
@@ -508,13 +572,17 @@ private class IncidentMarker(mapView: MapView) : Marker(mapView) {
 internal class IncidentClusterMarker(mapView: MapView) : Marker(mapView) {
     var clusterIds: List<String> = emptyList()
     var count: Int = 0
+
+    /** Acercamientos ya realizados desde que se creó este grupo. */
+    var zoomJumps: Int = 0
 }
 
 private fun createIncidentClusterMarker(
     mapView: MapView,
     cluster: IncidentCluster,
     iconCache: IncidentClusterIconCache,
-    clusterRadiusPx: Double
+    clusterRadiusPx: Double,
+    onClusterIncidentsRequested: (IncidentCluster) -> Unit
 ): IncidentClusterMarker = IncidentClusterMarker(mapView).apply {
     position = GeoPoint(cluster.latitude, cluster.longitude)
     clusterIds = cluster.incidentIds
@@ -524,13 +592,59 @@ private fun createIncidentClusterMarker(
     setIcon(iconCache.iconFor(cluster.count))
     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
     setOnMarkerClickListener { _, _ ->
-        zoomIntoIncidentCluster(mapView, cluster, clusterRadiusPx)
+        handleClusterMarkerClick(
+            marker = this@apply,
+            cluster = cluster,
+            mapView = mapView,
+            clusterRadiusPx = clusterRadiusPx,
+            onClusterIncidentsRequested = onClusterIncidentsRequested
+        )
         true
     }
 }
 
 private fun clusterTitle(count: Int): String =
     if (count == 1) "1 incidente agrupado" else "$count incidentes agrupados"
+
+/**
+ * Atiende el toque sobre un clúster.
+ *
+ * Mientras queden saltos disponibles, acerca la cámara. Cuando se alcanza
+ * [MAX_CLUSTER_ZOOM_JUMPS] o ya no es posible acercarse más, solicita el
+ * listado de incidentes para que los reportes que comparten una ubicación
+ * exacta sigan siendo accesibles.
+ */
+private fun handleClusterMarkerClick(
+    marker: IncidentClusterMarker,
+    cluster: IncidentCluster,
+    mapView: MapView,
+    clusterRadiusPx: Double,
+    onClusterIncidentsRequested: (IncidentCluster) -> Unit
+) {
+    val targetZoom = clusterZoomTarget(
+        cluster = cluster,
+        currentZoom = mapView.zoomLevelDouble,
+        clusterRadiusPixels = clusterRadiusPx,
+        maxZoom = mapView.maxZoomLevel
+    )
+    val canZoomFurther = targetZoom > mapView.zoomLevelDouble + CLUSTER_ZOOM_EPSILON
+
+    when (clusterTapDecision(marker.zoomJumps, canZoomFurther)) {
+        ClusterTapDecision.ZOOM -> {
+            marker.zoomJumps += 1
+            marker.snippet = if (marker.zoomJumps >= MAX_CLUSTER_ZOOM_JUMPS) {
+                "Toca para ver los incidentes"
+            } else {
+                "Toca para acercar"
+            }
+            animateToIncidentCluster(mapView, cluster, targetZoom)
+        }
+
+        ClusterTapDecision.SHOW_INCIDENTS -> {
+            onClusterIncidentsRequested(cluster)
+        }
+    }
+}
 
 /**
  * Acerca la cámara al centro de [cluster] hasta un zoom que permita separar sus
@@ -548,6 +662,14 @@ internal fun zoomIntoIncidentCluster(
         clusterRadiusPixels = clusterRadiusPx,
         maxZoom = mapView.maxZoomLevel
     )
+    animateToIncidentCluster(mapView, cluster, targetZoom)
+}
+
+private fun animateToIncidentCluster(
+    mapView: MapView,
+    cluster: IncidentCluster,
+    targetZoom: Double
+) {
     mapView.controller.animateTo(
         GeoPoint(cluster.latitude, cluster.longitude),
         targetZoom,
@@ -686,6 +808,130 @@ internal fun IncidentSummaryCard(
                     .testTag(MapTestTags.SUMMARY_DETAIL)
             ) {
                 Text("Ver detalle del incidente")
+            }
+        }
+    }
+}
+
+/**
+ * Lista los incidentes de un clúster que no puede separarse más.
+ *
+ * Aparece cuando se agotan los acercamientos o la cámara ya está en el zoom
+ * máximo. Cada fila permite seleccionar el incidente para abrir su resumen y,
+ * desde ahí, navegar al detalle.
+ */
+@Composable
+internal fun ClusterIncidentListCard(
+    markers: List<IncidentMapMarker>,
+    onClose: () -> Unit,
+    onIncidentClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .widthIn(max = 480.dp)
+            .fillMaxWidth()
+            .testTag(MapTestTags.CLUSTER_LIST),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.small)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Incidentes en esta ubicación",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${markers.size} reportes en esta ubicación.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = onClose,
+                    modifier = Modifier.testTag(MapTestTags.CLUSTER_LIST_CLOSE)
+                ) {
+                    Text("Cerrar")
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 280.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.small)
+            ) {
+                items(markers, key = { it.incidentId }) { marker ->
+                    ClusterIncidentRow(
+                        marker = marker,
+                        onClick = { onIncidentClick(marker.incidentId) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClusterIncidentRow(
+    marker: IncidentMapMarker,
+    onClick: () -> Unit
+) {
+    val summary = marker.summary
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Seleccionar incidente",
+                onClick = onClick
+            )
+            .testTag(MapTestTags.CLUSTER_LIST_ITEM_PREFIX + marker.incidentId),
+        shape = MaterialTheme.shapes.small,
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.small),
+            verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall)
+        ) {
+            Text(
+                text = summary.title ?: summary.categoryName ?: "Incidente sin título",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (summary.title != null && summary.categoryName != null) {
+                Text(
+                    summary.categoryName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            summary.statusName?.let { IncidentStatusBadge(it) }
+            if (summary.priorityLevel != null) {
+                IncidentPriorityBadge(summary.priorityLevel)
+            }
+            summary.referenceAddress?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
