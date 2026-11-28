@@ -48,6 +48,13 @@ class AuthenticatedUsersFlowTest {
             } catch (error: ApiException.InsufficientPermissions) {
                 assertEquals(listOf(message), error.serverMessages)
             }
+            try {
+                repository.updateUserRole(session.userId.uppercase(), UserRole.CIUDADANO)
+                fail("The signed-in administrator cannot send a patch for their own account")
+            } catch (error: ApiException.InsufficientPermissions) {
+                assertEquals(listOf("No puedes cambiar el rol de tu propia cuenta."), error.serverMessages)
+            }
+            assertEquals(3, server.requestCount)
             manager.establish(testSession())
             try {
                 repository.updateUserRole(userId, UserRole.ADMIN)

@@ -173,11 +173,11 @@ fun AppNavigation(
                 )
             }
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN_USERS) {
-                AdminUsersScreen(onBack = {
+                AdminUsersScreen(sessionManager = sessionManager) {
                     if (RoleAccessPolicy.allows(sessionManager.state.value, AppRoutes.ADMIN) &&
                         !navController.popBackStack(AppRoutes.ADMIN, inclusive = false)
                     ) navigate(AppRoutes.ADMIN)
-                })
+                }
             }
             protectedComposable(sessionManager, navController, AppRoutes.ADMIN_COMING_SOON) { entry ->
                 AdminComingSoonScreen(
