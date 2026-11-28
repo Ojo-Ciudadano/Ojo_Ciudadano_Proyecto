@@ -32,7 +32,16 @@ metadata:
   namespace: student-daalvarez
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Mismo tuning que el Ingress del host Android (backend-ingress.yaml): el
+    # navegador tambien sube evidencias de hasta 10 MB a traves de este host.
     nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "32k"
     external-dns.alpha.kubernetes.io/target: "proxy.inf.uct.cl"
 spec:
   ingressClassName: nginx
