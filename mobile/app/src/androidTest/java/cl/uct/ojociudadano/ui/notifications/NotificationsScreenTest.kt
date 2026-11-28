@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -268,6 +269,115 @@ class NotificationsScreenTest {
         indicator.assertDoesNotExist()
         list.performTouchInput { swipeDown() }
         indicator.assertIsDisplayed()
+    }
+
+    @Test fun unreadCardOffersIndividualMarkAndReadCardDoesNot() {
+        val marked = mutableListOf<String>()
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(
+                        notification(id = "u", isRead = false),
+                        notification(id = "r", isRead = true)
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onMarkAsRead = { marked += it.id }
+                )
+            }
+        }
+
+        compose.onNodeWithTag(NotificationsTestTags.unreadIndicator("u")).assertIsDisplayed()
+        compose.onNodeWithTag(NotificationsTestTags.unreadIndicator("r")).assertDoesNotExist()
+        compose.onNodeWithTag(NotificationsTestTags.markRead("r")).assertDoesNotExist()
+
+        compose.onNodeWithTag(NotificationsTestTags.markRead("u")).performClick()
+        assertEquals(listOf("u"), marked)
+    }
+
+    @Test fun markingStateShowsProgressAndDisablesTheCardAction() {
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(notification(id = "u", isRead = false)),
+                    onBack = {},
+                    onRetry = {},
+                    markingIds = setOf("u"),
+                    onMarkAsRead = {}
+                )
+            }
+        }
+
+        compose.onNodeWithTag(NotificationsTestTags.marking("u")).assertIsDisplayed()
+        compose.onNodeWithText("Marcando…").assertIsDisplayed()
+        compose.onNodeWithTag(NotificationsTestTags.markRead("u")).assertIsNotEnabled()
+    }
+
+    @Test fun markAllActionCallsBackAndDisablesWithoutUnreadRows() {
+        var markedAll = 0
+        val rows = mutableStateOf(listOf(notification(id = "u", isRead = false)))
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = rows.value,
+                    onBack = {},
+                    onRetry = {},
+                    unreadCount = rows.value.count { !it.isRead },
+                    onMarkAllAsRead = { markedAll++ }
+                )
+            }
+        }
+
+        compose.onNodeWithTag(NotificationsTestTags.MARK_ALL).performClick()
+        assertEquals(1, markedAll)
+
+        compose.runOnIdle { rows.value = listOf(notification(id = "r", isRead = true)) }
+        compose.onNodeWithTag(NotificationsTestTags.MARK_ALL).assertIsNotEnabled()
+    }
+
+    @Test fun markAllInProgressShowsProgressAndBlocksAnotherTap() {
+        var markedAll = 0
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(notification(id = "u", isRead = false)),
+                    onBack = {},
+                    onRetry = {},
+                    unreadCount = 1,
+                    isMarkingAll = true,
+                    onMarkAllAsRead = { markedAll++ }
+                )
+            }
+        }
+
+        compose.onNodeWithTag(NotificationsTestTags.MARK_ALL_PROGRESS).assertIsDisplayed()
+        compose.onNodeWithTag(NotificationsTestTags.MARK_ALL).assertIsNotEnabled()
+        assertEquals(0, markedAll)
+    }
+
+    @Test fun actionErrorIsShownDismissableAndSeparateFromTheQueryError() {
+        var dismissed = false
+        compose.setContent {
+            OjoCiudadanoTheme {
+                NotificationsContent(
+                    state = NotificationsUiState.Success,
+                    notifications = listOf(notification(id = "u", isRead = false)),
+                    onBack = {},
+                    onRetry = {},
+                    actionError = "No se pudo marcar la notificación (HTTP 500).",
+                    onDismissActionError = { dismissed = true }
+                )
+            }
+        }
+
+        compose.onNodeWithTag(NotificationsTestTags.ACTION_ERROR).assertIsDisplayed()
+        compose.onNodeWithText("No se pudo marcar la notificación (HTTP 500).").assertIsDisplayed()
+        compose.onNodeWithText("Entendido").performClick()
+        assertTrue(dismissed)
     }
 
     private val notification = Notification(
