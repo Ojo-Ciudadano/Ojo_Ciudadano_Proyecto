@@ -4,10 +4,12 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
-import cl.uct.ojociudadano.ui.theme.IncidentTones
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,7 +21,7 @@ import org.osmdroid.views.overlay.Marker
 class IncidentMarkerSyncTest {
 
     private lateinit var mapView: MapView
-    private lateinit var lightIcons: IncidentMarkerIcons
+    private lateinit var iconCache: IncidentMarkerIconCache
 
     @Before
     fun setUp() {
@@ -30,7 +32,7 @@ class IncidentMarkerSyncTest {
                 context.getSharedPreferences("osmdroid-test", 0)
             )
             mapView = MapView(context)
-            lightIcons = IncidentMarkerIcons(context.resources, IncidentTones.Light)
+            iconCache = IncidentMarkerIconCache(context.resources)
         }
     }
 
@@ -60,18 +62,24 @@ class IncidentMarkerSyncTest {
 
     @Test
     fun changingThemeRecolorsExistingMarkerInPlace() {
-        val data = IncidentMapMarker("first", -38.7359, -72.5904,
-            IncidentMapSummary(statusName = "En revisión", priorityLevel = 3))
-        sync(listOf(data))
-        val marker = incidentMarkers().single()
-        val lightBitmap = (marker.icon as BitmapDrawable).bitmap
-        onMainThread {
-            val darkIcons = IncidentMarkerIcons(mapView.resources, IncidentTones.Dark)
-            syncIncidentMarkers(mapView, listOf(data), darkIcons)
-        }
-        assertSame(marker, incidentMarkers().single())
-        val darkBitmap = (marker.icon as BitmapDrawable).bitmap
-        org.junit.Assert.assertFalse(lightBitmap.sameAs(darkBitmap))
+        val markers = listOf(
+            incidentMarker("first", status = "En revisión", priority = 3),
+            incidentMarker("second", status = "Resuelto", priority = 1)
+        )
+        sync(markers, selectedIncidentId = "first")
+        val marker = markerById("first")
+        val lightIcon = marker.icon as BitmapDrawable
+
+        sync(markers, selectedIncidentId = "first", darkTheme = true)
+
+        assertSame(marker, markerById("first"))
+        assertSame(marker, mapView.overlays.last())
+        assertTrue(marker.icon.intrinsicWidth > markerById("second").icon.intrinsicWidth)
+        assertFalse(lightIcon.bitmap.sameAs((marker.icon as BitmapDrawable).bitmap))
+
+        sync(markers, selectedIncidentId = "first")
+        assertSame(lightIcon, marker.icon)
+        assertEquals(4, iconCache.cachedIconCount)
     }
 
     @Test
@@ -116,6 +124,49 @@ class IncidentMarkerSyncTest {
     }
 
     @Test
+    fun syncAssignsCustomIconsAndReusesCachedInstances() {
+        val cache = IncidentMarkerIconCache(resources)
+        val markers = listOf(
+            incidentMarker("new", status = "Nuevo", priority = 2),
+            incidentMarker("resolved", status = "Resuelto", priority = 5)
+        )
+
+        sync(markers, cache = cache)
+
+        val newIcon = markerById("new").icon
+        assertNotNull(newIcon)
+        assertNotSame(newIcon, markerById("resolved").icon)
+        assertEquals(2, cache.cachedIconCount)
+
+        sync(markers, cache = cache)
+
+        assertSame(newIcon, markerById("new").icon)
+        assertEquals(2, cache.cachedIconCount)
+    }
+
+    @Test
+    fun selectedMarkerUsesHighlightedIconAndIsDrawnLast() {
+        val cache = IncidentMarkerIconCache(resources)
+        val markers = listOf(
+            incidentMarker("first", status = "Nuevo", priority = 1),
+            incidentMarker("second", status = "En revisión", priority = 3)
+        )
+
+        sync(markers, selectedIncidentId = "first", cache = cache)
+
+        val selectedIcon = markerById("first").icon
+        assertNotSame(selectedIcon, markerById("second").icon)
+        assertTrue(selectedIcon.intrinsicWidth > markerById("second").icon.intrinsicWidth)
+        assertEquals("first", (mapView.overlays.last() as Marker).relatedObject)
+
+        sync(markers, selectedIncidentId = "second", cache = cache)
+
+        assertNotSame(selectedIcon, markerById("first").icon)
+        assertTrue(markerById("second").icon.intrinsicWidth > markerById("first").icon.intrinsicWidth)
+        assertEquals("second", (mapView.overlays.last() as Marker).relatedObject)
+    }
+
+    @Test
     fun userLocationMarkerIsCreatedOnceAndUpdatedInPlace() {
         onMainThread {
             syncUserLocationMarker(mapView, userLocation(-38.7359, -72.5904))
@@ -142,14 +193,14 @@ class IncidentMarkerSyncTest {
             syncIncidentMarkers(
                 mapView,
                 listOf(IncidentMapMarker("first", -38.7359, -72.5904)),
-                lightIcons
+                iconCache = iconCache
             )
         }
 
         assertEquals(1, incidentMarkers().size)
         assertEquals(1, markerList().count { it.title == "Tu ubicación actual" })
 
-        onMainThread { syncIncidentMarkers(mapView, emptyList(), lightIcons) }
+        sync(emptyList())
 
         assertEquals(0, incidentMarkers().size)
         assertEquals(1, markerList().count { it.title == "Tu ubicación actual" })
@@ -165,6 +216,27 @@ class IncidentMarkerSyncTest {
         assertEquals(0, markerList().count { it.title == "Tu ubicación actual" })
     }
 
+    private val resources
+        get() = InstrumentationRegistry.getInstrumentation().targetContext.resources
+
+    private fun incidentMarker(
+        id: String,
+        status: String? = null,
+        priority: Int? = null
+    ) = IncidentMapMarker(
+        incidentId = id,
+        latitude = -38.7359,
+        longitude = -72.5904,
+        summary = IncidentMapSummary(
+            statusName = status,
+            priorityLevel = priority
+        )
+    )
+
+    private fun markerById(id: String): Marker = incidentMarkers().single {
+        it.relatedObject == id
+    }
+
     private fun userLocation(latitude: Double, longitude: Double) = MapUserLocation(
         coordinate = GeoCoordinate(
             latitude = latitude,
@@ -177,8 +249,21 @@ class IncidentMarkerSyncTest {
     private fun incidentMarkers(): List<Marker> =
         markerList().filter { it.relatedObject is String }
 
-    private fun sync(markers: List<IncidentMapMarker>) {
-        onMainThread { syncIncidentMarkers(mapView, markers, lightIcons) }
+    private fun sync(
+        markers: List<IncidentMapMarker>,
+        selectedIncidentId: String? = null,
+        darkTheme: Boolean = false,
+        cache: IncidentMarkerIconCache = iconCache
+    ) {
+        onMainThread {
+            syncIncidentMarkers(
+                mapView = mapView,
+                desiredMarkers = markers,
+                selectedIncidentId = selectedIncidentId,
+                darkTheme = darkTheme,
+                iconCache = cache
+            )
+        }
     }
 
     private fun onMainThread(block: () -> Unit) {

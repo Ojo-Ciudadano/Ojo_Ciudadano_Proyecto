@@ -44,8 +44,11 @@ object ReportPhotoTestTags {
     private const val REMOVE_PHOTO_BUTTON_PREFIX = "report_photo_remove_"
     private const val PHOTO_PREVIEW_ERROR_PREFIX = "report_photo_preview_error_"
     private const val PHOTO_LOADED_PREFIX = "report_photo_loaded_"
+    private const val UPLOAD_STATUS_PREFIX = "report_photo_upload_status_"
 
     fun thumbnail(fileName: String): String = "$PHOTO_THUMBNAIL_PREFIX$fileName"
+
+    fun uploadStatus(fileName: String): String = "$UPLOAD_STATUS_PREFIX$fileName"
 
     fun removeButton(fileName: String): String = "$REMOVE_PHOTO_BUTTON_PREFIX$fileName"
 
@@ -77,7 +80,8 @@ internal fun EvidencePhotoSection(
     onPickPhotoClick: () -> Unit,
     onRemovePhoto: (IncidentPhotoEvidence) -> Unit,
     onPhotoPreviewError: (IncidentPhotoEvidence) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    photoUploadStatuses: Map<String, EvidenceUploadStatus> = emptyMap()
 ) {
     var previewFileName by rememberSaveable { mutableStateOf<String?>(null) }
     val previewPhoto = previewFileName?.let { fileName ->
@@ -127,7 +131,8 @@ internal fun EvidencePhotoSection(
                         enabled = enabled,
                         onRemove = { onRemovePhoto(photo) },
                         onOpenPreview = { previewFileName = photo.fileName },
-                        onPreviewError = { onPhotoPreviewError(photo) }
+                        onPreviewError = { onPhotoPreviewError(photo) },
+                        uploadStatus = photoUploadStatuses[photo.fileName]
                     )
                 }
             }

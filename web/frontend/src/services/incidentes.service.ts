@@ -49,6 +49,11 @@ export async function obtenerIncidentes(
 ): Promise<Incidente[]> {
   const params: Record<string, string> = {}
 
+  const ciudad = filtros.ciudad?.trim()
+  if (ciudad) {
+    params.ciudad = ciudad
+  }
+
   const estadoId = filtros.estadoId?.trim()
   if (estadoId) {
     params.estadoId = estadoId

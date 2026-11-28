@@ -1,3 +1,5 @@
+import { IncidentFilterBar } from '../../components/incidentes/IncidentFilterBar'
+import { CIUDADES_INCIDENTES } from '../../config/ciudadesIncidentes'
 import { Link } from 'react-router-dom'
 import { EstadoIncidenteBadge } from '../../components/ui/EstadoIncidenteBadge'
 import { EstadoVistaMensaje } from '../../components/ui/EstadoVistaMensaje'
@@ -98,9 +100,8 @@ export function IncidentesPage() {
     filtros,
     estados,
     categorias,
-    comunas,
     hayFiltros,
-    cambiarFiltro,
+    cambiarFiltros,
     restablecerFiltros,
     paginaActual,
     totalPaginas,
@@ -198,74 +199,20 @@ export function IncidentesPage() {
         cuatro tarjetas.
       </p>
 
-      <div
-        className="incidentes-filtros"
-        role="group"
-        aria-label="Filtros de incidentes"
-      >
-        <div className="incidentes-filtro">
-          <label htmlFor="filtro-estado">Estado</label>
-          <select
-            id="filtro-estado"
-            value={filtros.estadoId}
-            onChange={(event) =>
-              cambiarFiltro('estadoId', event.target.value)
-            }
-          >
-            <option value="">Todos los estados</option>
-            {estados.map((estado) => (
-              <option key={estado.id} value={estado.id}>
-                {estado.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="incidentes-filtro">
-          <label htmlFor="filtro-comuna">Comuna</label>
-          <select
-            id="filtro-comuna"
-            value={filtros.comuna}
-            onChange={(event) =>
-              cambiarFiltro('comuna', event.target.value)
-            }
-          >
-            <option value="">Todas las comunas</option>
-            {comunas.map((comuna) => (
-              <option key={comuna} value={comuna}>
-                {comuna}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="incidentes-filtro">
-          <label htmlFor="filtro-categoria">Categoría</label>
-          <select
-            id="filtro-categoria"
-            value={filtros.categoriaId}
-            onChange={(event) =>
-              cambiarFiltro('categoriaId', event.target.value)
-            }
-          >
-            <option value="">Todas las categorías</option>
-            {categorias.map((categoria) => (
-              <option key={categoria.id} value={categoria.id}>
-                {categoria.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          type="button"
-          className="incidentes-restablecer"
-          onClick={restablecerFiltros}
-          disabled={!hayFiltros}
-        >
-          Restablecer filtros
-        </button>
-      </div>
+      <IncidentFilterBar
+        filtros={filtros}
+        ciudades={CIUDADES_INCIDENTES}
+        estados={estados}
+        categorias={categorias}
+        onChange={cambiarFiltros}
+        onLimpiar={restablecerFiltros}
+        defaultExpanded
+        titulo="Filtros de incidentes"
+        ariaLabel="Filtros de incidentes"
+        idPrefix="incidentes-admin-filtros"
+        className="incidentes-filtros-barra"
+        disabled={cargando}
+      />
 
       <div aria-busy={cargando}>
         {cargando ? (

@@ -39,6 +39,14 @@ class OjoCiudadanoApplication : Application(), SingletonImageLoader.Factory {
         // El ciclo se mantiene inactivo mientras no haya sesión o la app esté en
         // segundo plano; ver NotificationSyncScheduler.
         container.notificationSyncScheduler.start()
+        // Las imágenes autenticadas no deben sobrevivir a un cambio de cuenta.
+        container.imageCacheInvalidator.observe(
+            container.applicationScope,
+            container.sessionManager.state
+        )
+        container.applicationScope.launch(Dispatchers.IO) {
+            container.evidenceTempCleaner.cleanupExpired()
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader = container.imageLoader

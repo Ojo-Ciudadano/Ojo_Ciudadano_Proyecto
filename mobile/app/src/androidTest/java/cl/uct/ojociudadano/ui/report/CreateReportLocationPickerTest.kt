@@ -3,6 +3,7 @@ package cl.uct.ojociudadano.ui.report
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -74,6 +75,85 @@ class CreateReportLocationPickerTest {
     }
 
     @Test
+    fun showsTheLocationPreviewWithCoordinatesAddressAndSource() {
+        setScreen(
+            location = LocationResult.Success(
+                latitude = -38.7396,
+                longitude = -72.5984
+            ),
+            locationSource = LocationSelectionSource.MANUAL,
+            referenceAddress = "Av. Alemania 123",
+            commune = "Temuco"
+        )
+
+        composeTestRule
+            .onNodeWithTag(LocationPreviewTestTags.CARD)
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithTag(LocationPreviewTestTags.MAP)
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithText("Latitud: -38.739600\nLongitud: -72.598400")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithText("Av. Alemania 123 · Temuco")
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithText("Seleccionada en el mapa")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun showsAPendingStateWhenNoCoordinateHasBeenSelected() {
+        setScreen(location = LocationResult.NotAvailable)
+
+        composeTestRule
+            .onNodeWithTag(LocationPreviewTestTags.PENDING)
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithText("Ubicación pendiente")
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithTag(LocationPreviewTestTags.CARD)
+            .assertDoesNotExist()
+
+        composeTestRule
+            .onNodeWithTag(LocationPreviewTestTags.MAP)
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun opensTheMapPickerWhenTappingTheLocationPreview() {
+        var openRequests = 0
+        setScreen(
+            location = LocationResult.Success(
+                latitude = -38.7396,
+                longitude = -72.5984
+            ),
+            locationSource = LocationSelectionSource.DEVICE,
+            onChooseLocationOnMap = { openRequests += 1 }
+        )
+
+        composeTestRule
+            .onNodeWithTag(LocationPreviewTestTags.CARD)
+            .performScrollTo()
+            .performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals(1, openRequests)
+        }
+    }
+
+    @Test
     fun disablesTheLocationActionsWhileTheFormIsNotEditable() {
         setScreen(
             submissionState = CreateReportSubmissionState.CreatingIncident
@@ -94,6 +174,9 @@ class CreateReportLocationPickerTest {
         location: LocationResult = LocationResult.NotAvailable,
         locationSource: LocationSelectionSource = LocationSelectionSource.NONE,
         submissionState: CreateReportSubmissionState = CreateReportSubmissionState.Idle,
+        referenceAddress: String = "",
+        commune: String = "",
+        region: String = "",
         onRefreshLocation: () -> Unit = {},
         onChooseLocationOnMap: () -> Unit = {}
     ) {
@@ -102,7 +185,10 @@ class CreateReportLocationPickerTest {
                 CreateReportScreen(
                     state = CreateReportFormState(
                         location = location,
-                        locationSource = locationSource
+                        locationSource = locationSource,
+                        referenceAddress = referenceAddress,
+                        commune = commune,
+                        region = region
                     ),
                     categories = emptyList(),
                     isLoadingCategories = false,

@@ -6,3 +6,4 @@ metadata:
 data:
   SUPABASE_URL: "https://mnqirqjxmamzhoenntnj.supabase.co/rest/v1/"
   SUPABASE_BUCKET_EVIDENCES: "incident-evidences"
+  SUPABASE_BUCKET_AVATARS: "user-avatars"
