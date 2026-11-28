@@ -32,6 +32,18 @@ class NotificationsViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
+    /** Ids con marcado individual en curso: la tarjeta muestra progreso. */
+    private val _markingIds = MutableStateFlow<Set<String>>(emptySet())
+    val markingIds = _markingIds.asStateFlow()
+
+    /** Verdadero mientras el marcado masivo está en curso. */
+    private val _isMarkingAll = MutableStateFlow(false)
+    val isMarkingAll = _isMarkingAll.asStateFlow()
+
+    /** Fallo de marcado apto para el ciudadano; la pantalla lo muestra descartable. */
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError = _actionError.asStateFlow()
+
     init {
         load()
         // El ciclo periódico publica en el repositorio sin pasar por load(); el
@@ -103,6 +115,47 @@ class NotificationsViewModel(
                 // Silencioso a propósito.
             }
         }
+    }
+
+    /**
+     * Marca una notificación desde la lista y expone el fallo sin sacar al
+     * usuario de la pantalla: la fila sigue visible para reintentar.
+     */
+    fun markAsRead(notification: Notification) {
+        if (notification.isRead || notification.id in _markingIds.value) return
+        _markingIds.value = _markingIds.value + notification.id
+        viewModelScope.launch {
+            try {
+                repository.markAsRead(notification.id)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (exception: Exception) {
+                _actionError.value = exception.notificationActionMessage()
+            } finally {
+                _markingIds.value = _markingIds.value - notification.id
+            }
+        }
+    }
+
+    /** Marca todas las pendientes con la única petición del backend (#327). */
+    fun markAllAsRead() {
+        if (_isMarkingAll.value) return
+        _isMarkingAll.value = true
+        viewModelScope.launch {
+            try {
+                repository.markAllAsRead()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (exception: Exception) {
+                _actionError.value = exception.notificationActionMessage(bulk = true)
+            } finally {
+                _isMarkingAll.value = false
+            }
+        }
+    }
+
+    fun dismissActionError() {
+        _actionError.value = null
     }
 
     class Factory(

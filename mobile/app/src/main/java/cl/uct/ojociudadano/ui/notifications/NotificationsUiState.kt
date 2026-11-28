@@ -42,3 +42,25 @@ fun Throwable.isNotificationRetryable(): Boolean = when (this) {
     is ApiException.Http -> statusCode !in setOf(401, 403)
     else -> true
 }
+
+/**
+ * Mensaje de las acciones de marcado (#284): la consulta pudo haber funcionado
+ * y solo falló la escritura, así que el texto habla de marcar, no de consultar.
+ */
+fun Throwable.notificationActionMessage(bulk: Boolean = false): String {
+    val action = if (bulk) "marcar todas las notificaciones" else "marcar la notificación"
+    val forbidden = if (bulk) "marcar tus notificaciones" else "modificar esta notificación"
+    return when (this) {
+        is SessionRequiredException -> message.orEmpty()
+        is ApiException.Http -> when (statusCode) {
+            401 -> "Tu sesión expiró. Inicia sesión nuevamente."
+            403 -> "No tienes autorización para $forbidden."
+            in 500..599 ->
+                "No se pudo $action: el servicio no está disponible (HTTP $statusCode). Intenta más tarde."
+            else -> "No se pudo $action (HTTP $statusCode)."
+        }
+        is ApiException.Network, is java.io.IOException ->
+            "No fue posible conectar con el servidor. Revisa tu conexión e intenta nuevamente."
+        else -> "No se pudo $action. Intenta nuevamente."
+    }
+}

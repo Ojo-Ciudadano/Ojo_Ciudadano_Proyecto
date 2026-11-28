@@ -148,6 +148,32 @@ class RoleNavigationTest {
         }
     }
 
+    @Test fun citizenSeesTheNotificationsShortcutAndCanOpenIt() {
+        val manager = DefaultSessionManager(Storage(session("CIUDADANO")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme { AppNavigation(manager, controller, startDestination = AppRoutes.HOME) }
+        }
+        compose.waitUntil(5_000) { controller.currentDestination?.route == AppRoutes.HOME }
+        compose.onNodeWithText("Avisos").assertIsDisplayed()
+        compose.onNodeWithText("Avisos").performClick()
+        compose.runOnIdle { assertEquals(AppRoutes.NOTIFICATIONS, controller.currentDestination?.route) }
+    }
+
+    @Test fun administratorDoesNotSeeTheNotificationsShortcut() {
+        val manager = DefaultSessionManager(Storage(session("ADMIN")))
+        runBlocking { manager.restore() }
+        lateinit var controller: NavHostController
+        compose.setContent {
+            controller = rememberNavController()
+            OjoCiudadanoTheme { AppNavigation(manager, controller, startDestination = AppRoutes.ADMIN) }
+        }
+        compose.onNodeWithText("Panel de administración").assertIsDisplayed()
+        compose.onNodeWithText("Avisos").assertDoesNotExist()
+    }
+
     @Test fun administratorCannotNavigateToCitizenDestinationsEvenBypassingActionGuard() {
         val manager = DefaultSessionManager(Storage(session("ADMIN")))
         runBlocking { manager.restore() }

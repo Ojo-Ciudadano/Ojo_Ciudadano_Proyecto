@@ -254,6 +254,91 @@ class NotificationsViewModelTest {
         assertFalse(model.isRefreshing.value)
     }
 
+    @Test fun `marking an unread notification exposes progress and clears it afterwards`() = runTest {
+        val repository = Repository().apply { rows = listOf(notification(id = "n1", isRead = false)) }
+        val gate = CompletableDeferred<Unit>()
+        repository.markPending = gate
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.markAsRead(model.notifications.value.single())
+        runCurrent()
+        assertEquals(setOf("n1"), model.markingIds.value)
+
+        gate.complete(Unit)
+        runCurrent()
+
+        assertTrue(model.markingIds.value.isEmpty())
+        assertEquals(listOf("n1"), repository.markedIds)
+        assertTrue(model.notifications.value.single().isRead)
+        assertEquals(0, model.unreadCount.value)
+    }
+
+    @Test fun `a failed individual mark exposes a controlled action error`() = runTest {
+        val repository = Repository().apply {
+            rows = listOf(notification(id = "n1", isRead = false))
+            markFailure = ApiException.Network(IOException("offline"))
+        }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.markAsRead(model.notifications.value.single())
+        runCurrent()
+
+        assertTrue(model.actionError.value.orEmpty().contains("conectar"))
+        assertTrue(model.markingIds.value.isEmpty())
+        // La fila sigue pendiente y la pantalla no cambia de estado.
+        assertEquals(NotificationsUiState.Success, model.state.value)
+        assertFalse(model.notifications.value.single().isRead)
+
+        model.dismissActionError()
+        assertEquals(null, model.actionError.value)
+    }
+
+    @Test fun `marking all uses the repository once and ignores duplicate taps`() = runTest {
+        val repository = Repository().apply {
+            rows = listOf(
+                notification(id = "n1", isRead = false),
+                notification(id = "n2", isRead = false)
+            )
+        }
+        val gate = CompletableDeferred<Unit>()
+        repository.markAllPending = gate
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.markAllAsRead()
+        model.markAllAsRead()
+        runCurrent()
+        assertEquals(1, repository.markAllCalls)
+        assertTrue(model.isMarkingAll.value)
+
+        gate.complete(Unit)
+        runCurrent()
+
+        assertFalse(model.isMarkingAll.value)
+        assertEquals(0, model.unreadCount.value)
+        assertTrue(model.notifications.value.all { it.isRead })
+    }
+
+    @Test fun `a failed bulk mark explains that nothing was updated`() = runTest {
+        val repository = Repository().apply {
+            rows = listOf(notification(id = "n1", isRead = false))
+            markAllFailure = ApiException.Http(500, emptyList(), null, "/api/v1/notificaciones/leidas")
+        }
+        val model = NotificationsViewModel(repository)
+        runCurrent()
+
+        model.markAllAsRead()
+        runCurrent()
+
+        val message = model.actionError.value.orEmpty()
+        assertTrue(message.contains("todas las notificaciones"))
+        assertTrue(message.contains("500"))
+        assertFalse(model.isMarkingAll.value)
+        assertEquals(1, model.unreadCount.value)
+    }
+
     private class Repository : NotificationRepository {
         var rows: List<Notification> = emptyList()
         var failure: Throwable? = null
@@ -277,8 +362,10 @@ class NotificationsViewModelTest {
 
         var markedIds = mutableListOf<String>()
         var markFailure: Throwable? = null
+        var markPending: CompletableDeferred<Unit>? = null
 
         override suspend fun markAsRead(id: String) {
+            markPending?.await()
             markFailure?.let { throw it }
             markedIds += id
             _notifications.value = _notifications.value.map {
@@ -287,7 +374,19 @@ class NotificationsViewModelTest {
             _unreadCount.value = _notifications.value.count { !it.isRead }
         }
 
-        override suspend fun markAllAsRead(): Int = error("Not used by this test")
+        var markAllCalls = 0
+        var markAllFailure: Throwable? = null
+        var markAllPending: CompletableDeferred<Unit>? = null
+
+        override suspend fun markAllAsRead(): Int {
+            markAllCalls++
+            markAllPending?.await()
+            markAllFailure?.let { throw it }
+            val marked = _notifications.value.count { !it.isRead }
+            _notifications.value = _notifications.value.map { it.copy(isRead = true) }
+            _unreadCount.value = 0
+            return marked
+        }
 
         /** Simula una publicación del ciclo periódico de #282. */
         fun publish(rows: List<Notification>) {

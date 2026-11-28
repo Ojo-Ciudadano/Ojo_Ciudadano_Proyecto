@@ -9,7 +9,6 @@ import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.data.session.SessionRequiredException
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.data.session.requireIdentity
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,20 +66,13 @@ class RemoteNotificationRepository(
     }
 
     override suspend fun markAllAsRead(): Int = stateMutex.withLock {
-        var marked = 0
-        // El contrato masivo aún no está definido en el backend; se reutiliza la
-        // operación individual sin volver a tomar el lock (evita el deadlock).
-        _notifications.value.filter { !it.isRead }.forEach { row ->
-            try {
-                markAsReadLocked(row.id)
-                marked++
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: Exception) {
-                // Silencioso: la notificación permanece pendiente.
-            }
+        val response = withCurrentIdentity { identity ->
+            apiService.markAllNotificationsAsRead(expectedSession = identity.token)
         }
-        marked
+        // El backend confirma cuántas filas cambió; aunque `marcadas` sea 0, ya
+        // no queda ninguna pendiente de su lado y la lista local debe reflejarlo.
+        publish(_notifications.value.map { it.copy(isRead = true) })
+        response.marcadas
     }
 
     /** Requiere que el llamador ya tenga [stateMutex] tomado. */

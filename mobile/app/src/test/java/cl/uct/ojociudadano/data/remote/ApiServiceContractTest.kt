@@ -139,4 +139,16 @@ class ApiServiceContractTest {
         assertTrue(method.parameterAnnotations[0].any { it is Path })
         assertTrue(method.parameterAnnotations[1].any { it is Tag })
     }
+
+    @Test
+    fun `markAllNotificationsAsRead uses the bulk read route with session tag`() {
+        val method = ApiService::class.java.declaredMethods
+            .single { it.name == "markAllNotificationsAsRead" }
+
+        val patch = requireNotNull(method.getAnnotation(PATCH::class.java))
+
+        assertEquals("api/v1/notificaciones/leidas", patch.value)
+        assertTrue(method.parameterAnnotations.flatten().none { it is Path })
+        assertTrue(method.parameterAnnotations[0].any { it is Tag })
+    }
 }

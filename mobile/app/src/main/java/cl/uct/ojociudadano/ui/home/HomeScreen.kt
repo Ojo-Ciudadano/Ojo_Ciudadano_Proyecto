@@ -18,6 +18,7 @@ import cl.uct.ojociudadano.OjoCiudadanoApplication
 import cl.uct.ojociudadano.data.model.Incident
 import cl.uct.ojociudadano.data.session.SessionState
 import cl.uct.ojociudadano.ui.components.CitizenHeader
+import cl.uct.ojociudadano.ui.notifications.NotificationBadge
 import cl.uct.ojociudadano.ui.reports.*
 import cl.uct.ojociudadano.ui.theme.Spacing
 import cl.uct.ojociudadano.ui.theme.incidentStatusTone
@@ -36,11 +37,20 @@ fun HomeScreen(
     state: IncidentsUiState = IncidentsUiState.Success,
     onRetry: () -> Unit = {},
     onMapClick: () -> Unit = {},
-    onIncidentClick: (String) -> Unit = {}
+    onIncidentClick: (String) -> Unit = {},
+    unreadCount: Int = 0
 ) {
     Column(modifier.fillMaxSize().testTag("citizen_home")) {
         CitizenHeader("Ojo Ciudadano", "Ciudadano") {
-            IconButton(onClick = onNotificationsClick) { Icon(Icons.Default.Notifications, "Notificaciones", tint = MaterialTheme.colorScheme.onPrimary) }
+            IconButton(onClick = onNotificationsClick) {
+                NotificationBadge(count = unreadCount) {
+                    Icon(
+                        Icons.Default.Notifications,
+                        "Notificaciones",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.page), verticalArrangement = Arrangement.spacedBy(Spacing.page)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -100,10 +110,12 @@ fun HomeScreen(onReportsClick: () -> Unit = {}, onCreateReportClick: () -> Unit 
     val incidents by model.incidents.collectAsState()
     val state by model.uiState.collectAsState()
     val session by app.container.sessionManager.state.collectAsState()
+    val unreadCount by app.container.notificationRepository.unreadCount.collectAsState()
     // Refresh when returning from creation or another destination.
     LaunchedEffect(Unit) { model.loadIncidents() }
     HomeScreen(onReportsClick = onReportsClick, onCreateReportClick = onCreateReportClick,
         onNotificationsClick = onNotificationsClick, onMapClick = onMapClick, onIncidentClick = onIncidentClick,
+        unreadCount = unreadCount,
         recentIncidents = incidents.sortedByDescending { it.createdAt }.take(3),
         incidentsUnderReview = incidents.count { it.status.name in listOf("Nuevo", "En revisión") },
         incidentsInViewOf = incidents.count { it.status.name == "En atención" },
