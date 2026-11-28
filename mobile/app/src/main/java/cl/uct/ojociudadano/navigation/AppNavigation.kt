@@ -83,6 +83,14 @@ fun AppNavigation(
     registrationContent: (@Composable (onBack: () -> Unit) -> Unit)? = null
 ) {
     val sessionState by sessionManager.state.collectAsState()
+    // Fuera de una app real (previews o tests aislados) no hay contenedor: el
+    // badge simplemente no muestra pendientes.
+    val application = androidx.compose.ui.platform.LocalContext.current.applicationContext
+        as? cl.uct.ojociudadano.OjoCiudadanoApplication
+    val unreadNotifications by (
+        application?.container?.notificationRepository?.unreadCount
+            ?: kotlinx.coroutines.flow.flowOf(0)
+        ).collectAsState(initial = 0)
     fun navigate(route: String) {
         navController.navigateIfAllowed(sessionManager, route)
     }
@@ -127,7 +135,8 @@ fun AppNavigation(
             if (currentRoute in citizenRoutes && RoleAccessPolicy.allows(sessionState, currentRoute)) {
                 AppBottomNavigation(
                     currentRoute = currentRoute,
-                    isDestinationAllowed = { RoleAccessPolicy.allows(sessionState, it) }
+                    isDestinationAllowed = { RoleAccessPolicy.allows(sessionState, it) },
+                    unreadCount = unreadNotifications
                 ) { route ->
                     if (route != currentRoute) {
                         requestNavigation {

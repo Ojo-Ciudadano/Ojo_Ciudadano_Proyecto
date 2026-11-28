@@ -127,11 +127,11 @@ fun NotificationsContent(
     notifications: List<Notification>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
     onNotificationClick: (Notification) -> Unit = {},
     onInvalidIncident: (Notification) -> Unit = {},
     invalidIncidentMessage: String? = null,
     onDismissInvalidIncident: () -> Unit = {},
-    modifier: Modifier = Modifier,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = onRetry,
     unreadCount: Int = notifications.count { !it.isRead },
@@ -403,6 +403,7 @@ private fun MarkAllNotificationsAction(
 }
 
 internal object NotificationsTestTags {
+    const val BADGE = "notifications_badge"
     const val MARK_ALL = "notifications_mark_all"
     const val MARK_ALL_PROGRESS = "notifications_mark_all_progress"
     const val ACTION_ERROR = "notifications_action_error"
