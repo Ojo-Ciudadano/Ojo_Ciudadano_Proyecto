@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -222,6 +223,10 @@ internal fun EvidencePhotoPreviewDialog(
 
                 IconButton(
                     onClick = onDismiss,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = EvidenceScrim,
+                        contentColor = OnEvidenceCanvas
+                    ),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(Spacing.medium)
@@ -229,8 +234,7 @@ internal fun EvidencePhotoPreviewDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
-                        contentDescription = "Cerrar vista previa",
-                        tint = OnEvidenceCanvas
+                        contentDescription = "Cerrar vista previa"
                     )
                 }
 
@@ -238,7 +242,9 @@ internal fun EvidencePhotoPreviewDialog(
                     text = formatEvidencePhotoSize(photo.sizeBytes),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(Spacing.medium),
+                        .padding(Spacing.medium)
+                        .background(EvidenceScrim, CircleShape)
+                        .padding(horizontal = Spacing.small, vertical = Spacing.extraSmall),
                     color = OnEvidenceCanvas,
                     style = MaterialTheme.typography.bodySmall
                 )
