@@ -6,6 +6,7 @@ import cl.uct.ojociudadano.data.remote.dto.CreateIncidentRequestDto
 import cl.uct.ojociudadano.data.remote.dto.IncidentDto
 import cl.uct.ojociudadano.data.remote.dto.LoginRequestDto
 import cl.uct.ojociudadano.data.remote.dto.LoginResponseDto
+import cl.uct.ojociudadano.data.remote.dto.MarcarTodasLeidasDto
 import cl.uct.ojociudadano.data.remote.dto.NotificationDto
 import cl.uct.ojociudadano.data.remote.dto.EvidenceDto
 import okhttp3.MultipartBody
@@ -119,6 +120,17 @@ interface ApiService {
         @Path("id") id: String,
         @Tag expectedSession: TokenSnapshot? = null
     ): Response<Unit>
+
+    /**
+     * Marca todas las notificaciones pendientes del usuario autenticado.
+     *
+     * El backend (#327) responde `{ marcadas: n }` con 200; el cuerpo tipado
+     * evita un refetch para confirmar el conteo.
+     */
+    @PATCH("api/v1/notificaciones/leidas")
+    suspend fun markAllNotificationsAsRead(
+        @Tag expectedSession: TokenSnapshot? = null
+    ): MarcarTodasLeidasDto
 
     @GET("api/v1/usuarios")
     suspend fun getUsuarios(
