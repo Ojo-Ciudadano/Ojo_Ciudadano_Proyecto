@@ -1,10 +1,13 @@
 package cl.uct.ojociudadano.ui.profile
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -13,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,11 +33,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cl.uct.ojociudadano.OjoCiudadanoApplication
+import cl.uct.ojociudadano.R
 import cl.uct.ojociudadano.data.model.UserProfile
+import cl.uct.ojociudadano.data.preferences.ThemeMode
 import cl.uct.ojociudadano.data.session.SessionManager
 import cl.uct.ojociudadano.ui.components.CitizenHeader
 import cl.uct.ojociudadano.ui.components.CitizenMessage
@@ -52,7 +59,8 @@ import cl.uct.ojociudadano.ui.theme.Spacing
 fun ProfileScreen(
     sessionManager: SessionManager,
     modifier: Modifier = Modifier,
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    onBack: (() -> Unit)? = null
 ) {
     val application = LocalContext.current.applicationContext as OjoCiudadanoApplication
     val model: ProfileViewModel = viewModel(
@@ -61,7 +69,17 @@ fun ProfileScreen(
         }
     )
     val state by model.state.collectAsState()
-    ProfileContent(state = state, onRetry = model::retry, onLogout = onLogout, modifier = modifier)
+    val themePreferences = application.container.themePreferences
+    val themeMode by themePreferences.mode.collectAsState()
+    ProfileContent(
+        state = state,
+        onRetry = model::retry,
+        onLogout = onLogout,
+        themeMode = themeMode,
+        onThemeModeChange = themePreferences::setMode,
+        modifier = modifier,
+        onBack = onBack
+    )
 }
 
 @Composable
@@ -69,7 +87,10 @@ fun ProfileContent(
     state: ProfileUiState,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -78,7 +99,7 @@ fun ProfileContent(
             .padding(Spacing.page),
         verticalArrangement = Arrangement.spacedBy(Spacing.medium)
     ) {
-        CitizenHeader("Mi perfil")
+        CitizenHeader("Mi perfil", onBack = onBack)
         when (state) {
             ProfileUiState.Loading -> ProfileLoading()
             is ProfileUiState.Error -> ProfileError(state, onRetry)
@@ -87,7 +108,7 @@ fun ProfileContent(
                 ProfileDetails(state.profile)
             }
         }
-        SettingsCard()
+        ThemeSettingsCard(themeMode, onThemeModeChange)
         // La acción de sesión no depende de los datos del perfil: se mantiene
         // disponible incluso mientras la consulta carga o falla.
         Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
@@ -139,7 +160,7 @@ private fun ProfileIdentity(profile: UserProfile) {
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -150,8 +171,7 @@ private fun ProfileIdentity(profile: UserProfile) {
                 Text(profile.email, style = MaterialTheme.typography.bodyMedium)
                 Text(
                     roleLabel(profile.roles),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }
@@ -188,20 +208,38 @@ private fun ProfileDetail(label: String, value: String) {
 }
 
 @Composable
-private fun SettingsCard() {
+private fun ThemeSettingsCard(mode: ThemeMode, onModeChange: (ThemeMode) -> Unit) {
     Card {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(vertical = Spacing.medium)
         ) {
-            Icon(Icons.Filled.Settings, contentDescription = null)
             Text(
-                "La apariencia y el movimiento respetan las preferencias del sistema.",
-                style = MaterialTheme.typography.bodyMedium
+                stringResource(R.string.app_theme),
+                modifier = Modifier.padding(horizontal = Spacing.page),
+                style = MaterialTheme.typography.titleMedium
             )
+            Column(Modifier.selectableGroup()) {
+                ThemeMode.entries.forEach { option ->
+                    val selected = option == mode
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .heightIn(min = Spacing.touchTarget)
+                            .selectable(selected, role = Role.RadioButton, onClick = { onModeChange(option) })
+                            .padding(horizontal = Spacing.page),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.medium)
+                    ) {
+                        RadioButton(selected = selected, onClick = null)
+                        Text(stringResource(when (option) {
+                            ThemeMode.SYSTEM -> R.string.app_theme_system
+                            ThemeMode.LIGHT -> R.string.app_theme_light
+                            ThemeMode.DARK -> R.string.app_theme_dark
+                        }))
+                    }
+                }
+            }
         }
     }
 }

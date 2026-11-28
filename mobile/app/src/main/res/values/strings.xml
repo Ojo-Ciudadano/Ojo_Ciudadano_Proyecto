@@ -1,4 +1,8 @@
 <resources>
+    <string name="app_theme">Tema de la aplicación</string>
+    <string name="app_theme_system">Sistema</string>
+    <string name="app_theme_light">Claro</string>
+    <string name="app_theme_dark">Oscuro</string>
     <string name="app_name">ojoCiudadano</string>
     <string name="session_expired_notice">Tu sesión expiró. Vuelve a iniciar sesión</string>
     <string name="dismiss_notice">Cerrar aviso</string>

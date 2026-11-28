@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import cl.uct.ojociudadano.domain.model.GeoCoordinate
 import cl.uct.ojociudadano.domain.model.LocationResult
+import cl.uct.ojociudadano.ui.map.applyMapAppearance
+import cl.uct.ojociudadano.ui.theme.LocalDarkTheme
 import cl.uct.ojociudadano.ui.theme.Spacing
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
@@ -271,6 +274,8 @@ private fun LocationPreviewMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val darkTheme = LocalDarkTheme.current
+    val mapBackground = MaterialTheme.colorScheme.surfaceVariant.toArgb()
     val mapView = remember(context) {
         Configuration.getInstance().load(
             context,
@@ -311,6 +316,7 @@ private fun LocationPreviewMap(
 
     AndroidView(
         factory = { mapView },
+        update = { it.applyMapAppearance(darkTheme, mapBackground) },
         modifier = modifier.testTag(LocationPreviewTestTags.MAP)
     )
 }

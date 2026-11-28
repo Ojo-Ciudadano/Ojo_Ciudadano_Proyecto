@@ -15,6 +15,7 @@ import cl.uct.ojociudadano.data.media.EvidencePhotoFileStore
 import cl.uct.ojociudadano.data.media.EvidenceTempCleaner
 import cl.uct.ojociudadano.data.notifications.AppForegroundState
 import cl.uct.ojociudadano.data.notifications.NotificationSyncScheduler
+import cl.uct.ojociudadano.data.preferences.ThemePreferences
 import cl.uct.ojociudadano.data.remote.ApiService
 import cl.uct.ojociudadano.data.remote.RetrofitClient
 import cl.uct.ojociudadano.data.repository.UserRepository
@@ -48,6 +49,8 @@ class AppContainer(
     context: Context,
     baseUrl: String = BuildConfig.API_BASE_URL
 ) {
+    val themePreferences: ThemePreferences by lazy { ThemePreferences(context) }
+
     val sessionStorage: SessionStorage by lazy {
         EncryptedSharedPreferencesSessionStorage(
             context = context,

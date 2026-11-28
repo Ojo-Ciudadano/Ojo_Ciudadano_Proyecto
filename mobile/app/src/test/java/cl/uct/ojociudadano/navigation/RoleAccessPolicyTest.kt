@@ -17,11 +17,11 @@ class RoleAccessPolicyTest {
         AppRoutes.CREATE_REPORT, AppRoutes.NOTIFICATIONS, AppRoutes.MAP, AppRoutes.PROFILE)
     private val adminRoutes = listOf(AppRoutes.ADMIN, AppRoutes.ADMIN_USERS, AppRoutes.ADMIN_INCIDENTS,
         AppRoutes.ADMIN_INCIDENT_DETAIL, "admin/incidents/test-id", "admin/incidents/id%2Fencoded",
-        AppRoutes.ADMIN_COMING_SOON) + AdminFutureSection.entries.map { it.route }
-    private val routes = citizenRoutes + adminRoutes + listOf(AppRoutes.ROLE_UNAVAILABLE,
+        AppRoutes.ADMIN_COMING_SOON, AppRoutes.PROFILE) + AdminFutureSection.entries.map { it.route }
+    private val routes = (citizenRoutes + adminRoutes).distinct() + listOf(AppRoutes.ROLE_UNAVAILABLE,
         AppRoutes.LOGIN, AppRoutes.REGISTER)
 
-    @Test fun `each valid role can access only its own screens and actions`() {
+    @Test fun `both roles share the profile and retain their own protected routes`() {
         for (route in routes) {
             assertEquals(route, route in citizenRoutes, RoleAccessPolicy.allows(state("CIUDADANO"), route))
             assertEquals(route, route in adminRoutes, RoleAccessPolicy.allows(state("ADMIN"), route))

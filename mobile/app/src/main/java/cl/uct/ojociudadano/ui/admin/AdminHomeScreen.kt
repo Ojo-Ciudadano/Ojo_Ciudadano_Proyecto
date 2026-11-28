@@ -12,7 +12,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
@@ -33,12 +35,16 @@ fun AdminHomeScreen(
     email: String,
     onIncidentManagementClick: () -> Unit,
     onLogout: () -> Unit,
+    onProfileClick: () -> Unit,
     modifier: Modifier = Modifier,
     onUserManagementClick: () -> Unit = {},
     onFutureSectionClick: (AdminFutureSection) -> Unit = {}
 ) {
     Column(modifier.fillMaxSize()) {
         CitizenHeader(title = "Ojo Ciudadano", subtitle = "Administrador") {
+            IconButton(onClick = onProfileClick) {
+                Icon(Icons.Filled.Person, contentDescription = "Mi perfil")
+            }
             TextButton(onClick = onLogout) {
                 Text("Cerrar sesión", color = MaterialTheme.colorScheme.onPrimary)
             }

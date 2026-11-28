@@ -1,5 +1,6 @@
 package cl.uct.ojociudadano.ui.map
 
+import android.graphics.drawable.Drawable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +50,7 @@ import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import cl.uct.ojociudadano.ui.components.IncidentPriorityBadge
 import cl.uct.ojociudadano.ui.components.IncidentStatusBadge
+import cl.uct.ojociudadano.ui.theme.LocalDarkTheme
 import cl.uct.ojociudadano.ui.theme.Spacing
 
 /** Centro inicial: plaza de Temuco, Región de La Araucanía. */
@@ -230,6 +233,8 @@ private fun IncidentMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val darkTheme = LocalDarkTheme.current
+    val mapBackground = MaterialTheme.colorScheme.surfaceVariant.toArgb()
     val currentOnMapClick by rememberUpdatedState(onMapClick)
     val mapView = remember(context) {
         Configuration.getInstance().load(
@@ -258,6 +263,10 @@ private fun IncidentMap(
         onDispose { mapView.onDetach() }
     }
 
+    LaunchedEffect(mapView, darkTheme, mapBackground) {
+        mapView.applyMapAppearance(darkTheme, mapBackground)
+    }
+
     LaunchedEffect(mapView, userLocation?.focusRequestId) {
         val target = userLocation ?: return@LaunchedEffect
         mapView.post {
@@ -273,7 +282,8 @@ private fun IncidentMap(
                 mapView = currentMap,
                 desiredMarkers = markers,
                 onMarkerClick = onMarkerClick,
-                selectedIncidentId = selectedIncidentId
+                selectedIncidentId = selectedIncidentId,
+                darkTheme = darkTheme
             )
             syncUserLocationMarker(currentMap, userLocation)
         }
@@ -289,7 +299,7 @@ private fun IncidentMap(
  * normales del estado no acumulan marcadores.
  *
  * Los íconos se obtienen del [iconCache], por lo que solo se renderiza un pin
- * nuevo cuando cambia el estado, la prioridad o la selección del incidente. El
+ * nuevo por cada combinación de estado, prioridad, selección y tema. El
  * marcador seleccionado se dibuja al final para quedar por encima del resto.
  */
 internal fun syncIncidentMarkers(
@@ -297,6 +307,7 @@ internal fun syncIncidentMarkers(
     desiredMarkers: List<IncidentMapMarker>,
     onMarkerClick: (String) -> Unit = {},
     selectedIncidentId: String? = null,
+    darkTheme: Boolean = false,
     iconCache: IncidentMarkerIconCache = IncidentMarkerIconProvider.cacheFor(mapView.context)
 ) {
     val desiredById = desiredMarkers.associateBy { it.incidentId }
@@ -328,11 +339,12 @@ internal fun syncIncidentMarkers(
 
     desiredById.forEach { (incidentId, data) ->
         val visual = data.visual(selected = incidentId == selectedId)
+        val icon = iconCache.iconFor(visual, darkTheme)
         val previous = currentById[incidentId]
         when {
             previous == null -> {
                 mapView.overlays.add(
-                    createIncidentMarker(mapView, data, visual, iconCache, onMarkerClick)
+                    createIncidentMarker(mapView, data, icon, onMarkerClick)
                 )
                 changed = true
             }
@@ -342,7 +354,7 @@ internal fun syncIncidentMarkers(
                 // también adopten el ícono personalizado y el estado de selección.
                 mapView.overlays.remove(previous)
                 mapView.overlays.add(
-                    createIncidentMarker(mapView, data, visual, iconCache, onMarkerClick)
+                    createIncidentMarker(mapView, data, icon, onMarkerClick)
                 )
                 changed = true
             }
@@ -357,9 +369,8 @@ internal fun syncIncidentMarkers(
                     previous.position = GeoPoint(data.latitude, data.longitude)
                     changed = true
                 }
-                if (previous.visual != visual) {
-                    previous.setIcon(iconCache.iconFor(visual))
-                    previous.visual = visual
+                if (previous.icon !== icon) {
+                    previous.setIcon(icon)
                     changed = true
                 }
             }
@@ -382,22 +393,17 @@ internal fun syncIncidentMarkers(
     }
 }
 
-/** Marcador que recuerda la apariencia aplicada para evitar re-renderizarla. */
-private class IncidentMarker(mapView: MapView) : Marker(mapView) {
-    var visual: IncidentMarkerVisual? = null
-}
+private class IncidentMarker(mapView: MapView) : Marker(mapView)
 
 private fun createIncidentMarker(
     mapView: MapView,
     data: IncidentMapMarker,
-    visual: IncidentMarkerVisual,
-    iconCache: IncidentMarkerIconCache,
+    icon: Drawable,
     onMarkerClick: (String) -> Unit
 ): Marker = IncidentMarker(mapView).apply {
     position = GeoPoint(data.latitude, data.longitude)
     relatedObject = data.incidentId
-    this.visual = visual
-    setIcon(iconCache.iconFor(visual))
+    setIcon(icon)
     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
     setOnMarkerClickListener { _, _ ->
         onMarkerClick(data.incidentId)

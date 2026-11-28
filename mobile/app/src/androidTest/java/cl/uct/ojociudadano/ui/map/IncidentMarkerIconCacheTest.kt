@@ -3,7 +3,7 @@ package cl.uct.ojociudadano.ui.map
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.graphics.toArgb
-import cl.uct.ojociudadano.ui.theme.incidentStatusTone
+import cl.uct.ojociudadano.ui.theme.IncidentTones
 import kotlin.math.roundToInt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
@@ -79,24 +79,23 @@ class IncidentMarkerIconCacheTest {
     fun markerFillUsesTheSameStatusColorAsTheStateBadges() {
         val cache = IncidentMarkerIconCache(resources)
 
-        IncidentMarkerStatus.legendEntries.forEach { status ->
-            val bitmap = cache.iconFor(
-                IncidentMarkerVisual(
-                    status = status,
-                    priority = IncidentMarkerPriority.MEDIUM
+        for (darkTheme in listOf(false, true)) {
+            val tones = if (darkTheme) IncidentTones.Dark else IncidentTones.Light
+            IncidentMarkerStatus.legendEntries.forEach { status ->
+                val visual = IncidentMarkerVisual(status, IncidentMarkerPriority.MEDIUM)
+                val bitmap = cache.iconFor(visual, darkTheme).bitmap
+
+                val fillPixel = bitmap.getPixel(
+                    bitmap.width / 2,
+                    (bitmap.height * 0.18f).roundToInt()
                 )
-            ).bitmap
 
-            val fillPixel = bitmap.getPixel(
-                bitmap.width / 2,
-                (bitmap.height * 0.18f).roundToInt()
-            )
-
-            assertEquals(
-                "Color de relleno incorrecto para $status",
-                incidentStatusTone(status.backendName).container.toArgb(),
-                fillPixel
-            )
+                assertEquals(
+                    "Color de relleno incorrecto para $status con tema oscuro=$darkTheme",
+                    tones.status(status.backendName).container.toArgb(),
+                    fillPixel
+                )
+            }
         }
     }
 
@@ -116,7 +115,7 @@ class IncidentMarkerIconCacheTest {
         )
 
         assertEquals(
-            incidentStatusTone(IncidentMarkerStatus.RESOLVED.backendName).container.toArgb(),
+            IncidentTones.Light.status(IncidentMarkerStatus.RESOLVED.backendName).container.toArgb(),
             bodyPixel
         )
     }

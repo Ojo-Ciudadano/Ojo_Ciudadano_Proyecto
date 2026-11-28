@@ -49,6 +49,7 @@ internal fun MapLegendToggle(
                 modifier = Modifier.size(FilterChipDefaults.IconSize)
             )
         },
+        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = modifier.testTag(MapTestTags.LEGEND_TOGGLE)
     )
 }

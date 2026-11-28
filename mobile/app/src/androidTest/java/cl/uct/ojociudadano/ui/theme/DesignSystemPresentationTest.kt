@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
@@ -28,9 +29,10 @@ class DesignSystemPresentationTest {
 
     @Test fun sameIncidentHasReadableLabelsInBothListsMapAndDetails() {
         val scene = mutableIntStateOf(0)
+        val darkTheme = mutableStateOf(false)
         var backs = 0
         compose.setContent {
-            OjoCiudadanoTheme(darkTheme = false) {
+            OjoCiudadanoTheme(darkTheme = darkTheme.value) {
                 Surface(Modifier.width(320.dp).fillMaxHeight()) {
                     when (scene.intValue) {
                         0 -> Column {
@@ -60,17 +62,22 @@ class DesignSystemPresentationTest {
         compose.onNodeWithContentDescription("Volver")
             .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
         assertEquals(1, backs)
-        for ((index, name) in listOf("citizen-list", "map-summary", "admin-list", "admin-detail", "citizen-detail").withIndex()) {
-            compose.runOnIdle { scene.intValue = index }
-            compose.onNodeWithText("Estado: En revisión", useUnmergedTree = true).apply {
-                if (index != 1) performScrollTo()
-            }.assertIsDisplayed().assertHasNoClickAction()
-            capture("issue295-$name-state")
-            compose.onNodeWithText("Prioridad: 5 · Crítica", useUnmergedTree = true).apply {
-                if (index != 1) performScrollTo()
-            }.assertIsDisplayed().assertHasNoClickAction()
-            if (index == 3) compose.onNodeWithText("Modificar prioridad").performScrollTo()
-            capture("issue295-$name-priority")
+        val scenes = listOf("citizen-list", "map-summary", "admin-list", "admin-detail", "citizen-detail")
+        for (dark in listOf(false, true)) {
+            val theme = if (dark) "dark" else "light"
+            compose.runOnIdle { darkTheme.value = dark }
+            for ((index, name) in scenes.withIndex()) {
+                compose.runOnIdle { scene.intValue = index }
+                compose.onNodeWithText("Estado: En revisión", useUnmergedTree = true).apply {
+                    if (index != 1) performScrollTo()
+                }.assertIsDisplayed().assertHasNoClickAction()
+                capture("issue296-$theme-$name-state")
+                compose.onNodeWithText("Prioridad: 5 · Crítica", useUnmergedTree = true).apply {
+                    if (index != 1) performScrollTo()
+                }.assertIsDisplayed().assertHasNoClickAction()
+                if (index == 3) compose.onNodeWithText("Modificar prioridad").performScrollTo()
+                capture("issue296-$theme-$name-priority")
+            }
         }
     }
 

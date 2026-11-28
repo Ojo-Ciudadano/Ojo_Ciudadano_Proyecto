@@ -10,34 +10,35 @@ import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.graphics.toArgb
-import cl.uct.ojociudadano.ui.theme.CitizenBlue
-import cl.uct.ojociudadano.ui.theme.incidentStatusTone
+import cl.uct.ojociudadano.ui.theme.DarkColorScheme
+import cl.uct.ojociudadano.ui.theme.IncidentTones
+import cl.uct.ojociudadano.ui.theme.LightColorScheme
 import kotlin.math.roundToInt
 
 /**
  * Caché en memoria de los íconos ya renderizados para los marcadores del mapa.
  *
- * Las combinaciones de estado, prioridad y selección son finitas; reutilizar la
+ * Las combinaciones de estado, prioridad, selección y tema son finitas. Reutilizar la
  * misma instancia evita crear bitmaps cada vez que osmdroid redibuja la capa de
  * marcadores o el estado de la pantalla se recompone.
  */
 internal class IncidentMarkerIconCache(private val resources: Resources) {
 
-    private val icons = HashMap<IncidentMarkerVisual, BitmapDrawable>()
+    private val icons = HashMap<Pair<IncidentMarkerVisual, Boolean>, BitmapDrawable>()
 
     /** Cantidad de íconos distintos renderizados; útil para verificar la caché. */
     val cachedIconCount: Int
         get() = icons.size
 
     /** Devuelve el ícono cacheado para [visual] o lo renderiza la primera vez. */
-    fun iconFor(visual: IncidentMarkerVisual): BitmapDrawable =
-        icons.getOrPut(visual) {
-            BitmapDrawable(resources, renderMarkerBitmap(visual)).apply {
+    fun iconFor(visual: IncidentMarkerVisual, darkTheme: Boolean = false): BitmapDrawable =
+        icons.getOrPut(visual to darkTheme) {
+            BitmapDrawable(resources, renderMarkerBitmap(visual, darkTheme)).apply {
                 isFilterBitmap = true
             }
         }
 
-    private fun renderMarkerBitmap(visual: IncidentMarkerVisual): Bitmap {
+    private fun renderMarkerBitmap(visual: IncidentMarkerVisual, darkTheme: Boolean): Bitmap {
         val metrics = resources.displayMetrics
         val density = metrics.density
         val width = (if (visual.selected) SELECTED_WIDTH_DP else NORMAL_WIDTH_DP) * density
@@ -66,10 +67,9 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
         canvas.drawPath(pinPath, fillPaint(Color.argb(45, 0, 0, 0)))
         canvas.restore()
 
-        // Se usan los mismos pares container/content que los badges de estado:
-        // el relleno claro identifica el estado y el borde/glifo oscuro garantiza
-        // legibilidad sobre el mapa.
-        val tone = incidentStatusTone(visual.status.backendName)
+        val tones = if (darkTheme) IncidentTones.Dark else IncidentTones.Light
+        val colors = if (darkTheme) DarkColorScheme else LightColorScheme
+        val tone = tones.status(visual.status.backendName)
         val fillColor = tone.container.toArgb()
         val contentColor = tone.content.toArgb()
 
@@ -78,7 +78,7 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
             // más grande para destacar sobre el resto de marcadores.
             canvas.drawPath(
                 pinPath,
-                strokePaint(CitizenBlue.toArgb(), SELECTED_OUTER_RING_DP * density)
+                strokePaint(colors.primary.toArgb(), SELECTED_OUTER_RING_DP * density)
             )
         }
         canvas.drawPath(
@@ -99,7 +99,7 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
 
         // Círculo central neutro: deja el glifo de prioridad legible sin alterar
         // el color que identifica el estado.
-        canvas.drawCircle(centerX, circleCenterY, radius * 0.55f, fillPaint(Color.WHITE))
+        canvas.drawCircle(centerX, circleCenterY, radius * 0.55f, fillPaint(colors.surface.toArgb()))
         val textPaint = fillPaint(contentColor).apply {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER

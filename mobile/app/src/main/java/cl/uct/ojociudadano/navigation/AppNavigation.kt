@@ -83,6 +83,7 @@ fun AppNavigation(
     registrationContent: (@Composable (onBack: () -> Unit) -> Unit)? = null
 ) {
     val sessionState by sessionManager.state.collectAsState()
+    val isCitizen = RoleAccessPolicy.allows(sessionState, AppRoutes.HOME)
     fun navigate(route: String) {
         navController.navigateIfAllowed(sessionManager, route)
     }
@@ -124,7 +125,7 @@ fun AppNavigation(
 
     Scaffold(
         bottomBar = {
-            if (currentRoute in citizenRoutes && RoleAccessPolicy.allows(sessionState, currentRoute)) {
+            if (isCitizen && currentRoute in citizenRoutes && RoleAccessPolicy.allows(sessionState, currentRoute)) {
                 AppBottomNavigation(
                     currentRoute = currentRoute,
                     isDestinationAllowed = { RoleAccessPolicy.allows(sessionState, it) }
@@ -168,6 +169,7 @@ fun AppNavigation(
                     email = session?.email.orEmpty(),
                     onIncidentManagementClick = { navigate(AppRoutes.ADMIN_INCIDENTS) },
                     onUserManagementClick = { navigate(AppRoutes.ADMIN_USERS) },
+                    onProfileClick = { navigate(AppRoutes.PROFILE) },
                     onLogout = onLogout,
                     onFutureSectionClick = { navigate(it.route) }
                 )
@@ -275,7 +277,11 @@ fun AppNavigation(
                 MapScreen(onIncidentDetail = ::navigateToIncidentDetail)
             }
             protectedComposable(sessionManager, navController, AppRoutes.PROFILE) {
-                ProfileScreen(sessionManager = sessionManager, onLogout = onLogout)
+                ProfileScreen(
+                    sessionManager = sessionManager,
+                    onLogout = onLogout,
+                    onBack = if (isCitizen) null else ({ navController.navigateUp() })
+                )
             }
         }
     }

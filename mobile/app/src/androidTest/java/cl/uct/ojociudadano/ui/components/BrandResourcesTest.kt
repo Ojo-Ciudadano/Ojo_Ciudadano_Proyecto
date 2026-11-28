@@ -1,16 +1,44 @@
 package cl.uct.ojociudadano.ui.components
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
+import androidx.compose.ui.graphics.toArgb
 import androidx.test.platform.app.InstrumentationRegistry
 import cl.uct.ojociudadano.R
+import cl.uct.ojociudadano.ui.theme.DarkColorScheme
+import cl.uct.ojociudadano.ui.theme.LightColorScheme
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BrandResourcesTest {
+    @Test fun fondoDeInicioCoincideConElTemaDeCompose() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        for ((nightMode, background) in listOf(
+            Configuration.UI_MODE_NIGHT_NO to LightColorScheme.background,
+            Configuration.UI_MODE_NIGHT_YES to DarkColorScheme.background
+        )) {
+            val configuration = Configuration(context.resources.configuration).apply {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
+            }
+            val themedContext = context.createConfigurationContext(configuration)
+            val theme = themedContext.resources.newTheme().apply {
+                applyStyle(R.style.Theme_OjoCiudadano_Starting, true)
+            }
+            val attributes = theme.obtainStyledAttributes(
+                intArrayOf(androidx.core.splashscreen.R.attr.windowSplashScreenBackground)
+            )
+            try {
+                assertEquals(background.toArgb(), attributes.getColor(0, 0))
+            } finally {
+                attributes.recycle()
+            }
+        }
+    }
+
     @Test fun iconoAdaptativoYTemaDeInicioUtilizanLosRecursosOficiales() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val info = context.packageManager.getApplicationInfo(context.packageName, 0)
