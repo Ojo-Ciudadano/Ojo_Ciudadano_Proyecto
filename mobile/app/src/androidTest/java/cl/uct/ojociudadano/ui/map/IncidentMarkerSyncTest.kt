@@ -141,6 +141,64 @@ class IncidentMarkerSyncTest {
     }
 
     @Test
+    fun nearbyMarkersAreGroupedIntoASingleClusterWhenEnabled() {
+        val markers = listOf(
+            IncidentMapMarker("first", -38.7359, -72.5904),
+            IncidentMapMarker("second", -38.7360, -72.5905)
+        )
+
+        sync(markers, clusterRadiusPx = 128.0)
+
+        val clusters = mapView.overlays.filterIsInstance<IncidentClusterMarker>()
+        assertEquals(1, clusters.size)
+        assertEquals(2, clusters.single().count)
+        assertEquals(listOf("first", "second"), clusters.single().clusterIds)
+        assertTrue(incidentMarkers().isEmpty())
+    }
+
+    @Test
+    fun changingTheFilteredMarkersRemovesStaleClusters() {
+        sync(
+            listOf(
+                IncidentMapMarker("first", -38.7359, -72.5904),
+                IncidentMapMarker("second", -38.7360, -72.5905)
+            ),
+            clusterRadiusPx = 128.0
+        )
+        assertEquals(1, mapView.overlays.filterIsInstance<IncidentClusterMarker>().size)
+
+        sync(listOf(IncidentMapMarker("first", -38.7359, -72.5904)), clusterRadiusPx = 128.0)
+
+        assertTrue(mapView.overlays.none { it is IncidentClusterMarker })
+        assertEquals(listOf("first"), incidentMarkers().map { it.relatedObject })
+    }
+
+    @Test
+    fun selectedMarkerIsGroupedAtFarZoomAndRestoredWhenPinsSeparate() {
+        val markers = listOf(
+            IncidentMapMarker("selected", -38.7359, -72.5904),
+            IncidentMapMarker("nearby-1", -38.7360, -72.5905),
+            IncidentMapMarker("nearby-2", -38.7361, -72.5906)
+        )
+
+        sync(markers, selectedIncidentId = "selected", clusterRadiusPx = 128.0)
+
+        val cluster = mapView.overlays.filterIsInstance<IncidentClusterMarker>().single()
+        assertEquals(3, cluster.count)
+        assertTrue(incidentMarkers().isEmpty())
+
+        onMainThread { mapView.controller.setZoom(22.0) }
+        sync(markers, selectedIncidentId = "selected", clusterRadiusPx = 1.0)
+
+        assertEquals(3, incidentMarkers().size)
+        assertTrue(
+            markerById("selected").icon.intrinsicWidth >
+                markerById("nearby-1").icon.intrinsicWidth
+        )
+        assertEquals("selected", (mapView.overlays.last() as Marker).relatedObject)
+    }
+
+    @Test
     fun userLocationMarkerIsCreatedOnceAndUpdatedInPlace() {
         onMainThread {
             syncUserLocationMarker(mapView, userLocation(-38.7359, -72.5904))
@@ -225,14 +283,16 @@ class IncidentMarkerSyncTest {
     private fun sync(
         markers: List<IncidentMapMarker>,
         selectedIncidentId: String? = null,
-        cache: IncidentMarkerIconCache? = null
+        cache: IncidentMarkerIconCache? = null,
+        clusterRadiusPx: Double = 0.0
     ) {
         onMainThread {
             syncIncidentMarkers(
                 mapView = mapView,
                 desiredMarkers = markers,
                 selectedIncidentId = selectedIncidentId,
-                iconCache = cache ?: IncidentMarkerIconProvider.cacheFor(mapView.context)
+                iconCache = cache ?: IncidentMarkerIconProvider.cacheFor(mapView.context),
+                clusterRadiusPx = clusterRadiusPx
             )
         }
     }

@@ -42,6 +42,9 @@ import cl.uct.ojociudadano.ui.permission.rememberLocationPermissionLauncher
 import cl.uct.ojociudadano.ui.reports.incidentDate
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
@@ -231,6 +234,18 @@ private fun IncidentMap(
 ) {
     val context = LocalContext.current
     val currentOnMapClick by rememberUpdatedState(onMapClick)
+    val currentOnMarkerClick by rememberUpdatedState(onMarkerClick)
+    val currentMarkers by rememberUpdatedState(markers)
+    val currentSelectedIncidentId by rememberUpdatedState(selectedIncidentId)
+    val incidentIconCache = remember(context) {
+        IncidentMarkerIconProvider.cacheFor(context)
+    }
+    val clusterIconCache = remember(context) {
+        IncidentMarkerIconProvider.clusterCacheFor(context)
+    }
+    val clusterRadiusPx = remember(context) {
+        CLUSTER_RADIUS_DP * context.resources.displayMetrics.density
+    }
     val mapView = remember(context) {
         Configuration.getInstance().load(
             context,
@@ -255,7 +270,31 @@ private fun IncidentMap(
     }
 
     DisposableEffect(mapView) {
-        onDispose { mapView.onDetach() }
+        val listener = object : MapListener {
+            override fun onScroll(event: ScrollEvent): Boolean = false
+
+            override fun onZoom(event: ZoomEvent): Boolean {
+                // El agrupamiento depende del zoom: al acercar o alejar la
+                // cámara se recalculan los clústeres con los marcadores y
+                // filtros vigentes.
+                syncIncidentMarkers(
+                    mapView = mapView,
+                    desiredMarkers = currentMarkers,
+                    onMarkerClick = currentOnMarkerClick,
+                    selectedIncidentId = currentSelectedIncidentId,
+                    iconCache = incidentIconCache,
+                    clusterIconCache = clusterIconCache,
+                    clusterRadiusPx = clusterRadiusPx
+                )
+                return false
+            }
+        }
+        mapView.addMapListener(listener)
+
+        onDispose {
+            mapView.removeMapListener(listener)
+            mapView.onDetach()
+        }
     }
 
     LaunchedEffect(mapView, userLocation?.focusRequestId) {
@@ -273,7 +312,10 @@ private fun IncidentMap(
                 mapView = currentMap,
                 desiredMarkers = markers,
                 onMarkerClick = onMarkerClick,
-                selectedIncidentId = selectedIncidentId
+                selectedIncidentId = selectedIncidentId,
+                iconCache = incidentIconCache,
+                clusterIconCache = clusterIconCache,
+                clusterRadiusPx = clusterRadiusPx
             )
             syncUserLocationMarker(currentMap, userLocation)
         }
@@ -281,32 +323,59 @@ private fun IncidentMap(
 }
 
 /**
- * Sincroniza los marcadores de incidentes sobre el [MapView].
+ * Sincroniza los marcadores de incidentes y sus clústeres sobre el [MapView].
  *
  * El identificador del incidente se guarda en `relatedObject` y se usa como
  * clave: los marcadores existentes se reutilizan, los que ya no corresponden se
  * eliminan y cualquier duplicado previo se descarta. Así las actualizaciones
  * normales del estado no acumulan marcadores.
  *
- * Los íconos se obtienen del [iconCache], por lo que solo se renderiza un pin
- * nuevo cuando cambia el estado, la prioridad o la selección del incidente. El
- * marcador seleccionado se dibuja al final para quedar por encima del resto.
+ * Cuando [clusterRadiusPx] es mayor que cero, los incidentes cercanos se
+ * representan con un único pin que muestra su cantidad. La selección se
+ * conserva en [MapUiState.Success.selectedIncidentId]: si el zoom actual
+ * permite ver el pin separado, se dibuja resaltado al final para quedar por
+ * encima del resto.
+ *
+ * Los íconos se obtienen de [iconCache] y [clusterIconCache], por lo que solo se
+ * renderiza un pin nuevo cuando cambia el estado, la prioridad, la selección o
+ * la cantidad de incidentes agrupados.
  */
 internal fun syncIncidentMarkers(
     mapView: MapView,
     desiredMarkers: List<IncidentMapMarker>,
     onMarkerClick: (String) -> Unit = {},
     selectedIncidentId: String? = null,
-    iconCache: IncidentMarkerIconCache = IncidentMarkerIconProvider.cacheFor(mapView.context)
+    iconCache: IncidentMarkerIconCache = IncidentMarkerIconProvider.cacheFor(mapView.context),
+    clusterIconCache: IncidentClusterIconCache =
+        IncidentMarkerIconProvider.clusterCacheFor(mapView.context),
+    clusterRadiusPx: Double = 0.0
 ) {
     val desiredById = desiredMarkers.associateBy { it.incidentId }
     val selectedId = selectedIncidentId?.takeIf { it in desiredById }
 
+    val clusters = clusterIncidentMarkers(
+        markers = desiredById.values.toList(),
+        zoomLevel = mapView.zoomLevelDouble,
+        clusterRadiusPixels = clusterRadiusPx
+    )
+    val groupedClusters = clusters.filter { it.count > 1 }
+    val individualById = LinkedHashMap<String, IncidentMapMarker>()
+    clusters.filter { it.count == 1 }.forEach { cluster ->
+        val marker = cluster.markers.single()
+        individualById[marker.incidentId] = marker
+    }
+
     val currentById = HashMap<String, Marker>()
     val duplicateMarkers = ArrayList<Marker>()
+    val currentClusters = HashMap<List<String>, IncidentClusterMarker>()
+    val duplicateClusters = ArrayList<IncidentClusterMarker>()
 
     mapView.overlays.forEach { overlay ->
-        if (overlay is Marker) {
+        if (overlay is IncidentClusterMarker) {
+            if (currentClusters.putIfAbsent(overlay.clusterIds, overlay) != null) {
+                duplicateClusters.add(overlay)
+            }
+        } else if (overlay is Marker) {
             val incidentId = overlay.relatedObject as? String
             if (incidentId != null) {
                 if (currentById.putIfAbsent(incidentId, overlay) != null) {
@@ -316,17 +385,18 @@ internal fun syncIncidentMarkers(
         }
     }
 
-    var changed = duplicateMarkers.isNotEmpty()
+    var changed = duplicateMarkers.isNotEmpty() || duplicateClusters.isNotEmpty()
     duplicateMarkers.forEach { mapView.overlays.remove(it) }
+    duplicateClusters.forEach { mapView.overlays.remove(it) }
 
     currentById.forEach { (incidentId, marker) ->
-        if (incidentId !in desiredById) {
+        if (incidentId !in individualById) {
             mapView.overlays.remove(marker)
             changed = true
         }
     }
 
-    desiredById.forEach { (incidentId, data) ->
+    individualById.forEach { (incidentId, data) ->
         val visual = data.visual(selected = incidentId == selectedId)
         val previous = currentById[incidentId]
         when {
@@ -366,6 +436,47 @@ internal fun syncIncidentMarkers(
         }
     }
 
+    val desiredClustersByKey = groupedClusters.associateBy { it.incidentIds }
+    currentClusters.forEach { (key, marker) ->
+        if (key !in desiredClustersByKey) {
+            mapView.overlays.remove(marker)
+            changed = true
+        }
+    }
+
+    desiredClustersByKey.forEach { (key, cluster) ->
+        val previous = currentClusters[key]
+        if (previous == null) {
+            mapView.overlays.add(
+                createIncidentClusterMarker(
+                    mapView = mapView,
+                    cluster = cluster,
+                    iconCache = clusterIconCache,
+                    clusterRadiusPx = clusterRadiusPx
+                )
+            )
+            changed = true
+        } else {
+            previous.setOnMarkerClickListener { _, _ ->
+                zoomIntoIncidentCluster(mapView, cluster, clusterRadiusPx)
+                true
+            }
+            val position = previous.position
+            if (position.latitude != cluster.latitude ||
+                position.longitude != cluster.longitude
+            ) {
+                previous.position = GeoPoint(cluster.latitude, cluster.longitude)
+                changed = true
+            }
+            if (previous.count != cluster.count) {
+                previous.count = cluster.count
+                previous.title = clusterTitle(cluster.count)
+                previous.setIcon(clusterIconCache.iconFor(cluster.count))
+                changed = true
+            }
+        }
+    }
+
     selectedId?.let { id ->
         val selectedOverlay = mapView.overlays.firstOrNull { overlay ->
             overlay is Marker && overlay.relatedObject == id
@@ -385,6 +496,63 @@ internal fun syncIncidentMarkers(
 /** Marcador que recuerda la apariencia aplicada para evitar re-renderizarla. */
 private class IncidentMarker(mapView: MapView) : Marker(mapView) {
     var visual: IncidentMarkerVisual? = null
+}
+
+/**
+ * Marcador que representa varios incidentes agrupados.
+ *
+ * [clusterIds] identifica de forma estable la composición del grupo; si cambia
+ * por un filtro o por el zoom, el marcador anterior se retira y se crea uno
+ * nuevo para no dejar conteos ni posiciones fantasma.
+ */
+internal class IncidentClusterMarker(mapView: MapView) : Marker(mapView) {
+    var clusterIds: List<String> = emptyList()
+    var count: Int = 0
+}
+
+private fun createIncidentClusterMarker(
+    mapView: MapView,
+    cluster: IncidentCluster,
+    iconCache: IncidentClusterIconCache,
+    clusterRadiusPx: Double
+): IncidentClusterMarker = IncidentClusterMarker(mapView).apply {
+    position = GeoPoint(cluster.latitude, cluster.longitude)
+    clusterIds = cluster.incidentIds
+    count = cluster.count
+    title = clusterTitle(cluster.count)
+    snippet = "Toca para acercar"
+    setIcon(iconCache.iconFor(cluster.count))
+    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+    setOnMarkerClickListener { _, _ ->
+        zoomIntoIncidentCluster(mapView, cluster, clusterRadiusPx)
+        true
+    }
+}
+
+private fun clusterTitle(count: Int): String =
+    if (count == 1) "1 incidente agrupado" else "$count incidentes agrupados"
+
+/**
+ * Acerca la cámara al centro de [cluster] hasta un zoom que permita separar sus
+ * marcadores. La animación dispara el [MapListener] del mapa, que recalcula los
+ * clústeres con el nuevo nivel de zoom.
+ */
+internal fun zoomIntoIncidentCluster(
+    mapView: MapView,
+    cluster: IncidentCluster,
+    clusterRadiusPx: Double = CLUSTER_RADIUS_DP * mapView.context.resources.displayMetrics.density
+) {
+    val targetZoom = clusterZoomTarget(
+        cluster = cluster,
+        currentZoom = mapView.zoomLevelDouble,
+        clusterRadiusPixels = clusterRadiusPx,
+        maxZoom = mapView.maxZoomLevel
+    )
+    mapView.controller.animateTo(
+        GeoPoint(cluster.latitude, cluster.longitude),
+        targetZoom,
+        CLUSTER_ZOOM_DURATION_MILLIS
+    )
 }
 
 private fun createIncidentMarker(
