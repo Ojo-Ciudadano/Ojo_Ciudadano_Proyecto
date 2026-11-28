@@ -161,6 +161,97 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
 }
 
 /**
+ * Caché de los íconos que representan un clúster de incidentes.
+ *
+ * El contador es la única dimensión variable del ícono, por lo que basta con
+ * una entrada por cantidad distinta. El texto se abrevia a `999+` para que
+ * grupos muy numerosos sigan siendo legibles.
+ */
+internal class IncidentClusterIconCache(private val resources: Resources) {
+
+    private val icons = HashMap<Int, BitmapDrawable>()
+
+    /** Cantidad de íconos distintos renderizados; útil para verificar la caché. */
+    val cachedIconCount: Int
+        get() = icons.size
+
+    /** Devuelve el ícono cacheado para [count] o lo renderiza la primera vez. */
+    fun iconFor(count: Int): BitmapDrawable =
+        icons.getOrPut(count) {
+            BitmapDrawable(resources, renderClusterBitmap(count)).apply {
+                isFilterBitmap = true
+            }
+        }
+
+    private fun renderClusterBitmap(count: Int): Bitmap {
+        val density = resources.displayMetrics.density
+        val size = (CLUSTER_SIZE_DP * density).roundToInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
+            setDensity(
+                resources.displayMetrics.densityDpi.takeIf { it > 0 }
+                    ?: DEFAULT_DENSITY_DPI
+            )
+        }
+
+        val canvas = Canvas(bitmap)
+        val center = size / 2f
+        val radius = center - CLUSTER_PADDING_DP * density
+
+        // Sombra sutil para separar el clúster de mapas con colores claros.
+        canvas.drawCircle(
+            center,
+            center + density,
+            radius,
+            fillPaint(Color.argb(45, 0, 0, 0))
+        )
+        canvas.drawCircle(center, center, radius, fillPaint(Color.WHITE))
+        canvas.drawCircle(
+            center,
+            center,
+            radius - CLUSTER_BORDER_DP * density,
+            fillPaint(CitizenBlue.toArgb())
+        )
+
+        val label = if (count > MAX_DISPLAYED_COUNT) {
+            "$MAX_DISPLAYED_COUNT+"
+        } else {
+            count.toString()
+        }
+        val textPaint = fillPaint(Color.WHITE).apply {
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            textSize = when (label.length) {
+                1, 2 -> radius * 0.95f
+                3 -> radius * 0.72f
+                else -> radius * 0.56f
+            }
+        }
+        canvas.drawText(
+            label,
+            center,
+            center - (textPaint.ascent() + textPaint.descent()) / 2f,
+            textPaint
+        )
+
+        return bitmap
+    }
+
+    private fun fillPaint(color: Int): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.FILL
+        isDither = true
+    }
+
+    private companion object {
+        const val CLUSTER_SIZE_DP = 46f
+        const val CLUSTER_PADDING_DP = 2f
+        const val CLUSTER_BORDER_DP = 2.5f
+        const val MAX_DISPLAYED_COUNT = 999
+        const val DEFAULT_DENSITY_DPI = 160
+    }
+}
+
+/**
  * Proveedor del caché compartido por los mapas de la aplicación.
  *
  * Se recrea únicamente si cambia la densidad de pantalla, porque el tamaño en
@@ -169,7 +260,9 @@ internal class IncidentMarkerIconCache(private val resources: Resources) {
 internal object IncidentMarkerIconProvider {
 
     private var cache: IncidentMarkerIconCache? = null
+    private var clusterCache: IncidentClusterIconCache? = null
     private var densityDpi: Int = 0
+    private var clusterDensityDpi: Int = 0
 
     @Synchronized
     fun cacheFor(context: Context): IncidentMarkerIconCache {
@@ -181,6 +274,19 @@ internal object IncidentMarkerIconProvider {
         return IncidentMarkerIconCache(resources).also {
             cache = it
             densityDpi = currentDensity
+        }
+    }
+
+    @Synchronized
+    fun clusterCacheFor(context: Context): IncidentClusterIconCache {
+        val resources = context.applicationContext.resources
+        val currentDensity = resources.displayMetrics.densityDpi
+        val current = clusterCache
+        if (current != null && currentDensity == clusterDensityDpi) return current
+
+        return IncidentClusterIconCache(resources).also {
+            clusterCache = it
+            clusterDensityDpi = currentDensity
         }
     }
 }

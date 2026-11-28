@@ -76,6 +76,37 @@ class IncidentMarkerIconCacheTest {
     }
 
     @Test
+    fun repeatedClusterCountsReuseTheSameRenderedIconInstance() {
+        val cache = IncidentClusterIconCache(resources)
+
+        val first = cache.iconFor(12)
+        val second = cache.iconFor(12)
+        val other = cache.iconFor(13)
+
+        assertSame(first, second)
+        assertNotSame(first, other)
+        assertEquals(2, cache.cachedIconCount)
+        assertTrue(first.intrinsicWidth > 0)
+        assertTrue(first.intrinsicHeight > 0)
+    }
+
+    @Test
+    fun clusterIconUsesTheInstitutionalBlueFill() {
+        val cache = IncidentClusterIconCache(resources)
+        val bitmap = cache.iconFor(5).bitmap
+
+        val fillPixel = bitmap.getPixel(
+            (bitmap.width * 0.25f).roundToInt(),
+            bitmap.height / 2
+        )
+
+        assertEquals(
+            cl.uct.ojociudadano.ui.theme.CitizenBlue.toArgb(),
+            fillPixel
+        )
+    }
+
+    @Test
     fun markerFillUsesTheSameStatusColorAsTheStateBadges() {
         val cache = IncidentMarkerIconCache(resources)
 
